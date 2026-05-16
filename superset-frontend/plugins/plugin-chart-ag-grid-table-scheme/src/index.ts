@@ -22,11 +22,11 @@ import example1 from '@superset-ui/plugin-chart-ag-grid-table/src/images/Table.j
 import example2 from '@superset-ui/plugin-chart-ag-grid-table/src/images/Table2.jpg';
 import example3 from '@superset-ui/plugin-chart-ag-grid-table/src/images/Table3.jpg';
 import controlPanel from '@superset-ui/plugin-chart-ag-grid-table/src/controlPanel';
-import buildQuery from '@superset-ui/plugin-chart-ag-grid-table/src/buildQuery';
 import type {
   TableChartFormData,
   TableChartProps,
 } from '@superset-ui/plugin-chart-ag-grid-table/src/types';
+import buildQuery from './matrix/buildQuery';
 import transformProps from './transformProps';
 
 export { default as __hack__ } from '@superset-ui/plugin-chart-ag-grid-table/src/types';
