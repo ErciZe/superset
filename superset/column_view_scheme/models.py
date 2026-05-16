@@ -26,12 +26,10 @@ from superset.models.helpers import AuditMixinNullable
 
 class ColumnViewScheme(Model, AuditMixinNullable):
     __tablename__ = "superset_column_view_scheme"
-    # Best-effort DB uniqueness for dashboard scopes; command validation must
-    # enforce chart-level duplicates where dashboard_id is NULL.
+    # Scheme names are unique per user and chart for active and deleted rows.
     __table_args__ = (
         UniqueConstraint(
             "chart_id",
-            "dashboard_id",
             "user_id",
             "name",
             "is_deleted",
@@ -61,10 +59,9 @@ class ColumnViewScheme(Model, AuditMixinNullable):
     dashboard = relationship("Dashboard", foreign_keys=[dashboard_id])
     user = relationship("User", foreign_keys=[user_id])
 
-    def uniqueness_scope(self) -> tuple[int, int | None, int, str, bool]:
+    def uniqueness_scope(self) -> tuple[int, int, str, bool]:
         return (
             self.chart_id,
-            self.dashboard_id,
             self.user_id,
             self.name,
             self.is_deleted,

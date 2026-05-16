@@ -60,7 +60,6 @@ def upgrade():
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "chart_id",
-            "dashboard_id",
             "user_id",
             "name",
             "is_deleted",
