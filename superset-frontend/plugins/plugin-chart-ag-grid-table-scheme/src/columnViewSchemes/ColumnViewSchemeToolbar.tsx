@@ -62,6 +62,7 @@ export default function ColumnViewSchemeToolbar({
   gridApi,
   colDefs,
   includeSortState,
+  columnSettingsEnabled = false,
 }: ColumnViewSchemeToolbarProps) {
   const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -159,9 +160,11 @@ export default function ColumnViewSchemeToolbar({
         >
           {t('Save as')}
         </Button>
-        <Button disabled={isBusy || !isGridReady} onClick={openColumnSettings}>
-          {t('列设置')}
-        </Button>
+        {columnSettingsEnabled && (
+          <Button disabled={isBusy || !isGridReady} onClick={openColumnSettings}>
+            {t('列设置')}
+          </Button>
+        )}
         <Button
           disabled={!hasActiveScheme || activeScheme?.is_default || isBusy}
           loading={saving}
