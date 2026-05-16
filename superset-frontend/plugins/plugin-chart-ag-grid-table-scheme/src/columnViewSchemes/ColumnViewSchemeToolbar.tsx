@@ -24,6 +24,8 @@ import type {
   GridReadyEvent,
 } from '@superset-ui/core/components/ThemedAgGridReact';
 import { useColumnViewSchemes } from './useColumnViewSchemes';
+import ColumnViewSettingsModal from './ColumnViewSettingsModal';
+import type { ColumnSettingItem } from './types';
 
 const Toolbar = styled.div`
   ${({ theme }) => `
@@ -61,11 +63,16 @@ export default function ColumnViewSchemeToolbar({
   includeSortState,
 }: ColumnViewSchemeToolbarProps) {
   const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [newSchemeName, setNewSchemeName] = useState('');
+  const [columnSettings, setColumnSettings] = useState<ColumnSettingItem[]>([]);
   const {
     activeScheme,
+    applyColumnSettings,
     deleteActiveScheme,
     deleting,
+    getDefaultColumnSettings,
+    getColumnSettings,
     loading,
     resetColumns,
     saveActiveScheme,
@@ -95,6 +102,25 @@ export default function ColumnViewSchemeToolbar({
     } catch {
       // The hook already reports the save failure to the user.
     }
+  };
+
+  const openColumnSettings = () => {
+    setColumnSettings(getColumnSettings());
+    setIsSettingsOpen(true);
+  };
+
+  const handleApplyColumnSettings = async (settings: ColumnSettingItem[]) => {
+    applyColumnSettings(settings);
+    setIsSettingsOpen(false);
+    if (activeScheme) {
+      await saveActiveScheme();
+    } else {
+      setIsSaveAsOpen(true);
+    }
+  };
+
+  const handleResetColumnSettings = () => {
+    setColumnSettings(getDefaultColumnSettings());
   };
 
   const isBusy = loading || saving || deleting;
@@ -131,6 +157,9 @@ export default function ColumnViewSchemeToolbar({
           onClick={() => setIsSaveAsOpen(true)}
         >
           {t('Save as')}
+        </Button>
+        <Button disabled={isBusy || !isGridReady} onClick={openColumnSettings}>
+          {t('列设置')}
         </Button>
         <Button
           disabled={!hasActiveScheme || activeScheme?.is_default || isBusy}
@@ -174,6 +203,14 @@ export default function ColumnViewSchemeToolbar({
           value={newSchemeName}
         />
       </Modal>
+      <ColumnViewSettingsModal
+        columnSettings={columnSettings}
+        loading={isBusy}
+        onApply={handleApplyColumnSettings}
+        onCancel={() => setIsSettingsOpen(false)}
+        onReset={handleResetColumnSettings}
+        open={isSettingsOpen}
+      />
     </Toolbar>
   );
 }

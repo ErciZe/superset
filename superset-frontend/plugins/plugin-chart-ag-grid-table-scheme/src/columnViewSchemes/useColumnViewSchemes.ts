@@ -23,8 +23,15 @@ import type {
   ColDef,
   GridReadyEvent,
 } from '@superset-ui/core/components/ThemedAgGridReact';
-import { captureColumnViewState, reconcileColumnState } from './state';
+import {
+  buildColumnSettingItems,
+  buildColumnStateFromSettings,
+  buildDefaultColumnSettingItems,
+  captureColumnViewState,
+  reconcileColumnState,
+} from './state';
 import type {
+  ColumnSettingItem,
   ColumnViewColumnState,
   ColumnViewScheme,
   SchemeColDef,
@@ -146,6 +153,39 @@ export const useColumnViewSchemes = ({
     );
   }, [colDefs, gridApi, includeSortState]);
 
+  const getColumnSettings = useCallback(() => {
+    if (!gridApi) {
+      throw new Error('Cannot edit column settings before grid is ready.');
+    }
+    return buildColumnSettingItems(
+      gridApi.getColumnState() as ColumnViewColumnState[],
+      colDefs as SchemeColDef[],
+    );
+  }, [colDefs, gridApi]);
+
+  const getDefaultColumnSettings = useCallback(
+    () => buildDefaultColumnSettingItems(colDefs as SchemeColDef[]),
+    [colDefs],
+  );
+
+  const applyColumnSettings = useCallback(
+    (settings: ColumnSettingItem[]) => {
+      if (!gridApi) {
+        throw new Error('Cannot apply column settings before grid is ready.');
+      }
+      gridApi.applyColumnState({
+        state: buildColumnStateFromSettings(
+          gridApi.getColumnState() as ColumnViewColumnState[],
+          settings,
+          colDefs as SchemeColDef[],
+          { includeSort: includeSortState },
+        ) as ApplyColumnState['state'],
+        applyOrder: true,
+      });
+    },
+    [colDefs, gridApi, includeSortState],
+  );
+
   const switchScheme = useCallback(
     (schemeId: number | null) => {
       if (schemeId === null) {
@@ -260,6 +300,9 @@ export const useColumnViewSchemes = ({
     activeScheme,
     deleteActiveScheme,
     deleting,
+    applyColumnSettings,
+    getDefaultColumnSettings,
+    getColumnSettings,
     loading,
     resetColumns,
     saveActiveScheme,

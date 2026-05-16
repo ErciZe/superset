@@ -17,6 +17,8 @@
  * under the License.
  */
 import {
+  buildColumnSettingItems,
+  buildColumnStateFromSettings,
   buildColumnSignature,
   captureColumnViewState,
   reconcileColumnState,
@@ -140,5 +142,102 @@ describe('column view scheme state utilities', () => {
     expect(buildColumnSignature(colDefs)).toBe(
       buildColumnSignature([colDefs[2], colDefs[0], colDefs[1]]),
     );
+  });
+
+  it('builds editable setting items from current column state', () => {
+    expect(
+      buildColumnSettingItems(
+        [
+          { colId: 'country', hide: false, pinned: 'left' },
+          { colId: 'sales_total', hide: true },
+          { colId: 'removed', hide: false },
+        ],
+        colDefs,
+      ),
+    ).toEqual([
+      {
+        colId: 'country',
+        group: '基础信息',
+        label: 'Country',
+        pinned: true,
+        visible: true,
+      },
+      {
+        colId: 'sales_total',
+        group: '指标数据',
+        label: 'Sales',
+        pinned: false,
+        visible: false,
+      },
+      {
+        colId: 'margin',
+        group: '其他',
+        label: 'Margin',
+        pinned: false,
+        visible: true,
+      },
+    ]);
+  });
+
+  it('creates column state from hidden and reordered settings', () => {
+    const nextState = buildColumnStateFromSettings(
+      [
+        { colId: 'country', hide: false, width: 120 },
+        { colId: 'sales_total', hide: false, width: 180 },
+        { colId: 'margin', hide: false, width: 100 },
+      ],
+      [
+        {
+          colId: 'margin',
+          group: '其他',
+          label: 'Margin',
+          pinned: true,
+          visible: true,
+        },
+        {
+          colId: 'country',
+          group: '基础信息',
+          label: 'Country',
+          pinned: false,
+          visible: false,
+        },
+        {
+          colId: 'sales_total',
+          group: '指标数据',
+          label: 'Sales',
+          pinned: false,
+          visible: true,
+        },
+      ],
+      colDefs,
+    );
+
+    expect(nextState).toEqual([
+      { colId: 'margin', hide: false, pinned: 'left', width: 100 },
+      { colId: 'country', hide: true, pinned: null, width: 120 },
+      { colId: 'sales_total', hide: false, pinned: null, width: 180 },
+    ]);
+  });
+
+  it('appends newly configured columns when settings were based on older defs', () => {
+    const nextState = buildColumnStateFromSettings(
+      [{ colId: 'country', hide: false, width: 120 }],
+      [
+        {
+          colId: 'country',
+          group: '基础信息',
+          label: 'Country',
+          pinned: false,
+          visible: true,
+        },
+      ],
+      colDefs,
+    );
+
+    expect(nextState).toEqual([
+      { colId: 'country', hide: false, pinned: null, width: 120 },
+      { colId: 'sales_total', hide: false, pinned: null },
+      { colId: 'margin', hide: false, pinned: null },
+    ]);
   });
 });

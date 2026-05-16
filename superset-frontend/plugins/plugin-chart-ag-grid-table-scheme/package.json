@@ -11,7 +11,8 @@
     "lib"
   ],
   "dependencies": {
-    "@superset-ui/plugin-chart-ag-grid-table": "file:../plugin-chart-ag-grid-table"
+    "@superset-ui/plugin-chart-ag-grid-table": "file:../plugin-chart-ag-grid-table",
+    "react-sortable-hoc": "^2.0.0"
   },
   "peerDependencies": {
     "antd": "^5.24.6",

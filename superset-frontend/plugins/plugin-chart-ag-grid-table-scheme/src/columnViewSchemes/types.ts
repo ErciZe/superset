@@ -78,3 +78,13 @@ export type ColumnViewScheme = {
 export type ColumnViewStateOptions = {
   includeSort?: boolean;
 };
+
+export type ColumnSettingGroup = '日期/时间' | '基础信息' | '指标数据' | '其他';
+
+export type ColumnSettingItem = {
+  colId: string;
+  label: string;
+  group: ColumnSettingGroup;
+  visible: boolean;
+  pinned: boolean;
+};

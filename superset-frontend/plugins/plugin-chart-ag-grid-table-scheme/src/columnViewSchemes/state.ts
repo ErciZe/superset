@@ -17,6 +17,8 @@
  * under the License.
  */
 import type {
+  ColumnSettingGroup,
+  ColumnSettingItem,
   ColumnViewColumnState,
   ColumnViewSchemeColumn,
   ColumnViewSchemeState,
@@ -60,6 +62,203 @@ const buildColDefById = (colDefs: SchemeColDef[]) =>
 
     return colDefById;
   }, new Map<string, SchemeColDef>());
+
+const normalizeText = (value: string) => value.toLowerCase();
+
+const DATE_COLUMN_PATTERNS = [
+  'date',
+  'time',
+  '日期',
+  '时间',
+  'day',
+  'week',
+  'month',
+  'year',
+];
+
+const METRIC_COLUMN_PATTERNS = [
+  'amount',
+  'cost',
+  'fee',
+  'profit',
+  'gross',
+  'sales',
+  'volume',
+  'quantity',
+  'ratio',
+  'rate',
+  'discount',
+  'refund',
+  'income',
+  '金额',
+  '成本',
+  '费用',
+  '利润',
+  '销量',
+  '销售',
+  '%',
+];
+
+const BASIC_COLUMN_PATTERNS = [
+  'sku',
+  'msku',
+  'asin',
+  'shop',
+  'store',
+  'country',
+  'category',
+  'dimension',
+  'name',
+  'key',
+  'id',
+  '维度',
+  '店铺',
+  '国家',
+  '品类',
+  '父体',
+  '本地',
+  '编码',
+  '排序',
+  '项',
+  '单位',
+  '币种',
+];
+
+const matchesAnyPattern = (value: string, patterns: string[]) =>
+  patterns.some(pattern => value.includes(pattern));
+
+export const inferColumnSettingGroup = (
+  colDef: SchemeColDef,
+): ColumnSettingGroup => {
+  const source = normalizeText(
+    [getColId(colDef), colDef.field, colDef.headerName]
+      .filter(Boolean)
+      .join(' '),
+  );
+  const dataType = normalizeText(
+    String(
+      (colDef as SchemeColDef & { dataType?: string; cellDataType?: string })
+        .dataType ||
+        (colDef as SchemeColDef & { dataType?: string; cellDataType?: string })
+          .cellDataType ||
+        '',
+    ),
+  );
+
+  if (
+    dataType.includes('date') ||
+    dataType.includes('time') ||
+    matchesAnyPattern(source, DATE_COLUMN_PATTERNS)
+  ) {
+    return '日期/时间';
+  }
+  if (
+    dataType.includes('number') ||
+    dataType.includes('numeric') ||
+    matchesAnyPattern(source, METRIC_COLUMN_PATTERNS)
+  ) {
+    return '指标数据';
+  }
+  if (
+    dataType.includes('string') ||
+    dataType.includes('text') ||
+    matchesAnyPattern(source, BASIC_COLUMN_PATTERNS)
+  ) {
+    return '基础信息';
+  }
+
+  return '其他';
+};
+
+export const buildColumnSettingItems = (
+  columnState: ColumnViewColumnState[],
+  colDefs: SchemeColDef[],
+): ColumnSettingItem[] => {
+  const colDefById = buildColDefById(colDefs);
+  const configuredColIds = colDefs
+    .map(getColId)
+    .filter((colId): colId is string => Boolean(colId));
+  const configuredColIdSet = new Set(configuredColIds);
+  const columnStateById = new Map(
+    columnState
+      .filter(state => configuredColIdSet.has(state.colId))
+      .map(state => [state.colId, state]),
+  );
+  const orderedColIds = [
+    ...columnState
+      .map(state => state.colId)
+      .filter(colId => configuredColIdSet.has(colId)),
+    ...configuredColIds.filter(colId => !columnStateById.has(colId)),
+  ];
+
+  return orderedColIds.map(colId => {
+    const colDef = colDefById.get(colId);
+    const state = columnStateById.get(colId);
+
+    return {
+      colId,
+      label: colDef?.headerName || colDef?.field || colId,
+      group: colDef ? inferColumnSettingGroup(colDef) : '其他',
+      visible: state?.hide !== true,
+      pinned: state?.pinned === true || state?.pinned === 'left',
+    };
+  });
+};
+
+export const buildDefaultColumnSettingItems = (colDefs: SchemeColDef[]) =>
+  buildColumnSettingItems([], colDefs);
+
+export const buildColumnStateFromSettings = (
+  currentColumnState: ColumnViewColumnState[],
+  settings: ColumnSettingItem[],
+  colDefs: SchemeColDef[],
+  options: ColumnViewStateOptions = { includeSort: true },
+): ColumnViewColumnState[] => {
+  const configuredColIds = new Set(
+    colDefs.map(getColId).filter((colId): colId is string => Boolean(colId)),
+  );
+  const currentStateById = new Map(
+    currentColumnState
+      .filter(state => configuredColIds.has(state.colId))
+      .map(state => [state.colId, state]),
+  );
+  const selectedColIds = new Set(settings.map(setting => setting.colId));
+  const orderedSettings = settings.filter(setting =>
+    configuredColIds.has(setting.colId),
+  );
+
+  colDefs.forEach(colDef => {
+    const colId = getColId(colDef);
+    if (colId && configuredColIds.has(colId) && !selectedColIds.has(colId)) {
+      orderedSettings.push({
+        colId,
+        label: colDef.headerName || colDef.field || colId,
+        group: inferColumnSettingGroup(colDef),
+        visible: true,
+        pinned: false,
+      });
+    }
+  });
+
+  return orderedSettings.map(setting => {
+    const currentState = currentStateById.get(setting.colId);
+    return removeUndefinedValues({
+      ...pickColumnViewState(
+        {
+          colId: setting.colId,
+          width: currentState?.width,
+          pinned: setting.pinned ? 'left' : null,
+          hide: !setting.visible,
+          sort: currentState?.sort,
+          sortIndex: currentState?.sortIndex,
+        },
+        options,
+      ),
+      pinned: setting.pinned ? 'left' : null,
+      hide: !setting.visible,
+    });
+  });
+};
 
 const removeUndefinedValues = <T extends Record<string, unknown>>(value: T) =>
   Object.fromEntries(
