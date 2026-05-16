@@ -60,6 +60,7 @@ describe('column view scheme state utilities', () => {
         field: 'sales',
         headerName: 'Sales',
         hide: false,
+        sort: 'desc',
         width: 180,
       },
       {
@@ -79,6 +80,39 @@ describe('column view scheme state utilities', () => {
     ]);
     expect(state.raw_column_state).toEqual(columnState);
     expect(state.raw_column_state).not.toBe(columnState);
+  });
+
+  it('omits sort state when sort replay is disabled', () => {
+    const state = captureColumnViewState(
+      [
+        {
+          colId: 'sales_total',
+          hide: false,
+          width: 180,
+          sort: 'desc',
+          sortIndex: 0,
+          rowGroup: true,
+        },
+      ],
+      colDefs,
+      { includeSort: false },
+    );
+
+    expect(state.columns).toEqual([
+      {
+        colId: 'sales_total',
+        field: 'sales',
+        headerName: 'Sales',
+        hide: false,
+        width: 180,
+      },
+    ]);
+    expect(state.raw_column_state).toEqual([
+      { colId: 'sales_total', hide: false, width: 180 },
+    ]);
+    expect(
+      reconcileColumnState(state, colDefs, { includeSort: false })[0],
+    ).toEqual({ colId: 'sales_total', hide: false, width: 180 });
   });
 
   it('ignores removed columns and appends new columns', () => {

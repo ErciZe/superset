@@ -81,6 +81,7 @@ import { PivotTableChartPlugin as PivotTableChartPluginV2 } from '@superset-ui/p
 import { HandlebarsChartPlugin } from '@superset-ui/plugin-chart-handlebars';
 import { FilterPlugins } from 'src/constants';
 import AgGridTableChartPlugin from '@superset-ui/plugin-chart-ag-grid-table';
+import AgGridTableSchemeChartPlugin from '@superset-ui/plugin-chart-ag-grid-table-scheme';
 import TimeTableChartPlugin from '../TimeTable';
 
 export default class MainPreset extends Preset {
@@ -98,6 +99,16 @@ export default class MainPreset extends Preset {
     const agGridTablePlugin = isFeatureEnabled(FeatureFlag.AgGridTableEnabled)
       ? [new AgGridTableChartPlugin().configure({ key: VizType.TableAgGrid })]
       : [];
+
+    const agGridTableSchemePlugin =
+      isFeatureEnabled(FeatureFlag.AgGridTableEnabled) &&
+      isFeatureEnabled(FeatureFlag.ColumnViewSchemeEnabled)
+        ? [
+            new AgGridTableSchemeChartPlugin().configure({
+              key: VizType.TableAgGridScheme,
+            }),
+          ]
+        : [];
 
     super({
       name: 'Legacy charts',
@@ -193,6 +204,7 @@ export default class MainPreset extends Preset {
         }).configure({ key: VizType.Cartodiagram }),
         ...experimentalPlugins,
         ...agGridTablePlugin,
+        ...agGridTableSchemePlugin,
       ],
     });
   }

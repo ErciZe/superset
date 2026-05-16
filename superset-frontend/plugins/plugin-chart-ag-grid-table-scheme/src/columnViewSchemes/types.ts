@@ -46,6 +46,8 @@ export type ColumnViewSchemeColumn = {
   hide?: boolean | null;
   width?: number;
   pinned?: string | boolean | null;
+  sort?: string | null;
+  sortIndex?: number | null;
 };
 
 export type ColumnViewSchemeState = {
@@ -71,4 +73,8 @@ export type ColumnViewScheme = {
   is_default: boolean;
   state: ColumnViewSchemeState;
   column_signature: string;
+};
+
+export type ColumnViewStateOptions = {
+  includeSort?: boolean;
 };

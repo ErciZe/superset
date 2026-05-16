@@ -20,6 +20,7 @@ import type {
   ColumnViewColumnState,
   ColumnViewSchemeColumn,
   ColumnViewSchemeState,
+  ColumnViewStateOptions,
   SchemeColDef,
 } from './types';
 
@@ -68,6 +69,7 @@ const removeUndefinedValues = <T extends Record<string, unknown>>(value: T) =>
 const compactColumnState = (
   columnState: ColumnViewColumnState[],
   colDefs: SchemeColDef[],
+  options: ColumnViewStateOptions,
 ): ColumnViewSchemeColumn[] => {
   const colDefById = buildColDefById(colDefs);
 
@@ -81,20 +83,42 @@ const compactColumnState = (
       hide: state.hide,
       width: state.width,
       pinned: state.pinned,
+      ...(options.includeSort && {
+        sort: state.sort,
+        sortIndex: state.sortIndex,
+      }),
     });
   });
 };
 
+const pickColumnViewState = (
+  state: ColumnViewColumnState,
+  options: ColumnViewStateOptions,
+): ColumnViewColumnState =>
+  removeUndefinedValues({
+    colId: state.colId,
+    hide: state.hide,
+    width: state.width,
+    pinned: state.pinned,
+    ...(options.includeSort && {
+      sort: state.sort,
+      sortIndex: state.sortIndex,
+    }),
+  });
+
 export const captureColumnViewState = (
   columnState: ColumnViewColumnState[],
   colDefs: SchemeColDef[],
+  options: ColumnViewStateOptions = { includeSort: true },
 ): ColumnViewSchemeState => ({
   state_version: 1,
   viz_type: 'ag-grid-table-scheme',
   state_type: 'column_view',
   column_signature: buildColumnSignature(colDefs),
-  columns: compactColumnState(columnState, colDefs),
-  raw_column_state: columnState.map(state => ({ ...state })),
+  columns: compactColumnState(columnState, colDefs, options),
+  raw_column_state: columnState.map(state =>
+    pickColumnViewState(state, options),
+  ),
   meta: {
     saved_at: new Date().toISOString(),
   },
@@ -103,6 +127,7 @@ export const captureColumnViewState = (
 export const reconcileColumnState = (
   savedState: ColumnViewSchemeState,
   colDefs: SchemeColDef[],
+  options: ColumnViewStateOptions = { includeSort: true },
 ): ColumnViewColumnState[] => {
   const currentColIds = colDefs
     .map(getColId)
@@ -113,7 +138,7 @@ export const reconcileColumnState = (
     .filter(columnState => currentColIdSet.has(columnState.colId))
     .map(columnState => {
       savedColIdSet.add(columnState.colId);
-      return { ...columnState };
+      return pickColumnViewState(columnState, options);
     });
 
   currentColIds.forEach(colId => {
