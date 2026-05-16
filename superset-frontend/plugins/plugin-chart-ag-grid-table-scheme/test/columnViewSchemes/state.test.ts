@@ -240,4 +240,44 @@ describe('column view scheme state utilities', () => {
       { colId: 'margin', hide: false, pinned: null },
     ]);
   });
+
+  it('keeps generated matrix columns in column signatures and reconciliation', () => {
+    const matrixColDefs: SchemeColDef[] = [
+      { field: 'metric_name', headerName: 'Metric' },
+      {
+        colId: '__matrix_total',
+        field: '__matrix_total',
+        headerName: 'Total',
+      },
+      {
+        colId: '__matrix_col__2026-05-01',
+        field: '__matrix_col__2026-05-01',
+        headerName: '2026-05-01',
+      },
+    ];
+    const savedState = captureColumnViewState(
+      [
+        { colId: '__matrix_total', hide: false, pinned: 'left', width: 140 },
+        { colId: '__matrix_col__2026-05-01', hide: true, width: 120 },
+      ],
+      matrixColDefs,
+    );
+
+    expect(savedState.column_signature).toMatch(/^hash:[0-9a-f]+$/);
+    expect(
+      reconcileColumnState(savedState, [
+        ...matrixColDefs,
+        {
+          colId: '__matrix_col__2026-05-02',
+          field: '__matrix_col__2026-05-02',
+          headerName: '2026-05-02',
+        },
+      ]),
+    ).toEqual([
+      { colId: '__matrix_total', hide: false, pinned: 'left', width: 140 },
+      { colId: '__matrix_col__2026-05-01', hide: true, width: 120 },
+      { colId: 'metric_name', hide: false },
+      { colId: '__matrix_col__2026-05-02', hide: false },
+    ]);
+  });
 });
