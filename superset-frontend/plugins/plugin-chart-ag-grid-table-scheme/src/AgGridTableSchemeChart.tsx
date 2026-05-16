@@ -29,6 +29,7 @@ const COLUMN_VIEW_TOOLBAR_HEIGHT = 48;
 type SchemeChartProps = AgGridTableChartTransformedProps & {
   dashboardId?: number | null;
   datasetId?: number | null;
+  columnSettingsEnabled?: boolean;
 };
 
 type RenderToolbarArgs = {
@@ -49,6 +50,7 @@ export default function AgGridTableSchemeChart(props: SchemeChartProps) {
           gridApi={gridApi}
           colDefs={colDefs}
           includeSortState={!props.serverPagination}
+          columnSettingsEnabled={Boolean(props.columnSettingsEnabled)}
         />
       )}
     />

@@ -52,6 +52,7 @@ type ColumnViewSchemeToolbarProps = {
   gridApi?: GridApi;
   colDefs: ColDef[];
   includeSortState?: boolean;
+  columnSettingsEnabled?: boolean;
 };
 
 export default function ColumnViewSchemeToolbar({
