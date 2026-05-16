@@ -518,7 +518,9 @@ Object.entries(packageConfig.dependencies).forEach(([pkg, relativeDir]) => {
 
   if (/^@superset-ui/.test(pkg) && fs.existsSync(srcPath)) {
     console.log(`[Superset Plugin] Use symlink source for ${pkg} @ ${dir}`);
-    config.resolve.alias[pkg] = path.resolve(APP_DIR, `${dir}/src`);
+    const resolvedSource = path.resolve(APP_DIR, `${dir}/src`);
+    config.resolve.alias[`${pkg}/src`] = resolvedSource;
+    config.resolve.alias[pkg] = resolvedSource;
   }
 });
 console.log(''); // pure cosmetic new line
