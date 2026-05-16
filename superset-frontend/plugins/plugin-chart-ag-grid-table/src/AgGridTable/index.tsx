@@ -49,6 +49,8 @@ import { SearchOption, SortByItem } from '../types';
 import getInitialSortState, { shouldSort } from '../utils/getInitialSortState';
 import { PAGE_SIZE_OPTIONS } from '../consts';
 
+type GridApi = GridReadyEvent['api'];
+
 export interface AgGridTableProps {
   gridTheme?: string;
   isDarkMode?: boolean;
@@ -56,6 +58,10 @@ export interface AgGridTableProps {
   updateInterval?: number;
   data?: any[];
   onGridReady?: (params: GridReadyEvent) => void;
+  renderColumnViewToolbar?: (params: {
+    gridApi?: GridApi;
+    colDefs: ColDef[];
+  }) => JSX.Element | null;
   colDefsFromProps: any[];
   includeSearch: boolean;
   allowRearrangeColumns: boolean;
@@ -114,11 +120,14 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
     cleanedTotals,
     showTotals,
     width,
+    onGridReady: onGridReadyFromProps,
+    renderColumnViewToolbar,
   }) => {
     const gridRef = useRef<AgGridReact>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const rowData = useMemo(() => data, [data]);
     const containerRef = useRef<HTMLDivElement>(null);
+    const [gridApi, setGridApi] = useState<GridApi>();
 
     const searchId = `search-${id}`;
     const gridInitialState: GridState = {
@@ -257,10 +266,15 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
     const onGridReady = (params: GridReadyEvent) => {
       // This will make columns fill the grid width
       params.api.sizeColumnsToFit();
+      if (renderColumnViewToolbar) {
+        setGridApi(params.api);
+      }
+      onGridReadyFromProps?.(params);
     };
 
     return (
       <div style={containerStyles} ref={containerRef}>
+        {renderColumnViewToolbar?.({ gridApi, colDefs: colDefsFromProps })}
         <div className="dropdown-controls-container">
           {renderTimeComparisonDropdown && (
             <div className="time-comparison-dropdown">
