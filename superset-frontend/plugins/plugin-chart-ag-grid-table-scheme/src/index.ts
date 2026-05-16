@@ -21,11 +21,11 @@ import thumbnail from '@superset-ui/plugin-chart-ag-grid-table/src/images/thumbn
 import example1 from '@superset-ui/plugin-chart-ag-grid-table/src/images/Table.jpg';
 import example2 from '@superset-ui/plugin-chart-ag-grid-table/src/images/Table2.jpg';
 import example3 from '@superset-ui/plugin-chart-ag-grid-table/src/images/Table3.jpg';
-import controlPanel from '@superset-ui/plugin-chart-ag-grid-table/src/controlPanel';
 import type {
   TableChartFormData,
   TableChartProps,
 } from '@superset-ui/plugin-chart-ag-grid-table/src/types';
+import controlPanel from './controlPanel';
 import buildQuery from './matrix/buildQuery';
 import transformProps from './transformProps';
 
