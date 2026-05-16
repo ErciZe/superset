@@ -71,7 +71,8 @@ const buildMatrixConfig = (formData: ScopedFormData): MatrixTransformConfig => {
     .filter((value): value is string => Boolean(value));
   const metric = firstValue(formData.matrix_value);
   const value = metric ? getMetricLabel(metric) : '';
-  const rowSort = toFieldName(firstValue(formData.matrix_row_sort)) ?? undefined;
+  const rowSort =
+    toFieldName(firstValue(formData.matrix_row_sort)) ?? undefined;
   const unitField =
     toFieldName(firstValue(formData.matrix_unit_field)) ?? undefined;
 

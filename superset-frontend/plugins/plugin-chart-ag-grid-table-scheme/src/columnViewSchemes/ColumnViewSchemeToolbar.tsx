@@ -161,7 +161,10 @@ export default function ColumnViewSchemeToolbar({
           {t('Save as')}
         </Button>
         {columnSettingsEnabled && (
-          <Button disabled={isBusy || !isGridReady} onClick={openColumnSettings}>
+          <Button
+            disabled={isBusy || !isGridReady}
+            onClick={openColumnSettings}
+          >
             {t('列设置')}
           </Button>
         )}

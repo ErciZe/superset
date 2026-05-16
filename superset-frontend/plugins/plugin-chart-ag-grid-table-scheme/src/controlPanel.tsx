@@ -57,7 +57,9 @@ const matrixControls = [
         default: false,
         renderTrigger: true,
         visibility: isAggMode,
-        description: t('Transform aggregate records into a row-by-column matrix.'),
+        description: t(
+          'Transform aggregate records into a row-by-column matrix.',
+        ),
       },
     },
   ],
@@ -197,7 +199,9 @@ const matrixControls = [
         label: t('Column settings enabled'),
         default: false,
         renderTrigger: true,
-        description: t('Show the column settings entry point in the chart toolbar.'),
+        description: t(
+          'Show the column settings entry point in the chart toolbar.',
+        ),
       },
     },
   ],
