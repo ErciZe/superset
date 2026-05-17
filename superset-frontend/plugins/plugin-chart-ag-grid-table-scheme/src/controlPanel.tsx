@@ -23,7 +23,7 @@ import {
   sharedControls,
 } from '@superset-ui/chart-controls';
 import { QueryFormColumn, QueryMode, t } from '@superset-ui/core';
-import officialControlPanel from '@superset-ui/plugin-chart-ag-grid-table/src/controlPanel';
+import officialControlPanel from '../../plugin-chart-ag-grid-table/src/controlPanel';
 
 const getQueryMode = (controls: ControlStateMapping): QueryMode => {
   const mode = controls?.query_mode?.value;
@@ -191,17 +191,18 @@ const matrixControls = [
       },
     },
   ],
+];
+
+const columnViewControls = [
   [
     {
       name: 'column_view_schemes_enabled',
       config: {
         type: 'CheckboxControl',
-        label: t('Column view schemes enabled'),
+        label: t('启用列配置方案'),
         default: true,
         renderTrigger: true,
-        description: t(
-          'Show the column view toolbar for switching, saving, and resetting column views.',
-        ),
+        description: t('显示用于切换、保存和重置列配置方案的工具栏。'),
       },
     },
   ],
@@ -210,32 +211,82 @@ const matrixControls = [
       name: 'column_settings_enabled',
       config: {
         type: 'CheckboxControl',
-        label: t('Column settings enabled'),
+        label: t('显示列设置按钮'),
         default: false,
         renderTrigger: true,
-        description: t(
-          'Show the column settings entry point in the chart toolbar.',
-        ),
+        description: t('在图表工具栏中显示列设置按钮。'),
       },
     },
   ],
 ];
 
-const querySection = officialControlPanel.controlPanelSections[0];
+const officialControlPanelSections =
+  officialControlPanel.controlPanelSections.filter(
+    (section): section is NonNullable<typeof section> => Boolean(section),
+  );
+
+const querySection = officialControlPanelSections[0];
+const optionsSectionIndex = officialControlPanelSections.findIndex(section =>
+  section.controlSetRows.some(row =>
+    row.some(
+      control =>
+        Boolean(control) &&
+        typeof control === 'object' &&
+        (control as { name?: string }).name === 'column_config',
+    ),
+  ),
+);
 
 if (!querySection) {
   throw new Error('AG Grid table Query control panel section is required');
 }
 
+if (optionsSectionIndex === -1) {
+  throw new Error('AG Grid table Options control panel section is required');
+}
+
+const optionsSection = officialControlPanelSections[optionsSectionIndex];
+
+if (!optionsSection) {
+  throw new Error('AG Grid table Options control panel section is required');
+}
+
+const columnConfigRowIndex = optionsSection.controlSetRows.findIndex(row =>
+  row.some(
+    control =>
+      Boolean(control) &&
+      typeof control === 'object' &&
+      (control as { name?: string }).name === 'column_config',
+  ),
+);
+
+if (columnConfigRowIndex === -1) {
+  throw new Error('AG Grid table column configuration control is required');
+}
+
 const controlPanel: ControlPanelConfig = {
   ...officialControlPanel,
-  controlPanelSections: [
-    {
-      ...querySection,
-      controlSetRows: [...querySection.controlSetRows, ...matrixControls],
-    },
-    ...officialControlPanel.controlPanelSections.slice(1),
-  ],
+  controlPanelSections: officialControlPanelSections.map((section, index) => {
+    if (index === 0) {
+      return {
+        ...section,
+        controlSetRows: [...section.controlSetRows, ...matrixControls],
+      };
+    }
+
+    if (index === optionsSectionIndex) {
+      return {
+        ...section,
+        controlSetRows: [
+          ...section.controlSetRows.slice(0, columnConfigRowIndex + 1),
+          ...columnViewControls,
+          ...section.controlSetRows.slice(columnConfigRowIndex + 1),
+        ],
+      };
+    }
+
+    return section;
+  }),
 };
 
 export default controlPanel;

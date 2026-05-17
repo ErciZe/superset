@@ -126,7 +126,7 @@ export const useColumnViewSchemes = ({
       })
       .catch(() => {
         if (isMounted) {
-          message.error(t('Failed to load column view schemes.'));
+          message.error(t('加载列配置方案失败。'));
         }
       })
       .finally(() => {
@@ -217,7 +217,7 @@ export const useColumnViewSchemes = ({
       setActiveScheme(savedScheme);
       return savedScheme;
     } catch (error) {
-      message.error(t('Failed to save column view scheme.'));
+      message.error(t('保存列配置方案失败。'));
       throw error;
     } finally {
       setSaving(false);
@@ -237,7 +237,7 @@ export const useColumnViewSchemes = ({
         setActiveScheme(savedScheme);
         return savedScheme;
       } catch (error) {
-        message.error(t('Failed to save column view scheme.'));
+        message.error(t('保存列配置方案失败。'));
         throw error;
       } finally {
         setSaving(false);
@@ -262,7 +262,7 @@ export const useColumnViewSchemes = ({
       setActiveScheme(defaultScheme);
       return defaultScheme;
     } catch (error) {
-      message.error(t('Failed to set default column view scheme.'));
+      message.error(t('设置默认列配置方案失败。'));
       throw error;
     } finally {
       setSaving(false);
@@ -289,7 +289,7 @@ export const useColumnViewSchemes = ({
       );
       setActiveScheme(null);
     } catch (error) {
-      message.error(t('Failed to delete column view scheme.'));
+      message.error(t('删除列配置方案失败。'));
       throw error;
     } finally {
       setDeleting(false);

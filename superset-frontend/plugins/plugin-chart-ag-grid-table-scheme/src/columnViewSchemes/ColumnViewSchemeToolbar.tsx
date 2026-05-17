@@ -149,7 +149,7 @@ export default function ColumnViewSchemeToolbar({
               : scheme.name,
             value: scheme.id,
           }))}
-          placeholder={t('Column view')}
+          placeholder={t('列配置方案')}
           value={activeScheme?.id}
         />
       )}
@@ -185,7 +185,7 @@ export default function ColumnViewSchemeToolbar({
             loading={saving}
             onClick={setActiveAsDefault}
           >
-            {t('Set default')}
+            {t('设为默认')}
           </Button>
         )}
         <Button disabled={isBusy || !isGridReady} onClick={resetColumns}>
@@ -208,7 +208,7 @@ export default function ColumnViewSchemeToolbar({
         onCancel={closeSaveAsModal}
         onOk={handleSaveAs}
         open={isSaveAsOpen}
-        title={t('Save column view')}
+        title={t('保存列配置方案')}
       >
         <Input
           autoFocus
@@ -219,7 +219,7 @@ export default function ColumnViewSchemeToolbar({
               handleSaveAs();
             }
           }}
-          placeholder={t('Scheme name')}
+          placeholder={t('方案名称')}
           value={newSchemeName}
         />
       </Modal>

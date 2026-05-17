@@ -8118,7 +8118,7 @@ msgid "Piecewise"
 msgstr ""
 
 msgid "Pin"
-msgstr "标记"
+msgstr "固定"
 
 #, fuzzy
 msgid "Pin Left"
@@ -12488,9 +12488,8 @@ msgstr "未知错误"
 msgid "Unknown value"
 msgstr "未知值"
 
-#, fuzzy
 msgid "Unpin"
-msgstr "正在执行"
+msgstr "取消固定"
 
 #, python-format
 msgid "Unsafe return type for function %(func)s: %(value_type)s"
@@ -14628,3 +14627,62 @@ msgstr "缩放面积"
 
 msgid "© Layer attribution"
 msgstr ""
+
+msgid "Column view"
+msgstr "列配置方案"
+
+msgid "Column settings"
+msgstr "列设置"
+
+msgid "Drag column"
+msgstr "拖动列"
+
+msgid "Enable column view schemes"
+msgstr "启用列配置方案"
+
+msgid "Failed to delete column view scheme."
+msgstr "删除列配置方案失败。"
+
+msgid "Failed to load column view schemes."
+msgstr "加载列配置方案失败。"
+
+msgid "Failed to save column view scheme."
+msgstr "保存列配置方案失败。"
+
+msgid "Failed to set default column view scheme."
+msgstr "设置默认列配置方案失败。"
+
+msgid "Restore default"
+msgstr "恢复默认"
+
+msgid "Save and apply"
+msgstr "保存并应用"
+
+msgid "Save column view"
+msgstr "保存列配置方案"
+
+msgid "Scheme name"
+msgstr "方案名称"
+
+msgid "Search fields"
+msgstr "搜索字段"
+
+msgid "Selected"
+msgstr "已选"
+
+msgid "Set default"
+msgstr "设为默认"
+
+msgid "Show column settings button"
+msgstr "显示列设置按钮"
+
+msgid "Show the column settings button in the chart toolbar."
+msgstr "在图表工具栏中显示列设置按钮。"
+
+msgid ""
+"Show the toolbar for switching, saving, and resetting column view "
+"schemes."
+msgstr "显示用于切换、保存和重置列配置方案的工具栏。"
+
+msgid "Table V2 with Column Schemes"
+msgstr "列配置表格 V2"
