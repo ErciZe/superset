@@ -26,6 +26,10 @@ import {
 import officialTransformProps from '../../plugin-chart-ag-grid-table/src/transformProps';
 import type { TableChartProps } from '../../plugin-chart-ag-grid-table/src/types';
 import DateWithFormatter from '../../plugin-chart-ag-grid-table/src/utils/DateWithFormatter';
+import {
+  createMatrixCellStyle,
+  getMatrixCellColorFormatters,
+} from './matrix/cellColorRules';
 import { matrixTransform } from './matrix/matrixTransform';
 import { shouldUseMatrixRawTotalSummary } from './matrix/summary';
 import type { MatrixFormData, MatrixTransformConfig } from './matrix/types';
@@ -181,6 +185,12 @@ export default function transformProps(chartProps: TableChartProps) {
       summaryRecords: shouldUseSummaryRecords ? summaryRecords : undefined,
     },
   );
+  const matrixCellColorFormatters = getMatrixCellColorFormatters({
+    rules: formData.matrix_cell_color_rules,
+    generatedColumnIds: matrixResult.generatedColumnIds,
+    data: matrixResult.data,
+    theme: chartProps.theme,
+  });
 
   return {
     ...scopedProps,
@@ -188,5 +198,7 @@ export default function transformProps(chartProps: TableChartProps) {
     columns: matrixResult.columns,
     metrics: matrixResult.generatedColumnIds,
     percentMetrics: [],
+    columnColorFormatters: [],
+    additionalCellStyle: createMatrixCellStyle(matrixCellColorFormatters),
   };
 }

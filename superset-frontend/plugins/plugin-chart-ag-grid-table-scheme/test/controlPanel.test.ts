@@ -23,6 +23,11 @@ type ControlConfig = {
   config?: {
     label?: string;
     choices?: Array<[string, string]>;
+    type?: string;
+    visibility?: (args: {
+      controls: Record<string, { value?: unknown }>;
+    }) => boolean;
+    mapStateToProps?: (...args: any[]) => Record<string, unknown>;
   };
   name: string;
 };
@@ -159,5 +164,68 @@ describe('AG Grid table scheme control panel', () => {
       getControl(querySection.controlSetRows, 'matrix_max_generated_columns')
         ?.config?.label,
     ).toBe('矩阵最大生成列数');
+  });
+
+  it('adds matrix cell conditional coloring with a matrix value target', () => {
+    const controls = controlPanel.controlPanelSections
+      .filter((section): section is NonNullable<typeof section> =>
+        Boolean(section),
+      )
+      .flatMap(section => section.controlSetRows);
+    const cellColorControl = getControl(controls, 'matrix_cell_color_rules');
+
+    expect(cellColorControl?.config).toMatchObject({
+      type: 'ConditionalFormattingControl',
+      label: '单元格条件着色',
+    });
+    expect(
+      cellColorControl?.config?.visibility?.({
+        controls: {
+          query_mode: { value: 'aggregate' },
+          matrix_mode_enabled: { value: true },
+        },
+      }),
+    ).toBe(true);
+
+    const mappedProps = cellColorControl?.config?.mapStateToProps?.(
+      {},
+      {},
+      { chartStatus: 'success' },
+    );
+    expect(mappedProps?.columnOptions).toEqual([
+      {
+        value: 'matrix_value_cells',
+        label: '矩阵值单元格',
+      },
+    ]);
+  });
+
+  it('hides official conditional formatting while matrix mode is enabled', () => {
+    const controls = controlPanel.controlPanelSections
+      .filter((section): section is NonNullable<typeof section> =>
+        Boolean(section),
+      )
+      .flatMap(section => section.controlSetRows);
+    const officialConditionalFormatting = getControl(
+      controls,
+      'conditional_formatting',
+    );
+
+    expect(
+      officialConditionalFormatting?.config?.visibility?.({
+        controls: {
+          query_mode: { value: 'aggregate' },
+          matrix_mode_enabled: { value: true },
+        },
+      }),
+    ).toBe(false);
+    expect(
+      officialConditionalFormatting?.config?.visibility?.({
+        controls: {
+          query_mode: { value: 'aggregate' },
+          matrix_mode_enabled: { value: false },
+        },
+      }),
+    ).toBe(true);
   });
 });

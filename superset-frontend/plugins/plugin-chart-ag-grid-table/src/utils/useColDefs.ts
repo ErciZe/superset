@@ -23,6 +23,7 @@ import { DataRecord, GenericDataType } from '@superset-ui/core';
 import { ColorFormatters } from '@superset-ui/chart-controls';
 import { extent as d3Extent, max as d3Max } from 'd3-array';
 import {
+  AdditionalCellStyle,
   BasicColorFormatterType,
   CellRendererProps,
   InputColumn,
@@ -53,6 +54,7 @@ type UseColDefsProps = {
   columnColorFormatters: ColorFormatters;
   allowRearrangeColumns?: boolean;
   basicColorFormatters?: { [Key: string]: BasicColorFormatterType }[];
+  additionalCellStyle?: AdditionalCellStyle;
   isUsingTimeComparison?: boolean;
   emitCrossFilters?: boolean;
   alignPositiveNegative: boolean;
@@ -140,6 +142,7 @@ export const useColDefs = ({
   columnColorFormatters,
   allowRearrangeColumns,
   basicColorFormatters,
+  additionalCellStyle,
   isUsingTimeComparison,
   emitCrossFilters,
   alignPositiveNegative,
@@ -207,6 +210,7 @@ export const useColDefs = ({
             hasBasicColorFormatters,
             basicColorFormatters,
             col,
+            additionalCellStyle,
           }),
         cellClass: p =>
           getCellClass({
@@ -282,6 +286,7 @@ export const useColDefs = ({
       defaultAlignPN,
       columnColorFormatters,
       basicColorFormatters,
+      additionalCellStyle,
       showCellBars,
       colorPositiveNegative,
       isUsingTimeComparison,

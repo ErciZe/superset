@@ -17,6 +17,7 @@
  * under the License.
  */
 import { ColorFormatters } from '@superset-ui/chart-controls';
+import type { CSSProperties } from 'react';
 import {
   NumberFormatter,
   TimeFormatter,
@@ -37,6 +38,7 @@ import {
   Metric,
 } from '@superset-ui/core';
 import {
+  CellClassParams,
   ColDef,
   Column,
   IHeaderParams,
@@ -140,6 +142,10 @@ export interface ServerPaginationData {
   searchColumn?: string;
 }
 
+export type AdditionalCellStyle = (
+  params: CellClassParams & { col: InputColumn },
+) => Partial<CSSProperties> | undefined;
+
 export interface AgGridTableChartTransformedProps<
   D extends DataRecord = DataRecord,
 > {
@@ -175,6 +181,7 @@ export interface AgGridTableChartTransformedProps<
   columnColorFormatters: ColorFormatters;
   basicColorFormatters?: { [Key: string]: BasicColorFormatterType }[];
   basicColorColumnFormatters?: { [Key: string]: BasicColorFormatterType }[];
+  additionalCellStyle?: AdditionalCellStyle;
   formData: TableChartFormData;
 }
 

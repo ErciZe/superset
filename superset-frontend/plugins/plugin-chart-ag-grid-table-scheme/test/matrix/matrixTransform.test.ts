@@ -1,5 +1,6 @@
 import { GenericDataType, getTimeFormatter } from '@superset-ui/core';
 import {
+  getMatrixRawValueField,
   MATRIX_TOTAL_COL_ID,
   matrixTransform,
 } from '../../src/matrix/matrixTransform';
@@ -117,6 +118,41 @@ describe('matrixTransform', () => {
       metric_name: 'Sales',
       [MATRIX_TOTAL_COL_ID]: '30.00',
       '__matrix_col__2026-05-01': '15.00',
+    });
+  });
+
+  it('preserves generated cell display values and exposes raw values for styling', () => {
+    const result = matrixTransform(records, {
+      rows: ['metric_name'],
+      columns: ['biz_date'],
+      value: 'value',
+      rowSort: 'metric_order',
+      unitField: 'unit',
+      showTotal: true,
+      totalPosition: 'left',
+      calculation: 'raw',
+      maxGeneratedColumns: 10,
+      valueFormatter: (value: number) => value.toFixed(2),
+    });
+
+    expect(result.rawValueColumnIds).toEqual([
+      getMatrixRawValueField('__matrix_col__2026-05-01'),
+      getMatrixRawValueField('__matrix_col__2026-05-02'),
+    ]);
+    expect(result.columns.map(column => column.key)).not.toContain(
+      getMatrixRawValueField('__matrix_col__2026-05-01'),
+    );
+    expect(result.data[0]).toMatchObject({
+      metric_name: 'Profit %',
+      '__matrix_col__2026-05-01': '9.79%',
+      [getMatrixRawValueField('__matrix_col__2026-05-01')]: 9.79,
+      '__matrix_col__2026-05-02': null,
+      [getMatrixRawValueField('__matrix_col__2026-05-02')]: null,
+    });
+    expect(result.data[1]).toMatchObject({
+      metric_name: 'Sales',
+      '__matrix_col__2026-05-01': '15.00',
+      [getMatrixRawValueField('__matrix_col__2026-05-01')]: 15,
     });
   });
 

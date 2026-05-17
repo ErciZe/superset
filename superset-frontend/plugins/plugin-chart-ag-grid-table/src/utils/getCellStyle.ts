@@ -19,7 +19,11 @@
 
 import { ColorFormatters } from '@superset-ui/chart-controls';
 import { CellClassParams } from '@superset-ui/core/components/ThemedAgGridReact';
-import { BasicColorFormatterType, InputColumn } from '../types';
+import {
+  AdditionalCellStyle,
+  BasicColorFormatterType,
+  InputColumn,
+} from '../types';
 
 type CellStyleParams = CellClassParams & {
   hasColumnColorFormatters: boolean | undefined;
@@ -29,6 +33,7 @@ type CellStyleParams = CellClassParams & {
     [Key: string]: BasicColorFormatterType;
   }[];
   col: InputColumn;
+  additionalCellStyle?: AdditionalCellStyle;
 };
 
 const getCellStyle = (params: CellStyleParams) => {
@@ -42,6 +47,7 @@ const getCellStyle = (params: CellStyleParams) => {
     columnColorFormatters,
     col,
     node,
+    additionalCellStyle,
   } = params;
   let backgroundColor;
   if (hasColumnColorFormatters) {
@@ -73,9 +79,14 @@ const getCellStyle = (params: CellStyleParams) => {
   const textAlign =
     col?.config?.horizontalAlign || (col?.isNumeric ? 'right' : 'left');
 
-  return {
+  const baseStyle = {
     backgroundColor: backgroundColor || '',
     textAlign,
+  };
+
+  return {
+    ...baseStyle,
+    ...additionalCellStyle?.({ ...params, col }),
   };
 };
 

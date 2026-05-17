@@ -24,6 +24,7 @@ import {
 } from '@superset-ui/chart-controls';
 import { QueryFormColumn, QueryMode, t } from '@superset-ui/core';
 import officialControlPanel from '../../plugin-chart-ag-grid-table/src/controlPanel';
+import { MATRIX_CELL_COLOR_RULE_COLUMN } from './matrix/cellColorRules';
 
 const getQueryMode = (controls: ControlStateMapping): QueryMode => {
   const mode = controls?.query_mode?.value;
@@ -47,7 +48,11 @@ const matrixVisibility = ({
 }: Pick<ControlPanelsContainerProps, 'controls'>) =>
   isAggMode({ controls }) && Boolean(controls?.matrix_mode_enabled?.value);
 
-const matrixControls = [
+type ControlSetRows = NonNullable<
+  ControlPanelConfig['controlPanelSections'][number]
+>['controlSetRows'];
+
+const matrixControls: ControlSetRows = [
   [
     {
       name: 'matrix_mode_enabled',
@@ -191,7 +196,7 @@ const matrixControls = [
   ],
 ];
 
-const columnViewControls = [
+const columnViewControls: ControlSetRows = [
   [
     {
       name: 'column_view_schemes_enabled',
@@ -218,6 +223,102 @@ const columnViewControls = [
   ],
 ];
 
+const matrixCellColorControls: ControlSetRows = [
+  [
+    {
+      name: 'matrix_cell_color_rules',
+      config: {
+        type: 'ConditionalFormattingControl',
+        renderTrigger: true,
+        label: t('单元格条件着色'),
+        description: t('按数值阈值为矩阵值单元格设置背景色。'),
+        visibility: matrixVisibility,
+        shouldMapStateToProps() {
+          return true;
+        },
+        mapStateToProps(
+          _explore: unknown,
+          _control: unknown,
+          chart?: { chartStatus?: string },
+        ) {
+          return {
+            removeIrrelevantConditions: chart?.chartStatus === 'success',
+            columnOptions: [
+              {
+                value: MATRIX_CELL_COLOR_RULE_COLUMN,
+                label: t('矩阵值单元格'),
+              },
+            ],
+            verboseMap: {
+              [MATRIX_CELL_COLOR_RULE_COLUMN]: t('矩阵值单元格'),
+            },
+          };
+        },
+      },
+    },
+  ],
+];
+
+const findControlRowIndex = (rows: ControlSetRows, controlName: string) =>
+  rows.findIndex(row =>
+    row.some(
+      control =>
+        Boolean(control) &&
+        typeof control === 'object' &&
+        (control as { name?: string }).name === controlName,
+    ),
+  );
+
+const insertRowsAfterControl = (
+  rows: ControlSetRows,
+  controlName: string,
+  rowsToInsert: ControlSetRows,
+) => {
+  const rowIndex = findControlRowIndex(rows, controlName);
+  if (rowIndex === -1) {
+    throw new Error(`AG Grid table ${controlName} control is required`);
+  }
+  return [
+    ...rows.slice(0, rowIndex + 1),
+    ...rowsToInsert,
+    ...rows.slice(rowIndex + 1),
+  ];
+};
+
+const hideOfficialConditionalFormattingInMatrix = (
+  rows: ControlSetRows,
+): ControlSetRows =>
+  rows.map(row =>
+    row.map(control => {
+      if (
+        !control ||
+        typeof control !== 'object' ||
+        (control as { name?: string }).name !== 'conditional_formatting'
+      ) {
+        return control;
+      }
+
+      const typedControl = control as {
+        config?: {
+          visibility?: (
+            props: Pick<ControlPanelsContainerProps, 'controls'>,
+          ) => boolean;
+        };
+      };
+      const previousVisibility = typedControl.config?.visibility;
+
+      return {
+        ...control,
+        config: {
+          ...(control as { config?: Record<string, unknown> }).config,
+          visibility: (props: Pick<ControlPanelsContainerProps, 'controls'>) =>
+            !matrixVisibility(props) &&
+            (previousVisibility ? previousVisibility(props) : true),
+        },
+      } as unknown as typeof control;
+    }),
+  );
+
 const officialControlPanelSections =
   officialControlPanel.controlPanelSections.filter(
     (section): section is NonNullable<typeof section> => Boolean(section),
@@ -234,6 +335,17 @@ const optionsSectionIndex = officialControlPanelSections.findIndex(section =>
     ),
   ),
 );
+const conditionalFormattingSectionIndex =
+  officialControlPanelSections.findIndex(section =>
+    section.controlSetRows.some(row =>
+      row.some(
+        control =>
+          Boolean(control) &&
+          typeof control === 'object' &&
+          (control as { name?: string }).name === 'conditional_formatting',
+      ),
+    ),
+  );
 
 if (!querySection) {
   throw new Error('AG Grid table Query control panel section is required');
@@ -243,23 +355,38 @@ if (optionsSectionIndex === -1) {
   throw new Error('AG Grid table Options control panel section is required');
 }
 
+if (conditionalFormattingSectionIndex === -1) {
+  throw new Error('AG Grid table conditional formatting section is required');
+}
+
 const optionsSection = officialControlPanelSections[optionsSectionIndex];
+const conditionalFormattingSection =
+  officialControlPanelSections[conditionalFormattingSectionIndex];
 
 if (!optionsSection) {
   throw new Error('AG Grid table Options control panel section is required');
 }
 
-const columnConfigRowIndex = optionsSection.controlSetRows.findIndex(row =>
-  row.some(
-    control =>
-      Boolean(control) &&
-      typeof control === 'object' &&
-      (control as { name?: string }).name === 'column_config',
-  ),
+if (!conditionalFormattingSection) {
+  throw new Error('AG Grid table conditional formatting section is required');
+}
+
+const columnConfigRowIndex = findControlRowIndex(
+  optionsSection.controlSetRows,
+  'column_config',
+);
+
+const conditionalFormattingRowIndex = findControlRowIndex(
+  conditionalFormattingSection.controlSetRows,
+  'conditional_formatting',
 );
 
 if (columnConfigRowIndex === -1) {
   throw new Error('AG Grid table column configuration control is required');
+}
+
+if (conditionalFormattingRowIndex === -1) {
+  throw new Error('AG Grid table conditional formatting control is required');
 }
 
 const controlPanel: ControlPanelConfig = {
@@ -272,18 +399,28 @@ const controlPanel: ControlPanelConfig = {
       };
     }
 
-    if (index === optionsSectionIndex) {
-      return {
-        ...section,
-        controlSetRows: [
-          ...section.controlSetRows.slice(0, columnConfigRowIndex + 1),
-          ...columnViewControls,
-          ...section.controlSetRows.slice(columnConfigRowIndex + 1),
-        ],
-      };
+    let { controlSetRows } = section;
+
+    if (index === conditionalFormattingSectionIndex) {
+      controlSetRows = insertRowsAfterControl(
+        hideOfficialConditionalFormattingInMatrix(section.controlSetRows),
+        'conditional_formatting',
+        matrixCellColorControls,
+      );
     }
 
-    return section;
+    if (index === optionsSectionIndex) {
+      controlSetRows = insertRowsAfterControl(
+        controlSetRows,
+        'column_config',
+        columnViewControls,
+      );
+    }
+
+    return {
+      ...section,
+      controlSetRows,
+    };
   }),
 };
 

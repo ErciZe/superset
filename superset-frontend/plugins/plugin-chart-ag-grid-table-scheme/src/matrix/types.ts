@@ -22,6 +22,7 @@ import type {
   QueryFormColumn,
   QueryFormMetric,
 } from '@superset-ui/core';
+import type { ConditionalFormattingConfig } from '@superset-ui/chart-controls';
 import type { DataColumnMeta } from '../../../plugin-chart-ag-grid-table/src/types';
 
 export type MatrixCalculation =
@@ -54,6 +55,7 @@ export type MatrixTransformResult = {
   data: DataRecord[];
   columns: DataColumnMeta[];
   generatedColumnIds: string[];
+  rawValueColumnIds: string[];
 };
 
 export type MatrixFormData = {
@@ -68,6 +70,7 @@ export type MatrixFormData = {
   matrix_total_position?: MatrixTotalPosition;
   matrix_value_calculation?: MatrixCalculation;
   matrix_max_generated_columns?: number;
+  matrix_cell_color_rules?: ConditionalFormattingConfig[];
   column_view_schemes_enabled?: boolean;
   column_settings_enabled?: boolean;
 };

@@ -31,6 +31,10 @@ import type {
 
 export const MATRIX_TOTAL_COL_ID = '__matrix_total';
 export const MATRIX_COL_PREFIX = '__matrix_col__';
+export const MATRIX_RAW_VALUE_COL_PREFIX = '__matrix_raw_value__';
+
+export const getMatrixRawValueField = (columnId: string) =>
+  `${MATRIX_RAW_VALUE_COL_PREFIX}${columnId}`;
 
 type RowBucket = {
   rowValues: DataRecord;
@@ -234,6 +238,19 @@ const createColumn = (
   formatter,
   config: {},
 });
+
+const setRawValue = (
+  row: DataRecord,
+  columnId: string,
+  value: number | null,
+) => {
+  Object.defineProperty(row, getMatrixRawValueField(columnId), {
+    value,
+    enumerable: false,
+    configurable: true,
+    writable: true,
+  });
+};
 
 const assertConsistentBucketValue = (
   fieldName: string,
@@ -444,8 +461,10 @@ export function matrixTransform(
       const ranks = getDenseRanks(rowBucket.cells);
       sortedGeneratedColumnIds.forEach(columnId => {
         const cell = rowBucket.cells.get(columnId);
-        row[columnId] =
+        const rankedValue =
           typeof cell === 'number' ? (ranks.get(cell) ?? null) : null;
+        row[columnId] = rankedValue;
+        setRawValue(row, columnId, rankedValue);
       });
       return row;
     }
@@ -454,10 +473,17 @@ export function matrixTransform(
       const cell = rowBucket.cells.get(columnId);
       if (calculation === 'raw') {
         row[columnId] = formatRawValue(cell, rowBucket.unit, valueFormatter);
+        setRawValue(row, columnId, cell ?? null);
       } else if (calculation === 'contribution') {
-        row[columnId] = typeof cell === 'number' ? cell / matrixTotal : null;
+        const contributionValue =
+          typeof cell === 'number' ? cell / matrixTotal : null;
+        row[columnId] = contributionValue;
+        setRawValue(row, columnId, contributionValue);
       } else if (calculation === 'row_contribution') {
-        row[columnId] = typeof cell === 'number' ? cell / rowTotal : null;
+        const rowContributionValue =
+          typeof cell === 'number' ? cell / rowTotal : null;
+        row[columnId] = rowContributionValue;
+        setRawValue(row, columnId, rowContributionValue);
       }
     });
 
@@ -498,5 +524,6 @@ export function matrixTransform(
     data,
     columns: resultColumns,
     generatedColumnIds: sortedGeneratedColumnIds,
+    rawValueColumnIds: sortedGeneratedColumnIds.map(getMatrixRawValueField),
   };
 }
