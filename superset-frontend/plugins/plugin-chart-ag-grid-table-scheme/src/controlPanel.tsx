@@ -53,13 +53,11 @@ const matrixControls = [
       name: 'matrix_mode_enabled',
       config: {
         type: 'CheckboxControl',
-        label: t('Enable matrix mode'),
+        label: t('启用矩阵模式'),
         default: false,
         renderTrigger: true,
         visibility: isAggMode,
-        description: t(
-          'Transform aggregate records into a row-by-column matrix.',
-        ),
+        description: t('将聚合记录转换为行列矩阵。'),
       },
     },
   ],
@@ -68,7 +66,7 @@ const matrixControls = [
       name: 'matrix_rows',
       config: {
         ...sharedControls.groupby,
-        label: t('Matrix rows'),
+        label: t('矩阵行维度'),
         multi: true,
         resetOnHide: false,
         visibility: matrixVisibility,
@@ -80,7 +78,7 @@ const matrixControls = [
       name: 'matrix_columns',
       config: {
         ...sharedControls.groupby,
-        label: t('Matrix columns'),
+        label: t('矩阵列维度'),
         multi: true,
         resetOnHide: false,
         visibility: matrixVisibility,
@@ -92,7 +90,7 @@ const matrixControls = [
       name: 'matrix_value',
       config: {
         ...sharedControls.metrics,
-        label: t('Matrix value'),
+        label: t('矩阵指标值'),
         multi: false,
         resetOnHide: false,
         visibility: matrixVisibility,
@@ -104,7 +102,7 @@ const matrixControls = [
       name: 'matrix_row_sort',
       config: {
         ...sharedControls.groupby,
-        label: t('Row sort'),
+        label: t('行排序字段'),
         multi: false,
         resetOnHide: false,
         visibility: matrixVisibility,
@@ -114,7 +112,7 @@ const matrixControls = [
       name: 'matrix_row_sort_desc',
       config: {
         type: 'CheckboxControl',
-        label: t('Sort descending'),
+        label: t('降序排序'),
         default: false,
         renderTrigger: true,
         visibility: matrixVisibility,
@@ -126,7 +124,7 @@ const matrixControls = [
       name: 'matrix_unit_field',
       config: {
         ...sharedControls.groupby,
-        label: t('Unit field'),
+        label: t('单位字段'),
         multi: false,
         resetOnHide: false,
         visibility: matrixVisibility,
@@ -138,7 +136,7 @@ const matrixControls = [
       name: 'matrix_show_total',
       config: {
         type: 'CheckboxControl',
-        label: t('Show total column'),
+        label: t('显示合计列'),
         default: true,
         renderTrigger: true,
         visibility: matrixVisibility,
@@ -148,12 +146,12 @@ const matrixControls = [
       name: 'matrix_total_position',
       config: {
         type: 'SelectControl',
-        label: t('Total position'),
+        label: t('合计列位置'),
         default: 'left',
         clearable: false,
         choices: [
-          ['left', t('Left')],
-          ['right', t('Right')],
+          ['left', t('左侧')],
+          ['right', t('右侧')],
         ],
         renderTrigger: true,
         visibility: matrixVisibility,
@@ -165,14 +163,14 @@ const matrixControls = [
       name: 'matrix_value_calculation',
       config: {
         type: 'SelectControl',
-        label: t('Value calculation'),
+        label: t('数值计算方式'),
         default: 'raw',
         clearable: false,
         choices: [
-          ['raw', t('Raw value')],
-          ['contribution', t('Contribution')],
-          ['row_contribution', t('Row contribution')],
-          ['row_rank', t('Row rank')],
+          ['raw', t('原始值')],
+          ['contribution', t('整体占比')],
+          ['row_contribution', t('行内占比')],
+          ['row_rank', t('行内排名')],
         ],
         renderTrigger: true,
         visibility: matrixVisibility,
@@ -184,7 +182,7 @@ const matrixControls = [
       name: 'matrix_max_generated_columns',
       config: {
         type: 'TextControl',
-        label: t('Matrix max generated columns'),
+        label: t('矩阵最大生成列数'),
         default: 200,
         renderTrigger: true,
         visibility: matrixVisibility,

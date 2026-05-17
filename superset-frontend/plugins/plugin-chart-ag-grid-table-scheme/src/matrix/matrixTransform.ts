@@ -21,7 +21,7 @@ import {
   type DataRecord,
   type DataRecordValue,
 } from '@superset-ui/core';
-import type { DataColumnMeta } from '@superset-ui/plugin-chart-ag-grid-table/src/types';
+import type { DataColumnMeta } from '../../../plugin-chart-ag-grid-table/src/types';
 
 import type {
   MatrixCalculation,
@@ -251,6 +251,24 @@ const assertConsistentBucketValue = (
   }
 };
 
+const buildSummaryTotals = (
+  summaryRecords: DataRecord[] | undefined,
+  rows: string[],
+  valueField: string,
+) => {
+  if (!summaryRecords) {
+    return undefined;
+  }
+  return summaryRecords.reduce((totals, record) => {
+    const rowKey = buildRowKey(record, rows);
+    if (totals.has(rowKey)) {
+      throw new Error(`Matrix summary row is duplicated for key ${rowKey}.`);
+    }
+    totals.set(rowKey, getMatrixValue(record, valueField));
+    return totals;
+  }, new Map<string, number | null>());
+};
+
 export function matrixTransform(
   records: DataRecord[],
   config: MatrixTransformConfig,
@@ -259,6 +277,7 @@ export function matrixTransform(
     rows,
     columns,
     value,
+    summaryRecords,
     fieldLabels,
     dimensionLabelFormatters,
     temporalFields = [],
@@ -286,6 +305,7 @@ export function matrixTransform(
   }
 
   const rowBuckets = new Map<string, RowBucket>();
+  const summaryTotals = buildSummaryTotals(summaryRecords, rows, value);
   const generatedColumnIds = new Set<string>();
   const generatedColumnLabels = new Map<string, string>();
   const generatedColumnSortValues = new Map<
@@ -395,6 +415,18 @@ export function matrixTransform(
     const rowTotal = sumNumbers(
       sortedGeneratedColumnIds.map(columnId => rowBucket.cells.get(columnId)),
     );
+    const rowKey = buildRowKey(rowBucket.rowValues, rows);
+    if (summaryTotals && showTotal && calculation === 'raw') {
+      if (!summaryTotals.has(rowKey)) {
+        throw new Error(
+          `Matrix summary total is missing for row ${rowBucket.rowLabel}.`,
+        );
+      }
+    }
+    const rawTotal =
+      summaryTotals && showTotal && calculation === 'raw'
+        ? summaryTotals.get(rowKey)
+        : rowTotal;
     if (calculation === 'row_contribution' && rowTotal === 0) {
       throw new Error(
         'Matrix row total must be non-zero for row contribution.',
@@ -404,7 +436,7 @@ export function matrixTransform(
     if (showTotal) {
       row[MATRIX_TOTAL_COL_ID] =
         calculation === 'raw'
-          ? formatRawValue(rowTotal, rowBucket.unit, valueFormatter)
+          ? formatRawValue(rawTotal, rowBucket.unit, valueFormatter)
           : rowTotal;
     }
 

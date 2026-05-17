@@ -19,11 +19,13 @@
 import {
   ensureIsArray,
   type BuildQuery,
+  type QueryObject,
   type QueryFormColumn,
   type QueryFormMetric,
 } from '@superset-ui/core';
 import officialBuildQuery from '../../../plugin-chart-ag-grid-table/src/buildQuery';
 import type { TableChartFormData } from '../../../plugin-chart-ag-grid-table/src/types';
+import { shouldUseMatrixRawTotalSummary } from './summary';
 import type { MatrixFormData } from './types';
 
 type MatrixTableFormData = TableChartFormData & MatrixFormData;
@@ -36,6 +38,17 @@ const unique = <T>(values: T[]): T[] => [...new Set(values)];
 const getMatrixValue = (
   value: MatrixFormData['matrix_value'],
 ): QueryFormMetric | undefined => compactArray(value)[0];
+
+const buildSummaryQuery = (
+  query: QueryObject,
+  summaryColumns: QueryFormColumn[],
+): QueryObject => ({
+  ...query,
+  columns: summaryColumns,
+  row_limit: 0,
+  row_offset: 0,
+  post_processing: [],
+});
 
 const buildQuery: BuildQuery<MatrixTableFormData> = (formData, options) => {
   if (!formData.matrix_mode_enabled) {
@@ -56,7 +69,7 @@ const buildQuery: BuildQuery<MatrixTableFormData> = (formData, options) => {
     throw new Error('Matrix rows, columns, and value are required.');
   }
 
-  return officialBuildQuery(
+  const queryContext = officialBuildQuery(
     {
       ...formData,
       groupby: unique([
@@ -67,12 +80,24 @@ const buildQuery: BuildQuery<MatrixTableFormData> = (formData, options) => {
       ]),
       metrics: [matrixValue],
       percent_metrics: [],
+      show_totals: false,
       timeseries_limit_metric: rowSort[0] ?? null,
       order_desc: Boolean(formData.matrix_row_sort_desc),
       server_pagination: false,
     },
     options,
   );
+
+  if (shouldUseMatrixRawTotalSummary(formData)) {
+    queryContext.queries.push(
+      buildSummaryQuery(
+        queryContext.queries[0],
+        unique([...matrixRows, ...rowSort, ...unitField]),
+      ),
+    );
+  }
+
+  return queryContext;
 };
 
 export default buildQuery;

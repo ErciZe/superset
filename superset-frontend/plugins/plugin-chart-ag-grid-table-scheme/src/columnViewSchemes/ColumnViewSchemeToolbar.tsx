@@ -145,7 +145,7 @@ export default function ColumnViewSchemeToolbar({
           onChange={(value: number | null) => switchScheme(value ?? null)}
           options={schemes.map(scheme => ({
             label: scheme.is_default
-              ? `${scheme.name} (${t('default')})`
+              ? `${scheme.name} (${t('默认')})`
               : scheme.name,
             value: scheme.id,
           }))}
@@ -161,13 +161,13 @@ export default function ColumnViewSchemeToolbar({
               loading={saving}
               onClick={saveActiveScheme}
             >
-              {t('Save')}
+              {t('保存')}
             </Button>
             <Button
               disabled={isBusy || !isGridReady}
               onClick={() => setIsSaveAsOpen(true)}
             >
-              {t('Save as')}
+              {t('另存为')}
             </Button>
           </>
         )}
@@ -189,7 +189,7 @@ export default function ColumnViewSchemeToolbar({
           </Button>
         )}
         <Button disabled={isBusy || !isGridReady} onClick={resetColumns}>
-          {t('Reset')}
+          {t('重置')}
         </Button>
         {schemeManagementEnabled && hasActiveScheme && (
           <Button
@@ -198,7 +198,7 @@ export default function ColumnViewSchemeToolbar({
             loading={deleting}
             onClick={deleteActiveScheme}
           >
-            {t('Delete')}
+            {t('删除')}
           </Button>
         )}
       </Space>

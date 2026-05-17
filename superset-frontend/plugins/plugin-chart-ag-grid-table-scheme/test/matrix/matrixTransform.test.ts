@@ -120,6 +120,106 @@ describe('matrixTransform', () => {
     });
   });
 
+  it('uses summary records for raw totals when provided', () => {
+    const result = matrixTransform(records, {
+      rows: ['metric_name'],
+      columns: ['biz_date'],
+      value: 'value',
+      rowSort: 'metric_order',
+      unitField: 'unit',
+      showTotal: true,
+      totalPosition: 'left',
+      calculation: 'raw',
+      maxGeneratedColumns: 10,
+      summaryRecords: [
+        {
+          metric_name: 'Profit %',
+          metric_order: 1,
+          value: 12.7538,
+          unit: '%',
+        },
+        {
+          metric_name: 'Sales',
+          metric_order: 2,
+          value: 30,
+          unit: '件',
+        },
+      ],
+    });
+
+    expect(result.data[0]).toMatchObject({
+      metric_name: 'Profit %',
+      [MATRIX_TOTAL_COL_ID]: '12.7538%',
+      '__matrix_col__2026-05-01': '9.79%',
+    });
+    expect(result.data[1]).toMatchObject({
+      metric_name: 'Sales',
+      [MATRIX_TOTAL_COL_ID]: 30,
+    });
+  });
+
+  it('preserves null raw totals from summary records', () => {
+    const result = matrixTransform(records, {
+      rows: ['metric_name'],
+      columns: ['biz_date'],
+      value: 'value',
+      rowSort: 'metric_order',
+      unitField: 'unit',
+      showTotal: true,
+      totalPosition: 'left',
+      calculation: 'raw',
+      maxGeneratedColumns: 10,
+      summaryRecords: [
+        {
+          metric_name: 'Profit %',
+          metric_order: 1,
+          value: null,
+          unit: '%',
+        },
+        {
+          metric_name: 'Sales',
+          metric_order: 2,
+          value: 30,
+          unit: '件',
+        },
+      ],
+    });
+
+    expect(result.data[0]).toMatchObject({
+      metric_name: 'Profit %',
+      [MATRIX_TOTAL_COL_ID]: null,
+      '__matrix_col__2026-05-01': '9.79%',
+    });
+    expect(result.data[1]).toMatchObject({
+      metric_name: 'Sales',
+      [MATRIX_TOTAL_COL_ID]: 30,
+    });
+  });
+
+  it('fails fast when a summary total is missing for a raw row', () => {
+    expect(() =>
+      matrixTransform(records, {
+        rows: ['metric_name'],
+        columns: ['biz_date'],
+        value: 'value',
+        rowSort: 'metric_order',
+        unitField: 'unit',
+        showTotal: true,
+        totalPosition: 'left',
+        calculation: 'raw',
+        maxGeneratedColumns: 10,
+        summaryRecords: [
+          {
+            metric_name: 'Profit %',
+            metric_order: 1,
+            value: 12.7538,
+            unit: '%',
+          },
+        ],
+      }),
+    ).toThrow('Matrix summary total is missing for row Sales.');
+  });
+
   it('keeps raw values numeric when no unit field is configured', () => {
     const valueFormatter = (value: number) => value.toFixed(2);
     const result = matrixTransform(records, {

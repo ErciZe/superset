@@ -106,7 +106,7 @@ const ColumnLabel = styled.span`
 
 const DragHandle = SortableHandle(() => (
   <Icons.MenuOutlined
-    aria-label={t('Drag column')}
+    aria-label={t('拖拽列')}
     role="img"
     style={{ cursor: 'ns-resize' }}
   />

@@ -17,20 +17,20 @@
  * under the License.
  */
 import { Behavior, ChartMetadata, ChartPlugin, t } from '@superset-ui/core';
-import thumbnail from '@superset-ui/plugin-chart-ag-grid-table/src/images/thumbnail.png';
-import example1 from '@superset-ui/plugin-chart-ag-grid-table/src/images/Table.jpg';
-import example2 from '@superset-ui/plugin-chart-ag-grid-table/src/images/Table2.jpg';
-import example3 from '@superset-ui/plugin-chart-ag-grid-table/src/images/Table3.jpg';
+import thumbnail from '../../plugin-chart-ag-grid-table/src/images/thumbnail.png';
+import example1 from '../../plugin-chart-ag-grid-table/src/images/Table.jpg';
+import example2 from '../../plugin-chart-ag-grid-table/src/images/Table2.jpg';
+import example3 from '../../plugin-chart-ag-grid-table/src/images/Table3.jpg';
 import type {
   TableChartFormData,
   TableChartProps,
-} from '@superset-ui/plugin-chart-ag-grid-table/src/types';
+} from '../../plugin-chart-ag-grid-table/src/types';
 import controlPanel from './controlPanel';
 import buildQuery from './matrix/buildQuery';
 import transformProps from './transformProps';
 
-export { default as __hack__ } from '@superset-ui/plugin-chart-ag-grid-table/src/types';
-export * from '@superset-ui/plugin-chart-ag-grid-table/src/types';
+export { default as __hack__ } from '../../plugin-chart-ag-grid-table/src/types';
+export * from '../../plugin-chart-ag-grid-table/src/types';
 
 const metadata = new ChartMetadata({
   behaviors: [
@@ -44,7 +44,7 @@ const metadata = new ChartMetadata({
     'Classic row-by-column spreadsheet like view of a dataset. Use tables to showcase a view into the underlying data or to show aggregated metrics.',
   ),
   exampleGallery: [{ url: example1 }, { url: example2 }, { url: example3 }],
-  name: t('Table V2 with Column Schemes'),
+  name: t('noway table v1'),
   tags: [
     t('Additive'),
     t('Business'),

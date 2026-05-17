@@ -16,8 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import officialTransformProps from '@superset-ui/plugin-chart-ag-grid-table/src/transformProps';
-import type { TableChartProps } from '@superset-ui/plugin-chart-ag-grid-table/src/types';
 import {
   ensureIsArray,
   GenericDataType,
@@ -25,8 +23,11 @@ import {
   type DataRecordValue,
   type TimeFormatter,
 } from '@superset-ui/core';
-import DateWithFormatter from '@superset-ui/plugin-chart-ag-grid-table/src/utils/DateWithFormatter';
+import officialTransformProps from '../../plugin-chart-ag-grid-table/src/transformProps';
+import type { TableChartProps } from '../../plugin-chart-ag-grid-table/src/types';
+import DateWithFormatter from '../../plugin-chart-ag-grid-table/src/utils/DateWithFormatter';
 import { matrixTransform } from './matrix/matrixTransform';
+import { shouldUseMatrixRawTotalSummary } from './matrix/summary';
 import type { MatrixFormData, MatrixTransformConfig } from './matrix/types';
 
 type ScopedFormData = TableChartProps['rawFormData'] &
@@ -167,9 +168,18 @@ export default function transformProps(chartProps: TableChartProps) {
     throw new Error('Matrix mode does not support server pagination.');
   }
 
+  const shouldUseSummaryRecords = shouldUseMatrixRawTotalSummary(formData);
+  const summaryRecords = chartProps.queriesData?.[1]?.data;
+  if (shouldUseSummaryRecords && !summaryRecords) {
+    throw new Error('Matrix summary query result is required for raw totals.');
+  }
+
   const matrixResult = matrixTransform(
     chartProps.queriesData?.[0]?.data ?? officialProps.data,
-    buildMatrixConfig(formData, officialProps.columns),
+    {
+      ...buildMatrixConfig(formData, officialProps.columns),
+      summaryRecords: shouldUseSummaryRecords ? summaryRecords : undefined,
+    },
   );
 
   return {

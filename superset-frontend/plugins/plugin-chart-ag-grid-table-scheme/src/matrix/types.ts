@@ -22,7 +22,7 @@ import type {
   QueryFormColumn,
   QueryFormMetric,
 } from '@superset-ui/core';
-import type { DataColumnMeta } from '@superset-ui/plugin-chart-ag-grid-table/src/types';
+import type { DataColumnMeta } from '../../../plugin-chart-ag-grid-table/src/types';
 
 export type MatrixCalculation =
   | 'raw'
@@ -36,6 +36,7 @@ export type MatrixTransformConfig = {
   rows: string[];
   columns: string[];
   value: string;
+  summaryRecords?: DataRecord[];
   fieldLabels?: Record<string, string>;
   dimensionLabelFormatters?: Record<string, (value: DataRecordValue) => string>;
   temporalFields?: string[];

@@ -40,6 +40,38 @@ describe('ag grid table scheme matrix buildQuery', () => {
     expect(query.metrics).toEqual(['value']);
   });
 
+  it('adds a raw total summary query without matrix columns', () => {
+    const queryContext = buildQuery({
+      viz_type: VizType.Table,
+      datasource: '11__table',
+      query_mode: QueryMode.Aggregate,
+      matrix_mode_enabled: true,
+      matrix_rows: ['metric_name'],
+      matrix_columns: ['biz_date'],
+      matrix_value: 'value',
+      matrix_row_sort: 'metric_order',
+      matrix_unit_field: 'unit',
+      matrix_show_total: true,
+      matrix_value_calculation: 'raw',
+      show_totals: true,
+    } as any);
+
+    expect(queryContext.queries).toHaveLength(2);
+    expect(queryContext.queries[0].columns).toEqual([
+      'metric_name',
+      'biz_date',
+      'metric_order',
+      'unit',
+    ]);
+    expect(queryContext.queries[1]).toMatchObject({
+      columns: ['metric_name', 'metric_order', 'unit'],
+      metrics: ['value'],
+      post_processing: [],
+      row_limit: 0,
+      row_offset: 0,
+    });
+  });
+
   it('passes adhoc dimensions and metrics through the official query builder', () => {
     const regionColumn = {
       expressionType: 'SQL',
