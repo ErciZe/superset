@@ -18,6 +18,7 @@
  */
 import type {
   DataRecord,
+  DataRecordValue,
   QueryFormColumn,
   QueryFormMetric,
 } from '@superset-ui/core';
@@ -35,6 +36,10 @@ export type MatrixTransformConfig = {
   rows: string[];
   columns: string[];
   value: string;
+  fieldLabels?: Record<string, string>;
+  dimensionLabelFormatters?: Record<string, (value: DataRecordValue) => string>;
+  temporalFields?: string[];
+  valueFormatter?: DataColumnMeta['formatter'];
   rowSort?: string;
   rowSortDesc?: boolean;
   unitField?: string;

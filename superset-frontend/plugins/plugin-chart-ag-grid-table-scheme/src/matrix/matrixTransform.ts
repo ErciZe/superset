@@ -43,6 +43,7 @@ type RowBucket = {
 type ColumnTuple = {
   id: string;
   label: string;
+  sortValues: Array<DataRecordValue | undefined>;
 };
 
 type CanonicalDimensionValue = {
@@ -105,17 +106,37 @@ const getCanonicalDimensionValue = (
   };
 };
 
+const getDimensionLabel = (
+  field: string,
+  value: DataRecordValue | undefined,
+  formatters: MatrixTransformConfig['dimensionLabelFormatters'],
+) => {
+  if (value === undefined) {
+    return 'undefined';
+  }
+  const formatter = formatters?.[field];
+  if (formatter && value !== null) {
+    return formatter(value);
+  }
+  return getCanonicalDimensionValue(value).label;
+};
+
 const buildRowKey = (record: DataRecord, fields: string[]) =>
   fields.map(field => getCanonicalDimensionValue(record[field]).key).join('');
 
-const buildRowLabel = (record: DataRecord, fields: string[]) =>
+const buildRowLabel = (
+  record: DataRecord,
+  fields: string[],
+  formatters: MatrixTransformConfig['dimensionLabelFormatters'],
+) =>
   fields
-    .map(field => getCanonicalDimensionValue(record[field]).label)
+    .map(field => getDimensionLabel(field, record[field], formatters))
     .join(' / ');
 
 const buildColumnTuple = (
   record: DataRecord,
   fields: string[],
+  formatters: MatrixTransformConfig['dimensionLabelFormatters'],
 ): ColumnTuple => {
   const values = fields.map(field => record[field]);
   const encodedValue =
@@ -127,9 +148,10 @@ const buildColumnTuple = (
 
   return {
     id: `${MATRIX_COL_PREFIX}${encodedValue}`,
-    label: values
-      .map(item => getCanonicalDimensionValue(item).label)
+    label: fields
+      .map(field => getDimensionLabel(field, record[field], formatters))
       .join(' / '),
+    sortValues: values,
   };
 };
 
@@ -173,12 +195,12 @@ const sumNumbers = (values: Array<number | null | undefined>) =>
 const formatRawValue = (
   value: number | null | undefined,
   unit: DataRecordValue | undefined,
-): string | null => {
+): number | string | null => {
   if (value === null || value === undefined) {
     return null;
   }
   if (!unit) {
-    return `${value}`;
+    return value;
   }
   return unit === '%' ? `${value}%` : `${value} ${unit}`;
 };
@@ -199,10 +221,13 @@ const createColumn = (
   key: string,
   label = key,
   dataType = GenericDataType.String,
+  formatter?: DataColumnMeta['formatter'],
 ): DataColumnMeta => ({
   key,
   label,
   dataType,
+  formatter,
+  config: {},
 });
 
 const assertConsistentBucketValue = (
@@ -229,6 +254,10 @@ export function matrixTransform(
     rows,
     columns,
     value,
+    fieldLabels,
+    dimensionLabelFormatters,
+    temporalFields = [],
+    valueFormatter,
     rowSort,
     rowSortDesc = false,
     unitField,
@@ -254,10 +283,19 @@ export function matrixTransform(
   const rowBuckets = new Map<string, RowBucket>();
   const generatedColumnIds = new Set<string>();
   const generatedColumnLabels = new Map<string, string>();
+  const generatedColumnSortValues = new Map<
+    string,
+    Array<DataRecordValue | undefined>
+  >();
+  const temporalFieldSet = new Set(temporalFields);
 
   records.forEach(record => {
     const rowKey = buildRowKey(record, rows);
-    const columnTuple = buildColumnTuple(record, columns);
+    const columnTuple = buildColumnTuple(
+      record,
+      columns,
+      dimensionLabelFormatters,
+    );
     const matrixValue = getMatrixValue(record, value);
 
     if (!rowBuckets.has(rowKey)) {
@@ -266,7 +304,7 @@ export function matrixTransform(
           (row, field) => ({ ...row, [field]: record[field] }),
           {},
         ),
-        rowLabel: buildRowLabel(record, rows),
+        rowLabel: buildRowLabel(record, rows, dimensionLabelFormatters),
         cells: new Map(),
         rowSortValue: rowSort ? record[rowSort] : undefined,
         unit: unitField ? record[unitField] : undefined,
@@ -297,13 +335,31 @@ export function matrixTransform(
     }
     generatedColumnIds.add(columnTuple.id);
     generatedColumnLabels.set(columnTuple.id, columnTuple.label);
+    generatedColumnSortValues.set(columnTuple.id, columnTuple.sortValues);
     rowBucket.cells.set(
       columnTuple.id,
       sumCell(rowBucket.cells.get(columnTuple.id), matrixValue),
     );
   });
 
-  const sortedGeneratedColumnIds = Array.from(generatedColumnIds).sort();
+  const sortedGeneratedColumnIds = Array.from(generatedColumnIds).sort(
+    (left, right) => {
+      const leftValues = generatedColumnSortValues.get(left) ?? [];
+      const rightValues = generatedColumnSortValues.get(right) ?? [];
+      for (let index = 0; index < columns.length; index += 1) {
+        const sortResult = compareRecordValues(
+          leftValues[index],
+          rightValues[index],
+        );
+        if (sortResult !== 0) {
+          return temporalFieldSet.has(columns[index])
+            ? -sortResult
+            : sortResult;
+        }
+      }
+      return left.localeCompare(right);
+    },
+  );
   if (sortedGeneratedColumnIds.length > maxGeneratedColumns) {
     throw new Error(
       `Matrix generated ${sortedGeneratedColumnIds.length} columns, which exceeds the limit of ${maxGeneratedColumns}.`,
@@ -371,18 +427,25 @@ export function matrixTransform(
     return row;
   });
 
-  const rowColumns = rows.map(row => createColumn(row));
+  const rawValueType = unitField
+    ? GenericDataType.String
+    : GenericDataType.Numeric;
+  const rowColumns = rows.map(row =>
+    createColumn(row, fieldLabels?.[row] ?? row),
+  );
   const generatedColumns = sortedGeneratedColumnIds.map(columnId =>
     createColumn(
       columnId,
       generatedColumnLabels.get(columnId) ?? columnId,
-      calculation === 'raw' ? GenericDataType.String : GenericDataType.Numeric,
+      calculation === 'raw' ? rawValueType : GenericDataType.Numeric,
+      calculation === 'raw' && !unitField ? valueFormatter : undefined,
     ),
   );
   const totalColumn = createColumn(
     MATRIX_TOTAL_COL_ID,
     'Total',
-    calculation === 'raw' ? GenericDataType.String : GenericDataType.Numeric,
+    calculation === 'raw' ? rawValueType : GenericDataType.Numeric,
+    calculation === 'raw' && !unitField ? valueFormatter : undefined,
   );
 
   const resultColumns: DataColumnMeta[] = [...rowColumns];

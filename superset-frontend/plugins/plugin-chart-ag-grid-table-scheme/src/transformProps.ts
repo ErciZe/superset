@@ -18,7 +18,14 @@
  */
 import officialTransformProps from '@superset-ui/plugin-chart-ag-grid-table/src/transformProps';
 import type { TableChartProps } from '@superset-ui/plugin-chart-ag-grid-table/src/types';
-import { ensureIsArray, getMetricLabel } from '@superset-ui/core';
+import {
+  ensureIsArray,
+  GenericDataType,
+  getMetricLabel,
+  type DataRecordValue,
+  type TimeFormatter,
+} from '@superset-ui/core';
+import DateWithFormatter from '@superset-ui/plugin-chart-ag-grid-table/src/utils/DateWithFormatter';
 import { matrixTransform } from './matrix/matrixTransform';
 import type { MatrixFormData, MatrixTransformConfig } from './matrix/types';
 
@@ -62,7 +69,13 @@ const maxGeneratedColumns = (value: number | string | null | undefined) => {
   return Number(value);
 };
 
-const buildMatrixConfig = (formData: ScopedFormData): MatrixTransformConfig => {
+const trimMidnightTime = (label: string) =>
+  label.replace(/^(\d{4}-\d{2}-\d{2}) 00:00:00$/, '$1');
+
+const buildMatrixConfig = (
+  formData: ScopedFormData,
+  officialColumns: ReturnType<typeof officialTransformProps>['columns'],
+): MatrixTransformConfig => {
   const rows = ensureIsArray(formData.matrix_rows)
     .map(toFieldName)
     .filter((value): value is string => Boolean(value));
@@ -75,11 +88,49 @@ const buildMatrixConfig = (formData: ScopedFormData): MatrixTransformConfig => {
     toFieldName(firstValue(formData.matrix_row_sort)) ?? undefined;
   const unitField =
     toFieldName(firstValue(formData.matrix_unit_field)) ?? undefined;
+  const columnByKey = new Map(
+    (officialColumns ?? []).map(column => [column.key, column]),
+  );
+  const matrixFields = [...rows, ...columns];
+  const fieldLabels = Object.fromEntries(
+    matrixFields.map(field => [field, columnByKey.get(field)?.label ?? field]),
+  );
+  const dimensionLabelFormatters = Object.fromEntries(
+    matrixFields.flatMap(field => {
+      const column = columnByKey.get(field);
+      if (!column?.formatter) {
+        return [];
+      }
+      return [
+        [
+          field,
+          (value: DataRecordValue) =>
+            column.dataType === GenericDataType.Temporal
+              ? trimMidnightTime(
+                  String(
+                    new DateWithFormatter(value, {
+                      formatter: column.formatter as TimeFormatter,
+                    }),
+                  ),
+                )
+              : String(column.formatter?.(value as number)),
+        ],
+      ];
+    }),
+  );
+  const temporalFields = matrixFields.filter(
+    field => columnByKey.get(field)?.dataType === GenericDataType.Temporal,
+  );
+  const valueColumn = columnByKey.get(value);
 
   return {
     rows,
     columns,
     value,
+    fieldLabels,
+    dimensionLabelFormatters,
+    temporalFields,
+    valueFormatter: valueColumn?.formatter,
     rowSort,
     rowSortDesc: Boolean(formData.matrix_row_sort_desc),
     unitField,
@@ -117,7 +168,7 @@ export default function transformProps(chartProps: TableChartProps) {
 
   const matrixResult = matrixTransform(
     chartProps.queriesData?.[0]?.data ?? officialProps.data,
-    buildMatrixConfig(formData),
+    buildMatrixConfig(formData, officialProps.columns),
   );
 
   return {

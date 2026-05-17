@@ -1,3 +1,4 @@
+import { GenericDataType, getTimeFormatter } from '@superset-ui/core';
 import {
   MATRIX_TOTAL_COL_ID,
   matrixTransform,
@@ -93,6 +94,67 @@ describe('matrixTransform', () => {
     ]);
   });
 
+  it('keeps raw values numeric when no unit field is configured', () => {
+    const valueFormatter = (value: number) => value.toFixed(2);
+    const result = matrixTransform(records, {
+      rows: ['metric_name'],
+      columns: ['biz_date'],
+      value: 'value',
+      rowSort: 'metric_order',
+      showTotal: true,
+      totalPosition: 'left',
+      calculation: 'raw',
+      maxGeneratedColumns: 10,
+      valueFormatter,
+    });
+
+    expect(
+      result.columns.find(column => column.key === MATRIX_TOTAL_COL_ID),
+    ).toMatchObject({
+      dataType: GenericDataType.Numeric,
+      formatter: valueFormatter,
+      config: {},
+    });
+    expect(result.data[0]).toMatchObject({
+      metric_name: 'Profit %',
+      [MATRIX_TOTAL_COL_ID]: 9.79,
+      '__matrix_col__2026-05-01': 9.79,
+    });
+  });
+
+  it('formats temporal column labels and sorts them newest first', () => {
+    const result = matrixTransform(
+      [
+        { metric_name: 'Sales', biz_date: 1777334400000, value: 1 },
+        { metric_name: 'Sales', biz_date: 1778544000000, value: 2 },
+      ],
+      {
+        rows: ['metric_name'],
+        columns: ['biz_date'],
+        value: 'value',
+        showTotal: false,
+        totalPosition: 'right',
+        calculation: 'raw',
+        maxGeneratedColumns: 10,
+        temporalFields: ['biz_date'],
+        dimensionLabelFormatters: {
+          biz_date: value =>
+            getTimeFormatter('%Y-%m-%d')(new Date(value as number)),
+        },
+      },
+    );
+
+    expect(result.generatedColumnIds).toEqual([
+      '__matrix_col__n13:1778544000000',
+      '__matrix_col__n13:1777334400000',
+    ]);
+    expect(
+      result.columns
+        .filter(column => column.key.startsWith('__matrix_col__'))
+        .map(column => column.label),
+    ).toEqual(['2026-05-12', '2026-04-28']);
+  });
+
   it('supports contribution, row contribution, and dense row rank', () => {
     const base = {
       rows: ['metric_name'],
@@ -159,8 +221,8 @@ describe('matrixTransform', () => {
       '__matrix_col__s4:a__bs1:c',
     ]);
     expect(result.data[0]).toMatchObject({
-      '__matrix_col__s1:as4:b__c': '1',
-      '__matrix_col__s4:a__bs1:c': '2',
+      '__matrix_col__s1:as4:b__c': 1,
+      '__matrix_col__s4:a__bs1:c': 2,
     });
   });
 
@@ -191,10 +253,10 @@ describe('matrixTransform', () => {
     ]);
     expect(new Set(result.generatedColumnIds).size).toBe(4);
     expect(result.data[0]).toMatchObject({
-      __matrix_col__1: '4',
-      '__matrix_col__n1:1': '3',
-      __matrix_col__null: '2',
-      '__matrix_col__z4:null': '1',
+      __matrix_col__1: 4,
+      '__matrix_col__n1:1': 3,
+      __matrix_col__null: 2,
+      '__matrix_col__z4:null': 1,
     });
   });
 
@@ -220,12 +282,12 @@ describe('matrixTransform', () => {
       {
         row_a: 'a',
         row_b: 'b\u0001c',
-        '__matrix_col__2026-05-01': '1',
+        '__matrix_col__2026-05-01': 1,
       },
       {
         row_a: 'a\u0001b',
         row_b: 'c',
-        '__matrix_col__2026-05-01': '2',
+        '__matrix_col__2026-05-01': 2,
       },
     ]);
   });
