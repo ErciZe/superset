@@ -164,6 +164,12 @@ describe('AG Grid table scheme control panel', () => {
       getControl(querySection.controlSetRows, 'matrix_max_generated_columns')
         ?.config?.label,
     ).toBe('矩阵最大生成列数');
+    expect(
+      getControl(
+        querySection.controlSetRows,
+        'matrix_cell_formatter_expression',
+      ),
+    ).toBeUndefined();
   });
 
   it('adds matrix cell conditional coloring with a matrix value target', () => {
@@ -215,6 +221,14 @@ describe('AG Grid table scheme control panel', () => {
     ]);
     expect(mappedProps?.rowScopeLabel).toBe('适用行维度');
     expect(mappedProps?.rowValueLabel).toBe('适用行值');
+
+    expect(
+      getControl(controls, 'matrix_cell_formatter_expression')?.config,
+    ).toMatchObject({
+      type: 'TextAreaControl',
+      label: '单元格展示表达式',
+      language: 'javascript',
+    });
   });
 
   it('hides official conditional formatting while matrix mode is enabled', () => {

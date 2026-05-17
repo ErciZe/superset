@@ -71,6 +71,7 @@ export type MatrixFormData = {
   matrix_value_calculation?: MatrixCalculation;
   matrix_max_generated_columns?: number;
   matrix_cell_color_rules?: ConditionalFormattingConfig[];
+  matrix_cell_formatter_expression?: string;
   column_view_schemes_enabled?: boolean;
   column_settings_enabled?: boolean;
 };

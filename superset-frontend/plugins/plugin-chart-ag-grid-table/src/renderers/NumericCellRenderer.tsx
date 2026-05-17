@@ -16,9 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { styled } from '@superset-ui/core';
+import { sanitizeHtml, styled } from '@superset-ui/core';
 import { CustomCellRendererProps } from '@superset-ui/core/components/ThemedAgGridReact';
-import { BasicColorFormatterType, InputColumn } from '../types';
+import {
+  AdditionalCellFormatter,
+  BasicColorFormatterType,
+  InputColumn,
+} from '../types';
 import { useIsDark } from '../utils/useTableTheme';
 
 const StyledTotalCell = styled.div`
@@ -135,6 +139,7 @@ export const NumericCellRenderer = (
     valueRange: any;
     alignPositiveNegative: boolean;
     colorPositiveNegative: boolean;
+    additionalCellFormatter?: AdditionalCellFormatter;
   },
 ) => {
   const {
@@ -150,9 +155,35 @@ export const NumericCellRenderer = (
   } = params;
 
   const isDarkTheme = useIsDark();
+  const additionalFormatting = params.additionalCellFormatter?.({
+    ...params,
+    col: params.col,
+  });
 
   if (node?.rowPinned === 'bottom') {
     return <StyledTotalCell>{valueFormatted ?? value}</StyledTotalCell>;
+  }
+
+  if (additionalFormatting?.html) {
+    return (
+      <div
+        className={additionalFormatting.className}
+        title={additionalFormatting.tooltip}
+        dangerouslySetInnerHTML={{
+          __html: sanitizeHtml(additionalFormatting.html),
+        }}
+      />
+    );
+  }
+  if (additionalFormatting && 'text' in additionalFormatting) {
+    return (
+      <div
+        className={additionalFormatting.className}
+        title={additionalFormatting.tooltip}
+      >
+        {additionalFormatting.text}
+      </div>
+    );
   }
 
   let arrow = '';

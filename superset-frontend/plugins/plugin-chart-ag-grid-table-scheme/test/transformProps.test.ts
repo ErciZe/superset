@@ -109,4 +109,43 @@ describe('ag grid table scheme transformProps', () => {
       backgroundColor: '#00aa00',
     });
   });
+
+  it('passes a safe matrix cell formatter to the base AG Grid chart', () => {
+    const result = transformProps({
+      rawFormData: {
+        query_mode: 'aggregate',
+        matrix_mode_enabled: true,
+        matrix_rows: ['metric_name'],
+        matrix_columns: ['biz_date'],
+        matrix_value: 'value',
+        matrix_show_total: false,
+        matrix_cell_formatter_expression:
+          'row.metric_name === "Sales" ? { text: "¥" + rawValue } : { text: value }',
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              metric_name: 'Sales',
+              biz_date: '2026-05-01',
+              value: 15,
+            },
+          ],
+        },
+      ],
+      hooks: {},
+      filterState: { filters: {} },
+      theme: {},
+    } as any);
+
+    expect(
+      result.additionalCellFormatter?.({
+        colDef: { field: '__matrix_col__2026-05-01' },
+        value: '15.00',
+        data: result.data[0],
+      } as any),
+    ).toEqual({
+      text: '¥15',
+    });
+  });
 });

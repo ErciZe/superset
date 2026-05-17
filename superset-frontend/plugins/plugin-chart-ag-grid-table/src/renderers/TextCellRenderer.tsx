@@ -31,6 +31,10 @@ const SUMMARY_TOOLTIP_TEXT = t(
 export const TextCellRenderer = (params: CellRendererProps) => {
   const { node, api, colDef, columns, allowRenderHtml, value, valueFormatted } =
     params;
+  const additionalFormatting = params.additionalCellFormatter?.({
+    ...params,
+    col: params.col,
+  });
 
   if (node?.rowPinned === 'bottom') {
     const cols = api.getAllGridColumns().filter(col => col.isVisible());
@@ -48,6 +52,28 @@ export const TextCellRenderer = (params: CellRendererProps) => {
     if (!value) {
       return null;
     }
+  }
+
+  if (additionalFormatting?.html) {
+    return (
+      <div
+        className={additionalFormatting.className}
+        title={additionalFormatting.tooltip}
+        dangerouslySetInnerHTML={{
+          __html: sanitizeHtml(additionalFormatting.html),
+        }}
+      />
+    );
+  }
+  if (additionalFormatting && 'text' in additionalFormatting) {
+    return (
+      <div
+        className={additionalFormatting.className}
+        title={additionalFormatting.tooltip}
+      >
+        {additionalFormatting.text}
+      </div>
+    );
   }
 
   if (!(typeof value === 'string' || value instanceof Date)) {

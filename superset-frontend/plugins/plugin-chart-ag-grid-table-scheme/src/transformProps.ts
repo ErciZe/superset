@@ -30,6 +30,7 @@ import {
   createMatrixCellStyle,
   getMatrixCellColorFormatters,
 } from './matrix/cellColorRules';
+import { createMatrixCellFormatter } from './matrix/cellFormatter';
 import { matrixTransform } from './matrix/matrixTransform';
 import { shouldUseMatrixRawTotalSummary } from './matrix/summary';
 import type { MatrixFormData, MatrixTransformConfig } from './matrix/types';
@@ -200,5 +201,8 @@ export default function transformProps(chartProps: TableChartProps) {
     percentMetrics: [],
     columnColorFormatters: [],
     additionalCellStyle: createMatrixCellStyle(matrixCellColorFormatters),
+    additionalCellFormatter: createMatrixCellFormatter(
+      formData.matrix_cell_formatter_expression,
+    ),
   };
 }

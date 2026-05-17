@@ -303,6 +303,23 @@ const matrixCellColorControls: ControlSetRows = [
       },
     },
   ],
+  [
+    {
+      name: 'matrix_cell_formatter_expression',
+      config: {
+        type: 'TextAreaControl',
+        label: t('单元格展示表达式'),
+        default: '',
+        renderTrigger: true,
+        resetOnHide: false,
+        language: 'javascript',
+        visibility: matrixVisibility,
+        description: t(
+          '使用单个安全 JavaScript 表达式格式化矩阵单元格。可用参数：row、cell、value、rawValue、column、rowIndex、colDef；唯一允许的全局对象是 console。',
+        ),
+      },
+    },
+  ],
 ];
 
 const findControlRowIndex = (rows: ControlSetRows, controlName: string) =>
