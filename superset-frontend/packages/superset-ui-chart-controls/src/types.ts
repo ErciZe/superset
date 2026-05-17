@@ -474,6 +474,8 @@ export type ConditionalFormattingConfig = {
   targetValueRight?: number;
   column?: string;
   colorScheme?: string;
+  rowField?: string;
+  rowValue?: string | number | boolean | null;
 };
 
 export type ColorFormatters = {

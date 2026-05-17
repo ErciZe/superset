@@ -18,11 +18,18 @@
  */
 import {
   ControlPanelConfig,
+  ControlPanelState,
   ControlPanelsContainerProps,
   ControlStateMapping,
   sharedControls,
 } from '@superset-ui/chart-controls';
-import { QueryFormColumn, QueryMode, t } from '@superset-ui/core';
+import {
+  ensureIsArray,
+  getColumnLabel,
+  QueryFormColumn,
+  QueryMode,
+  t,
+} from '@superset-ui/core';
 import officialControlPanel from '../../plugin-chart-ag-grid-table/src/controlPanel';
 import { MATRIX_CELL_COLOR_RULE_COLUMN } from './matrix/cellColorRules';
 
@@ -47,6 +54,28 @@ const matrixVisibility = ({
   controls,
 }: Pick<ControlPanelsContainerProps, 'controls'>) =>
   isAggMode({ controls }) && Boolean(controls?.matrix_mode_enabled?.value);
+
+const getRowScopeOptions = (
+  matrixRows: unknown,
+  verboseMap?: Record<string, string>,
+) =>
+  ensureIsArray(matrixRows)
+    .map(row => {
+      if (!row) {
+        return null;
+      }
+      const value = getColumnLabel(row as QueryFormColumn);
+      if (!value) {
+        return null;
+      }
+      return {
+        value,
+        label: verboseMap?.[value] ?? value,
+      };
+    })
+    .filter((option): option is { value: string; label: string } =>
+      Boolean(option),
+    );
 
 type ControlSetRows = NonNullable<
   ControlPanelConfig['controlPanelSections'][number]
@@ -231,16 +260,29 @@ const matrixCellColorControls: ControlSetRows = [
         type: 'ConditionalFormattingControl',
         renderTrigger: true,
         label: t('单元格条件着色'),
-        description: t('按数值阈值为矩阵值单元格设置背景色。'),
+        description: t(
+          '按数值阈值为矩阵值单元格设置背景色，可限定到指定矩阵行维度和值。',
+        ),
         visibility: matrixVisibility,
         shouldMapStateToProps() {
           return true;
         },
         mapStateToProps(
-          _explore: unknown,
+          explore: ControlPanelState,
           _control: unknown,
           chart?: { chartStatus?: string },
         ) {
+          const datasourceVerboseMap =
+            explore.datasource && 'verbose_map' in explore.datasource
+              ? explore.datasource.verbose_map
+              : undefined;
+          const rowScopeOptions = getRowScopeOptions(
+            explore?.controls?.matrix_rows?.value,
+            datasourceVerboseMap,
+          );
+          const rowScopeVerboseMap = Object.fromEntries(
+            rowScopeOptions.map(option => [option.value, option.label]),
+          );
           return {
             removeIrrelevantConditions: chart?.chartStatus === 'success',
             columnOptions: [
@@ -252,6 +294,10 @@ const matrixCellColorControls: ControlSetRows = [
             verboseMap: {
               [MATRIX_CELL_COLOR_RULE_COLUMN]: t('矩阵值单元格'),
             },
+            rowScopeOptions,
+            rowScopeVerboseMap,
+            rowScopeLabel: t('适用行维度'),
+            rowValueLabel: t('适用行值'),
           };
         },
       },

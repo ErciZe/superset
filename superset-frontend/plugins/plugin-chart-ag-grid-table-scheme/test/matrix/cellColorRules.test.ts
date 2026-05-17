@@ -112,4 +112,72 @@ describe('matrix cell color rules', () => {
 
     expect(formatters.map(formatter => formatter.column)).toEqual([columnId]);
   });
+
+  it('limits a rule to the configured matrix row value', () => {
+    const [formatter] = getMatrixCellColorFormatters({
+      rules: [
+        {
+          column: MATRIX_CELL_COLOR_RULE_COLUMN,
+          operator: Comparator.GreaterThan,
+          targetValue: 10,
+          colorScheme: '#ff0000',
+          rowField: 'metric_name_with_unit',
+          rowValue: '毛利率（%）',
+        },
+      ],
+      generatedColumnIds: [columnId],
+      data: [
+        { metric_name_with_unit: '销售额', [rawValueField]: 20 },
+        { metric_name_with_unit: '毛利率（%）', [rawValueField]: 20 },
+      ],
+    });
+
+    expect(
+      formatter.getColorFromValue(20, {
+        data: { metric_name_with_unit: '销售额', [rawValueField]: 20 },
+      }),
+    ).toBeUndefined();
+    expect(
+      formatter.getColorFromValue(20, {
+        data: { metric_name_with_unit: '毛利率（%）', [rawValueField]: 20 },
+      }),
+    ).toBe('#ff0000');
+  });
+
+  it('lets row-specific rules override earlier global matches', () => {
+    const [formatter] = getMatrixCellColorFormatters({
+      rules: [
+        {
+          column: MATRIX_CELL_COLOR_RULE_COLUMN,
+          operator: Comparator.GreaterThan,
+          targetValue: 10,
+          colorScheme: '#00aa00',
+        },
+        {
+          column: MATRIX_CELL_COLOR_RULE_COLUMN,
+          operator: Comparator.GreaterThan,
+          targetValue: 10,
+          colorScheme: '#ff0000',
+          rowField: 'metric_name_with_unit',
+          rowValue: '毛利率（%）',
+        },
+      ],
+      generatedColumnIds: [columnId],
+      data: [
+        { metric_name_with_unit: '销售额', [rawValueField]: 20 },
+        { metric_name_with_unit: '毛利率（%）', [rawValueField]: 20 },
+      ],
+    });
+
+    expect(
+      formatter.getColorFromValue(20, {
+        data: { metric_name_with_unit: '销售额', [rawValueField]: 20 },
+      }),
+    ).toBe('#00aa00');
+    expect(
+      formatter.getColorFromValue(20, {
+        data: { metric_name_with_unit: '毛利率（%）', [rawValueField]: 20 },
+      }),
+    ).toBe('#ff0000');
+  });
 });

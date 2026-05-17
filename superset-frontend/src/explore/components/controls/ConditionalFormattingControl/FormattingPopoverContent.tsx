@@ -27,6 +27,7 @@ import {
   Button,
   Form,
   FormItem,
+  Input,
   InputNumber,
   Col,
   Row,
@@ -123,6 +124,7 @@ const rulesTargetValueRight = [
 
 const targetValueLeftDeps = ['targetValueRight'];
 const targetValueRightDeps = ['targetValueLeft'];
+const rowFieldDeps = ['rowField'];
 
 const shouldFormItemUpdate = (
   prevValues: ConditionalFormattingConfig,
@@ -132,6 +134,11 @@ const shouldFormItemUpdate = (
     isOperatorNone(currentValues.operator) ||
   isOperatorMultiValue(prevValues.operator) !==
     isOperatorMultiValue(currentValues.operator);
+
+const shouldRowScopeUpdate = (
+  prevValues: ConditionalFormattingConfig,
+  currentValues: ConditionalFormattingConfig,
+) => prevValues.rowField !== currentValues.rowField;
 
 const renderOperator = ({ showOnlyNone }: { showOnlyNone?: boolean } = {}) => (
   <FormItem
@@ -200,11 +207,17 @@ export const FormattingPopoverContent = ({
   onChange,
   columns = [],
   extraColorChoices = [],
+  rowScopeOptions = [],
+  rowScopeLabel = t('Row scope'),
+  rowValueLabel = t('Row value'),
 }: {
   config?: ConditionalFormattingConfig;
   onChange: (config: ConditionalFormattingConfig) => void;
   columns: { label: string; value: string }[];
   extraColorChoices?: { label: string; value: string }[];
+  rowScopeOptions?: { label: string; value: string }[];
+  rowScopeLabel?: string;
+  rowValueLabel?: string;
 }) => {
   const colorScheme = colorSchemeOptions();
   const [showOperatorFields, setShowOperatorFields] = useState(
@@ -217,10 +230,20 @@ export const FormattingPopoverContent = ({
       !(event === ColorSchemeEnum.Green || event === ColorSchemeEnum.Red),
     );
   };
+  const handleFinish = (values: ConditionalFormattingConfig) => {
+    if (!values.rowField) {
+      const globalValues = { ...values };
+      delete globalValues.rowField;
+      delete globalValues.rowValue;
+      onChange(globalValues);
+      return;
+    }
+    onChange(values);
+  };
 
   return (
     <Form
-      onFinish={onChange}
+      onFinish={handleFinish}
       initialValues={config}
       requiredMark="optional"
       layout="vertical"
@@ -260,6 +283,35 @@ export const FormattingPopoverContent = ({
           </Row>
         )}
       </FormItem>
+      {rowScopeOptions.length > 0 && (
+        <Row gutter={12}>
+          <Col span={12}>
+            <FormItem name="rowField" label={rowScopeLabel}>
+              <Select
+                allowClear
+                ariaLabel={rowScopeLabel}
+                options={rowScopeOptions}
+              />
+            </FormItem>
+          </Col>
+          <FormItem noStyle shouldUpdate={shouldRowScopeUpdate}>
+            {({ getFieldValue }: GetFieldValue) =>
+              getFieldValue('rowField') ? (
+                <Col span={12}>
+                  <FormItem
+                    name="rowValue"
+                    label={rowValueLabel}
+                    rules={rulesRequired}
+                    dependencies={rowFieldDeps}
+                  >
+                    <Input />
+                  </FormItem>
+                </Col>
+              ) : null
+            }
+          </FormItem>
+        </Row>
+      )}
       <FormItem>
         <JustifyEnd>
           <Button htmlType="submit" buttonStyle="primary">

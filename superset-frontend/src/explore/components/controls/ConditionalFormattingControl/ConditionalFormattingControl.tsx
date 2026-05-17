@@ -73,6 +73,10 @@ const ConditionalFormattingControl = ({
   verboseMap,
   removeIrrelevantConditions,
   extraColorChoices,
+  rowScopeOptions,
+  rowScopeVerboseMap,
+  rowScopeLabel,
+  rowValueLabel,
   ...props
 }: ConditionalFormattingControlProps) => {
   const [conditionalFormattingConfigs, setConditionalFormattingConfigs] =
@@ -121,21 +125,27 @@ const ConditionalFormattingControl = ({
     targetValue,
     targetValueLeft,
     targetValueRight,
+    rowField,
+    rowValue,
   }: ConditionalFormattingConfig) => {
     const columnName = (column && verboseMap?.[column]) ?? column;
+    const rowScope =
+      rowField && rowValue !== undefined && rowValue !== null
+        ? `${rowScopeVerboseMap?.[rowField] ?? rowField}: ${rowValue} · `
+        : '';
     switch (operator) {
       case Comparator.None:
-        return `${columnName}`;
+        return `${rowScope}${columnName}`;
       case Comparator.Between:
-        return `${targetValueLeft} ${Comparator.LessThan} ${columnName} ${Comparator.LessThan} ${targetValueRight}`;
+        return `${rowScope}${targetValueLeft} ${Comparator.LessThan} ${columnName} ${Comparator.LessThan} ${targetValueRight}`;
       case Comparator.BetweenOrEqual:
-        return `${targetValueLeft} ${Comparator.LessOrEqual} ${columnName} ${Comparator.LessOrEqual} ${targetValueRight}`;
+        return `${rowScope}${targetValueLeft} ${Comparator.LessOrEqual} ${columnName} ${Comparator.LessOrEqual} ${targetValueRight}`;
       case Comparator.BetweenOrLeftEqual:
-        return `${targetValueLeft} ${Comparator.LessOrEqual} ${columnName} ${Comparator.LessThan} ${targetValueRight}`;
+        return `${rowScope}${targetValueLeft} ${Comparator.LessOrEqual} ${columnName} ${Comparator.LessThan} ${targetValueRight}`;
       case Comparator.BetweenOrRightEqual:
-        return `${targetValueLeft} ${Comparator.LessThan} ${columnName} ${Comparator.LessOrEqual} ${targetValueRight}`;
+        return `${rowScope}${targetValueLeft} ${Comparator.LessThan} ${columnName} ${Comparator.LessOrEqual} ${targetValueRight}`;
       default:
-        return `${columnName} ${operator} ${targetValue}`;
+        return `${rowScope}${columnName} ${operator} ${targetValue}`;
     }
   };
 
@@ -157,6 +167,9 @@ const ConditionalFormattingControl = ({
               }
               destroyTooltipOnHide
               extraColorChoices={extraColorChoices}
+              rowScopeOptions={rowScopeOptions}
+              rowScopeLabel={rowScopeLabel}
+              rowValueLabel={rowValueLabel}
             >
               <OptionControlContainer withCaret>
                 <Label>{createLabel(config)}</Label>
@@ -173,6 +186,9 @@ const ConditionalFormattingControl = ({
           onChange={onSave}
           destroyTooltipOnHide
           extraColorChoices={extraColorChoices}
+          rowScopeOptions={rowScopeOptions}
+          rowScopeLabel={rowScopeLabel}
+          rowValueLabel={rowValueLabel}
         >
           <AddControlLabel>
             <Icons.PlusOutlined

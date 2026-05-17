@@ -28,24 +28,35 @@ export type ConditionalFormattingConfig = {
   targetValueRight?: number;
   column?: string;
   colorScheme?: string;
+  rowField?: string;
+  rowValue?: string | number | boolean | null;
 };
+
+export type SelectOption = { label: string; value: string };
 
 export type ConditionalFormattingControlProps = ControlComponentProps<
   ConditionalFormattingConfig[]
 > & {
-  columnOptions: { label: string; value: string }[];
+  columnOptions: SelectOption[];
   removeIrrelevantConditions: boolean;
   verboseMap: Record<string, string>;
   label: string;
   description: string;
   extraColorChoices?: { label: string; value: string }[];
+  rowScopeOptions?: SelectOption[];
+  rowScopeVerboseMap?: Record<string, string>;
+  rowScopeLabel?: string;
+  rowValueLabel?: string;
 };
 
 export type FormattingPopoverProps = PopoverProps & {
-  columns: { label: string; value: string }[];
+  columns: SelectOption[];
   onChange: (value: ConditionalFormattingConfig) => void;
   config?: ConditionalFormattingConfig;
   title: string;
   children: ReactNode;
   extraColorChoices?: { label: string; value: string }[];
+  rowScopeOptions?: SelectOption[];
+  rowScopeLabel?: string;
+  rowValueLabel?: string;
 };

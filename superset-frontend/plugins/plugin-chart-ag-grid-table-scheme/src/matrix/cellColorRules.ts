@@ -51,12 +51,24 @@ type MatrixAdditionalCellStyle = (
 const isFiniteNumber = (value: DataRecordValue): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
+const hasRowScope = (rule: ConditionalFormattingConfig) =>
+  rule.rowField !== undefined || rule.rowValue !== undefined;
+
+const hasCompleteRowScope = (rule: ConditionalFormattingConfig) =>
+  typeof rule.rowField === 'string' &&
+  rule.rowField.length > 0 &&
+  rule.rowValue !== undefined &&
+  rule.rowValue !== '';
+
 const isValidRule = (rule: ConditionalFormattingConfig) => {
   if (
     rule.column !== MATRIX_CELL_COLOR_RULE_COLUMN ||
     rule.operator === undefined ||
     rule.colorScheme === undefined
   ) {
+    return false;
+  }
+  if (hasRowScope(rule) && !hasCompleteRowScope(rule)) {
     return false;
   }
   if (MultipleValueComparators.includes(rule.operator)) {
@@ -84,6 +96,24 @@ const resolveColor = (
   return colorScheme;
 };
 
+const normalizeRowValue = (value: DataRecordValue | undefined) =>
+  value === null || value === undefined ? value : String(value);
+
+const matchesRowScope = (
+  rule: ConditionalFormattingConfig,
+  row: DataRecord | undefined,
+) => {
+  if (!rule.rowField) {
+    return true;
+  }
+  if (!row) {
+    return false;
+  }
+  return (
+    normalizeRowValue(row[rule.rowField]) === normalizeRowValue(rule.rowValue)
+  );
+};
+
 export function getMatrixCellColorFormatters({
   rules,
   generatedColumnIds,
@@ -97,19 +127,23 @@ export function getMatrixCellColorFormatters({
 
   return generatedColumnIds.map(columnId => {
     const rawValueField = getMatrixRawValueField(columnId);
-    const columnValues = data
-      .map(row => row[rawValueField])
-      .filter(isFiniteNumber);
-    const colorFunctions = validRules.map(rule =>
-      getColorFunction(
-        {
-          ...rule,
-          colorScheme: resolveColor(rule.colorScheme, theme),
-        },
-        columnValues,
-        false,
-      ),
-    );
+    const colorRules = validRules.map(rule => {
+      const columnValues = data
+        .filter(row => matchesRowScope(rule, row))
+        .map(row => row[rawValueField])
+        .filter(isFiniteNumber);
+      return {
+        rule,
+        getColor: getColorFunction(
+          {
+            ...rule,
+            colorScheme: resolveColor(rule.colorScheme, theme),
+          },
+          columnValues,
+          false,
+        ),
+      };
+    });
 
     return {
       column: columnId,
@@ -119,7 +153,10 @@ export function getMatrixCellColorFormatters({
           return undefined;
         }
         let color: string | undefined;
-        colorFunctions.forEach(getColor => {
+        colorRules.forEach(({ rule, getColor }) => {
+          if (!matchesRowScope(rule, params.data)) {
+            return;
+          }
           const nextColor = getColor(rawValue);
           if (nextColor) {
             color = nextColor;

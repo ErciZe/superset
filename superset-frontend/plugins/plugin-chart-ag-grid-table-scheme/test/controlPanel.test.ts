@@ -188,7 +188,16 @@ describe('AG Grid table scheme control panel', () => {
     ).toBe(true);
 
     const mappedProps = cellColorControl?.config?.mapStateToProps?.(
-      {},
+      {
+        controls: {
+          matrix_rows: { value: ['metric_name_with_unit'] },
+        },
+        datasource: {
+          verbose_map: {
+            metric_name_with_unit: '指标（单位）',
+          },
+        },
+      },
       {},
       { chartStatus: 'success' },
     );
@@ -198,6 +207,14 @@ describe('AG Grid table scheme control panel', () => {
         label: '矩阵值单元格',
       },
     ]);
+    expect(mappedProps?.rowScopeOptions).toEqual([
+      {
+        value: 'metric_name_with_unit',
+        label: '指标（单位）',
+      },
+    ]);
+    expect(mappedProps?.rowScopeLabel).toBe('适用行维度');
+    expect(mappedProps?.rowValueLabel).toBe('适用行值');
   });
 
   it('hides official conditional formatting while matrix mode is enabled', () => {
