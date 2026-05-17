@@ -29,19 +29,31 @@ type ControlConfig = {
     }) => boolean;
     mapStateToProps?: (...args: any[]) => Record<string, unknown>;
   };
+  override?: {
+    visibility?: (args: {
+      controls: Record<string, { value?: unknown; options?: unknown }>;
+    }) => boolean;
+  };
   name: string;
 };
 
 const getControlNames = (rows: ControlSetRows) =>
   rows.flatMap(row =>
     row
-      .filter(
-        (control): control is { name: string } =>
+      .map(control => {
+        if (typeof control === 'string') {
+          return control;
+        }
+        if (
           Boolean(control) &&
           typeof control === 'object' &&
-          typeof (control as { name?: unknown }).name === 'string',
-      )
-      .map(control => control.name),
+          typeof (control as { name?: unknown }).name === 'string'
+        ) {
+          return (control as { name: string }).name;
+        }
+        return null;
+      })
+      .filter((name): name is string => Boolean(name)),
   );
 
 const getControl = (rows: ControlSetRows, name: string) =>
@@ -53,6 +65,17 @@ const getControl = (rows: ControlSetRows, name: string) =>
         typeof control === 'object' &&
         (control as { name?: string }).name === name,
     );
+
+const getControlVisibility = (
+  rows: ControlSetRows,
+  name: string,
+  controls: Record<string, { value?: unknown; options?: unknown }>,
+) => {
+  const control = getControl(rows, name);
+  const visibility =
+    control?.override?.visibility ?? control?.config?.visibility;
+  return visibility ? visibility({ controls }) : true;
+};
 
 describe('AG Grid table scheme control panel', () => {
   it('keeps column view controls in Options after Customize columns', () => {
@@ -122,6 +145,120 @@ describe('AG Grid table scheme control panel', () => {
     expect(queryControlNames.indexOf('matrix_rows')).toBeGreaterThan(
       queryControlNames.indexOf('metrics'),
     );
+  });
+
+  it('hides regular aggregate controls while matrix mode is enabled', () => {
+    const sections = controlPanel.controlPanelSections.filter(
+      (section): section is NonNullable<typeof section> => Boolean(section),
+    );
+    const querySection = sections[0];
+
+    expect(querySection).toBeDefined();
+    if (!querySection) {
+      throw new Error('Expected query section to be available');
+    }
+
+    const matrixControls = {
+      query_mode: { value: 'aggregate' },
+      matrix_mode_enabled: { value: true },
+      timeseries_limit_metric: { value: 'metric_order' },
+      server_pagination: { value: true },
+      groupby: { value: ['biz_date'], options: [] },
+    };
+
+    [
+      'groupby',
+      'time_grain_sqla',
+      'metrics',
+      'percent_metrics',
+      'timeseries_limit_metric',
+      'order_desc',
+      'show_totals',
+      'server_pagination',
+      'server_page_length',
+    ].forEach(controlName => {
+      expect(
+        getControlVisibility(
+          querySection.controlSetRows,
+          controlName,
+          matrixControls,
+        ),
+      ).toBe(false);
+    });
+  });
+
+  it('restores regular aggregate controls when matrix mode is disabled', () => {
+    const sections = controlPanel.controlPanelSections.filter(
+      (section): section is NonNullable<typeof section> => Boolean(section),
+    );
+    const querySection = sections[0];
+
+    expect(querySection).toBeDefined();
+    if (!querySection) {
+      throw new Error('Expected query section to be available');
+    }
+
+    const aggregateControls = {
+      query_mode: { value: 'aggregate' },
+      matrix_mode_enabled: { value: false },
+      timeseries_limit_metric: { value: 'metric_order' },
+      server_pagination: { value: true },
+      groupby: {
+        value: ['biz_date'],
+        options: [{ column_name: 'biz_date', is_dttm: true }],
+      },
+    };
+
+    [
+      'groupby',
+      'time_grain_sqla',
+      'metrics',
+      'percent_metrics',
+      'timeseries_limit_metric',
+      'order_desc',
+      'show_totals',
+      'server_pagination',
+      'server_page_length',
+    ].forEach(controlName => {
+      expect(
+        getControlVisibility(
+          querySection.controlSetRows,
+          controlName,
+          aggregateControls,
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('keeps filters, row limit, and matrix details available in matrix mode', () => {
+    const sections = controlPanel.controlPanelSections.filter(
+      (section): section is NonNullable<typeof section> => Boolean(section),
+    );
+    const querySection = sections[0];
+
+    expect(querySection).toBeDefined();
+    if (!querySection) {
+      throw new Error('Expected query section to be available');
+    }
+
+    const queryControlNames = getControlNames(querySection.controlSetRows);
+    const matrixControls = {
+      query_mode: { value: 'aggregate' },
+      matrix_mode_enabled: { value: true },
+    };
+
+    expect(queryControlNames).toEqual(
+      expect.arrayContaining(['adhoc_filters', 'row_limit']),
+    );
+    ['matrix_rows', 'matrix_columns', 'matrix_value'].forEach(controlName => {
+      expect(
+        getControlVisibility(
+          querySection.controlSetRows,
+          controlName,
+          matrixControls,
+        ),
+      ).toBe(true);
+    });
   });
 
   it('uses Chinese labels for matrix-specific controls', () => {

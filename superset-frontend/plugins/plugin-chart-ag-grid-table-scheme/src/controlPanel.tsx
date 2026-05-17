@@ -351,6 +351,67 @@ const insertRowsAfterControl = (
   ];
 };
 
+const controlsHiddenInMatrixMode = new Set([
+  'groupby',
+  'time_grain_sqla',
+  'metrics',
+  'percent_metrics',
+  'timeseries_limit_metric',
+  'order_desc',
+  'server_pagination',
+  'server_page_length',
+  'show_totals',
+]);
+
+type VisibilityConfig = {
+  visibility?: (props: Pick<ControlPanelsContainerProps, 'controls'>) => boolean;
+};
+
+const withHiddenInMatrixVisibility = (
+  visibility?: VisibilityConfig['visibility'],
+): VisibilityConfig['visibility'] => props =>
+  !matrixVisibility(props) && (visibility ? visibility(props) : true);
+
+const hideControlsInMatrixMode = (rows: ControlSetRows): ControlSetRows =>
+  rows.map(row =>
+    row.map(control => {
+      if (
+        !control ||
+        typeof control !== 'object' ||
+        !controlsHiddenInMatrixMode.has((control as { name?: string }).name ?? '')
+      ) {
+        return control;
+      }
+
+      const typedControl = control as {
+        config?: VisibilityConfig;
+        override?: VisibilityConfig;
+      };
+
+      if (typedControl.override) {
+        return {
+          ...control,
+          override: {
+            ...typedControl.override,
+            visibility: withHiddenInMatrixVisibility(
+              typedControl.override.visibility,
+            ),
+          },
+        } as unknown as typeof control;
+      }
+
+      return {
+        ...control,
+        config: {
+          ...(control as { config?: Record<string, unknown> }).config,
+          visibility: withHiddenInMatrixVisibility(
+            typedControl.config?.visibility,
+          ),
+        },
+      } as unknown as typeof control;
+    }),
+  );
+
 const hideOfficialConditionalFormattingInMatrix = (
   rows: ControlSetRows,
 ): ControlSetRows =>
@@ -365,21 +426,16 @@ const hideOfficialConditionalFormattingInMatrix = (
       }
 
       const typedControl = control as {
-        config?: {
-          visibility?: (
-            props: Pick<ControlPanelsContainerProps, 'controls'>,
-          ) => boolean;
-        };
+        config?: VisibilityConfig;
       };
-      const previousVisibility = typedControl.config?.visibility;
 
       return {
         ...control,
         config: {
           ...(control as { config?: Record<string, unknown> }).config,
-          visibility: (props: Pick<ControlPanelsContainerProps, 'controls'>) =>
-            !matrixVisibility(props) &&
-            (previousVisibility ? previousVisibility(props) : true),
+          visibility: withHiddenInMatrixVisibility(
+            typedControl.config?.visibility,
+          ),
         },
       } as unknown as typeof control;
     }),
@@ -463,7 +519,7 @@ const controlPanel: ControlPanelConfig = {
         ...section,
         controlSetRows: [
           ...insertRowsAfterControl(
-            section.controlSetRows,
+            hideControlsInMatrixMode(section.controlSetRows),
             'query_mode',
             matrixModeControlRows,
           ),
