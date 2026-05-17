@@ -62,6 +62,35 @@ describe('ag grid table scheme transformProps', () => {
     expect(result.additionalCellStyle).toBeUndefined();
   });
 
+  it('keeps official props while matrix mode configuration is incomplete', () => {
+    const result = transformProps({
+      rawFormData: {
+        query_mode: 'aggregate',
+        matrix_mode_enabled: true,
+        matrix_rows: [],
+        matrix_columns: [],
+        matrix_value: null,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              metric_name: 'Sales',
+              biz_date: '2026-05-01',
+              value: 15,
+            },
+          ],
+        },
+      ],
+      hooks: {},
+      filterState: { filters: {} },
+    } as any);
+
+    expect(result.columnColorFormatters).toEqual([{ column: 'value' }]);
+    expect(result.additionalCellStyle).toBeUndefined();
+    expect((result as any).metrics).toBeUndefined();
+  });
+
   it('builds matrix cell coloring from chart-level threshold rules', () => {
     const result = transformProps({
       rawFormData: {

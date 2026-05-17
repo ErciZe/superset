@@ -149,6 +149,9 @@ const buildMatrixConfig = (
   };
 };
 
+const hasCompleteMatrixConfig = (config: MatrixTransformConfig) =>
+  Boolean(config.rows.length && config.columns.length && config.value);
+
 export default function transformProps(chartProps: TableChartProps) {
   const formData = chartProps.rawFormData as ScopedFormData;
   const datasourceId =
@@ -169,6 +172,12 @@ export default function transformProps(chartProps: TableChartProps) {
   if (!formData.matrix_mode_enabled) {
     return scopedProps;
   }
+
+  const matrixConfig = buildMatrixConfig(formData, officialProps.columns);
+  if (!hasCompleteMatrixConfig(matrixConfig)) {
+    return scopedProps;
+  }
+
   if (officialProps.serverPagination) {
     throw new Error('Matrix mode does not support server pagination.');
   }
@@ -182,7 +191,7 @@ export default function transformProps(chartProps: TableChartProps) {
   const matrixResult = matrixTransform(
     chartProps.queriesData?.[0]?.data ?? officialProps.data,
     {
-      ...buildMatrixConfig(formData, officialProps.columns),
+      ...matrixConfig,
       summaryRecords: shouldUseSummaryRecords ? summaryRecords : undefined,
     },
   );
