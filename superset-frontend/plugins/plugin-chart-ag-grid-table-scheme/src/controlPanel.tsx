@@ -193,6 +193,20 @@ const matrixControls = [
   ],
   [
     {
+      name: 'column_view_schemes_enabled',
+      config: {
+        type: 'CheckboxControl',
+        label: t('Column view schemes enabled'),
+        default: true,
+        renderTrigger: true,
+        description: t(
+          'Show controls for saving, switching, and managing column view schemes.',
+        ),
+      },
+    },
+  ],
+  [
+    {
       name: 'column_settings_enabled',
       config: {
         type: 'CheckboxControl',

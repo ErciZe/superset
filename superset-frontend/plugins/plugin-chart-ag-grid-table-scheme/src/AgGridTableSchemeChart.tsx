@@ -29,6 +29,7 @@ const COLUMN_VIEW_TOOLBAR_HEIGHT = 48;
 type SchemeChartProps = AgGridTableChartTransformedProps & {
   dashboardId?: number | null;
   datasetId?: number | null;
+  columnViewSchemesEnabled?: boolean;
   columnSettingsEnabled?: boolean;
 };
 
@@ -38,21 +39,32 @@ type RenderToolbarArgs = {
 };
 
 export default function AgGridTableSchemeChart(props: SchemeChartProps) {
+  const columnViewSchemesEnabled = props.columnViewSchemesEnabled !== false;
+  const shouldRenderColumnViewToolbar =
+    columnViewSchemesEnabled || Boolean(props.columnSettingsEnabled);
+
   return (
     <AgGridTableChart
       {...props}
-      columnViewToolbarHeight={COLUMN_VIEW_TOOLBAR_HEIGHT}
-      renderColumnViewToolbar={({ gridApi, colDefs }: RenderToolbarArgs) => (
-        <ColumnViewSchemeToolbar
-          chartId={props.slice_id}
-          dashboardId={props.dashboardId}
-          datasetId={props.datasetId}
-          gridApi={gridApi}
-          colDefs={colDefs}
-          includeSortState={!props.serverPagination}
-          columnSettingsEnabled={Boolean(props.columnSettingsEnabled)}
-        />
-      )}
+      columnViewToolbarHeight={
+        shouldRenderColumnViewToolbar ? COLUMN_VIEW_TOOLBAR_HEIGHT : undefined
+      }
+      renderColumnViewToolbar={
+        shouldRenderColumnViewToolbar
+          ? ({ gridApi, colDefs }: RenderToolbarArgs) => (
+              <ColumnViewSchemeToolbar
+                chartId={props.slice_id}
+                dashboardId={props.dashboardId}
+                datasetId={props.datasetId}
+                gridApi={gridApi}
+                colDefs={colDefs}
+                includeSortState={!props.serverPagination}
+                schemeManagementEnabled={columnViewSchemesEnabled}
+                columnSettingsEnabled={Boolean(props.columnSettingsEnabled)}
+              />
+            )
+          : undefined
+      }
     />
   );
 }

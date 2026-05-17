@@ -52,6 +52,7 @@ type ColumnViewSchemeToolbarProps = {
   gridApi?: GridApi;
   colDefs: ColDef[];
   includeSortState?: boolean;
+  schemeManagementEnabled?: boolean;
   columnSettingsEnabled?: boolean;
 };
 
@@ -62,6 +63,7 @@ export default function ColumnViewSchemeToolbar({
   gridApi,
   colDefs,
   includeSortState,
+  schemeManagementEnabled = true,
   columnSettingsEnabled = false,
 }: ColumnViewSchemeToolbarProps) {
   const [isSaveAsOpen, setIsSaveAsOpen] = useState(false);
@@ -114,6 +116,9 @@ export default function ColumnViewSchemeToolbar({
   const handleApplyColumnSettings = async (settings: ColumnSettingItem[]) => {
     applyColumnSettings(settings);
     setIsSettingsOpen(false);
+    if (!schemeManagementEnabled) {
+      return;
+    }
     if (activeScheme) {
       await saveActiveScheme();
     } else {
@@ -132,34 +137,40 @@ export default function ColumnViewSchemeToolbar({
 
   return (
     <Toolbar>
-      <SchemeSelect
-        allowClear
-        disabled={isBusy}
-        loading={loading}
-        onChange={(value: number | null) => switchScheme(value ?? null)}
-        options={schemes.map(scheme => ({
-          label: scheme.is_default
-            ? `${scheme.name} (${t('default')})`
-            : scheme.name,
-          value: scheme.id,
-        }))}
-        placeholder={t('Column view')}
-        value={activeScheme?.id}
-      />
+      {schemeManagementEnabled && (
+        <SchemeSelect
+          allowClear
+          disabled={isBusy}
+          loading={loading}
+          onChange={(value: number | null) => switchScheme(value ?? null)}
+          options={schemes.map(scheme => ({
+            label: scheme.is_default
+              ? `${scheme.name} (${t('default')})`
+              : scheme.name,
+            value: scheme.id,
+          }))}
+          placeholder={t('Column view')}
+          value={activeScheme?.id}
+        />
+      )}
       <Space size="small">
-        <Button
-          disabled={!hasActiveScheme || isBusy || !isGridReady}
-          loading={saving}
-          onClick={saveActiveScheme}
-        >
-          {t('Save')}
-        </Button>
-        <Button
-          disabled={isBusy || !isGridReady}
-          onClick={() => setIsSaveAsOpen(true)}
-        >
-          {t('Save as')}
-        </Button>
+        {schemeManagementEnabled && (
+          <>
+            <Button
+              disabled={!hasActiveScheme || isBusy || !isGridReady}
+              loading={saving}
+              onClick={saveActiveScheme}
+            >
+              {t('Save')}
+            </Button>
+            <Button
+              disabled={isBusy || !isGridReady}
+              onClick={() => setIsSaveAsOpen(true)}
+            >
+              {t('Save as')}
+            </Button>
+          </>
+        )}
         {columnSettingsEnabled && (
           <Button
             disabled={isBusy || !isGridReady}
@@ -168,17 +179,19 @@ export default function ColumnViewSchemeToolbar({
             {t('列设置')}
           </Button>
         )}
-        <Button
-          disabled={!hasActiveScheme || activeScheme?.is_default || isBusy}
-          loading={saving}
-          onClick={setActiveAsDefault}
-        >
-          {t('Set default')}
-        </Button>
+        {schemeManagementEnabled && (
+          <Button
+            disabled={!hasActiveScheme || activeScheme?.is_default || isBusy}
+            loading={saving}
+            onClick={setActiveAsDefault}
+          >
+            {t('Set default')}
+          </Button>
+        )}
         <Button disabled={isBusy || !isGridReady} onClick={resetColumns}>
           {t('Reset')}
         </Button>
-        {hasActiveScheme && (
+        {schemeManagementEnabled && hasActiveScheme && (
           <Button
             danger
             disabled={isBusy}

@@ -195,6 +195,7 @@ const sumNumbers = (values: Array<number | null | undefined>) =>
 const formatRawValue = (
   value: number | null | undefined,
   unit: DataRecordValue | undefined,
+  formatter?: DataColumnMeta['formatter'],
 ): number | string | null => {
   if (value === null || value === undefined) {
     return null;
@@ -202,7 +203,8 @@ const formatRawValue = (
   if (!unit) {
     return value;
   }
-  return unit === '%' ? `${value}%` : `${value} ${unit}`;
+  const formattedValue = formatter ? formatter(value) : `${value}`;
+  return unit === '%' ? `${formattedValue}%` : `${formattedValue} ${unit}`;
 };
 
 const getDenseRanks = (cells: Map<string, number | null>) => {
@@ -399,7 +401,7 @@ export function matrixTransform(
     if (showTotal) {
       row[MATRIX_TOTAL_COL_ID] =
         calculation === 'raw'
-          ? formatRawValue(rowTotal, rowBucket.unit)
+          ? formatRawValue(rowTotal, rowBucket.unit, valueFormatter)
           : rowTotal;
     }
 
@@ -416,7 +418,7 @@ export function matrixTransform(
     sortedGeneratedColumnIds.forEach(columnId => {
       const cell = rowBucket.cells.get(columnId);
       if (calculation === 'raw') {
-        row[columnId] = formatRawValue(cell, rowBucket.unit);
+        row[columnId] = formatRawValue(cell, rowBucket.unit, valueFormatter);
       } else if (calculation === 'contribution') {
         row[columnId] = typeof cell === 'number' ? cell / matrixTotal : null;
       } else if (calculation === 'row_contribution') {

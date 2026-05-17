@@ -67,5 +67,6 @@ export type MatrixFormData = {
   matrix_total_position?: MatrixTotalPosition;
   matrix_value_calculation?: MatrixCalculation;
   matrix_max_generated_columns?: number;
+  column_view_schemes_enabled?: boolean;
   column_settings_enabled?: boolean;
 };

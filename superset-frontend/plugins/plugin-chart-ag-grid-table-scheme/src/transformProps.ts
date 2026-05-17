@@ -156,6 +156,7 @@ export default function transformProps(chartProps: TableChartProps) {
       'dashboardId',
     ),
     datasetId: optionalNumber(datasourceId, 'datasetId'),
+    columnViewSchemesEnabled: formData.column_view_schemes_enabled !== false,
     columnSettingsEnabled: Boolean(formData.column_settings_enabled),
   };
 

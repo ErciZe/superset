@@ -94,6 +94,32 @@ describe('matrixTransform', () => {
     ]);
   });
 
+  it('applies value formatting before appending row-level units', () => {
+    const result = matrixTransform(records, {
+      rows: ['metric_name'],
+      columns: ['biz_date'],
+      value: 'value',
+      rowSort: 'metric_order',
+      unitField: 'unit',
+      showTotal: true,
+      totalPosition: 'left',
+      calculation: 'raw',
+      maxGeneratedColumns: 10,
+      valueFormatter: (value: number) => value.toFixed(2),
+    });
+
+    expect(result.data[0]).toMatchObject({
+      metric_name: 'Profit %',
+      [MATRIX_TOTAL_COL_ID]: '9.79%',
+      '__matrix_col__2026-05-01': '9.79%',
+    });
+    expect(result.data[1]).toMatchObject({
+      metric_name: 'Sales',
+      [MATRIX_TOTAL_COL_ID]: '30.00 件',
+      '__matrix_col__2026-05-01': '15.00 件',
+    });
+  });
+
   it('keeps raw values numeric when no unit field is configured', () => {
     const valueFormatter = (value: number) => value.toFixed(2);
     const result = matrixTransform(records, {
