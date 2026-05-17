@@ -204,7 +204,10 @@ const formatRawValue = (
     return value;
   }
   const formattedValue = formatter ? formatter(value) : `${value}`;
-  return unit === '%' ? `${formattedValue}%` : `${formattedValue} ${unit}`;
+  if (unit === '%') {
+    return `${formattedValue}%`;
+  }
+  return formatter ? formattedValue : value;
 };
 
 const getDenseRanks = (cells: Map<string, number | null>) => {

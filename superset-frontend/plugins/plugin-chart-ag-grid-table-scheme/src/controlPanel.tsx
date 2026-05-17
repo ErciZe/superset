@@ -200,7 +200,7 @@ const matrixControls = [
         default: true,
         renderTrigger: true,
         description: t(
-          'Show controls for saving, switching, and managing column view schemes.',
+          'Show the column view toolbar for switching, saving, and resetting column views.',
         ),
       },
     },

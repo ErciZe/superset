@@ -40,17 +40,15 @@ type RenderToolbarArgs = {
 
 export default function AgGridTableSchemeChart(props: SchemeChartProps) {
   const columnViewSchemesEnabled = props.columnViewSchemesEnabled !== false;
-  const shouldRenderColumnViewToolbar =
-    columnViewSchemesEnabled || Boolean(props.columnSettingsEnabled);
 
   return (
     <AgGridTableChart
       {...props}
       columnViewToolbarHeight={
-        shouldRenderColumnViewToolbar ? COLUMN_VIEW_TOOLBAR_HEIGHT : undefined
+        columnViewSchemesEnabled ? COLUMN_VIEW_TOOLBAR_HEIGHT : undefined
       }
       renderColumnViewToolbar={
-        shouldRenderColumnViewToolbar
+        columnViewSchemesEnabled
           ? ({ gridApi, colDefs }: RenderToolbarArgs) => (
               <ColumnViewSchemeToolbar
                 chartId={props.slice_id}

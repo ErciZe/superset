@@ -87,14 +87,14 @@ describe('matrixTransform', () => {
       },
       {
         metric_name: 'Sales',
-        [MATRIX_TOTAL_COL_ID]: '30 件',
-        '__matrix_col__2026-05-01': '15 件',
-        '__matrix_col__2026-05-02': '15 件',
+        [MATRIX_TOTAL_COL_ID]: 30,
+        '__matrix_col__2026-05-01': 15,
+        '__matrix_col__2026-05-02': 15,
       },
     ]);
   });
 
-  it('applies value formatting before appending row-level units', () => {
+  it('only appends row-level units for percentage values', () => {
     const result = matrixTransform(records, {
       rows: ['metric_name'],
       columns: ['biz_date'],
@@ -115,8 +115,8 @@ describe('matrixTransform', () => {
     });
     expect(result.data[1]).toMatchObject({
       metric_name: 'Sales',
-      [MATRIX_TOTAL_COL_ID]: '30.00 件',
-      '__matrix_col__2026-05-01': '15.00 件',
+      [MATRIX_TOTAL_COL_ID]: '30.00',
+      '__matrix_col__2026-05-01': '15.00',
     });
   });
 
