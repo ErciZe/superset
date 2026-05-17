@@ -100,6 +100,30 @@ describe('AG Grid table scheme control panel', () => {
     );
   });
 
+  it('puts the matrix mode switch before aggregate fields', () => {
+    const sections = controlPanel.controlPanelSections.filter(
+      (section): section is NonNullable<typeof section> => Boolean(section),
+    );
+    const querySection = sections[0];
+
+    expect(querySection).toBeDefined();
+    if (!querySection) {
+      throw new Error('Expected query section to be available');
+    }
+
+    const queryControlNames = getControlNames(querySection.controlSetRows);
+
+    expect(queryControlNames.indexOf('matrix_mode_enabled')).toBe(
+      queryControlNames.indexOf('query_mode') + 1,
+    );
+    expect(queryControlNames.indexOf('matrix_rows')).toBeGreaterThan(
+      queryControlNames.indexOf('groupby'),
+    );
+    expect(queryControlNames.indexOf('matrix_rows')).toBeGreaterThan(
+      queryControlNames.indexOf('metrics'),
+    );
+  });
+
   it('uses Chinese labels for matrix-specific controls', () => {
     const sections = controlPanel.controlPanelSections.filter(
       (section): section is NonNullable<typeof section> => Boolean(section),

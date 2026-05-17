@@ -155,20 +155,24 @@ export const NumericCellRenderer = (
   } = params;
 
   const isDarkTheme = useIsDark();
-  const additionalFormatting = params.additionalCellFormatter?.({
-    ...params,
-    col: params.col,
-  });
 
   if (node?.rowPinned === 'bottom') {
     return <StyledTotalCell>{valueFormatted ?? value}</StyledTotalCell>;
   }
 
+  const additionalFormatting = params.additionalCellFormatter?.({
+    ...params,
+    col: params.col,
+  });
+  const additionalContentProps = {
+    className: additionalFormatting?.className,
+    title: additionalFormatting?.tooltip,
+  };
+
   if (additionalFormatting?.html) {
     return (
       <div
-        className={additionalFormatting.className}
-        title={additionalFormatting.tooltip}
+        {...additionalContentProps}
         dangerouslySetInnerHTML={{
           __html: sanitizeHtml(additionalFormatting.html),
         }}
@@ -176,14 +180,7 @@ export const NumericCellRenderer = (
     );
   }
   if (additionalFormatting && 'text' in additionalFormatting) {
-    return (
-      <div
-        className={additionalFormatting.className}
-        title={additionalFormatting.tooltip}
-      >
-        {additionalFormatting.text}
-      </div>
-    );
+    return <div {...additionalContentProps}>{additionalFormatting.text}</div>;
   }
 
   let arrow = '';
@@ -203,7 +200,7 @@ export const NumericCellRenderer = (
 
   if (!valueRange) {
     return (
-      <CellContainer align={alignment}>
+      <CellContainer align={alignment} {...additionalContentProps}>
         {arrow && (
           <ArrowContainer arrowColor={arrowColor}>{arrow}</ArrowContainer>
         )}
@@ -229,7 +226,7 @@ export const NumericCellRenderer = (
   });
 
   return (
-    <div>
+    <div {...additionalContentProps}>
       <Bar offset={CellOffset} percentage={CellWidth} background={background} />
       {valueFormatted ?? value}
     </div>

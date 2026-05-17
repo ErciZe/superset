@@ -31,10 +31,6 @@ const SUMMARY_TOOLTIP_TEXT = t(
 export const TextCellRenderer = (params: CellRendererProps) => {
   const { node, api, colDef, columns, allowRenderHtml, value, valueFormatted } =
     params;
-  const additionalFormatting = params.additionalCellFormatter?.({
-    ...params,
-    col: params.col,
-  });
 
   if (node?.rowPinned === 'bottom') {
     const cols = api.getAllGridColumns().filter(col => col.isVisible());
@@ -54,11 +50,22 @@ export const TextCellRenderer = (params: CellRendererProps) => {
     }
   }
 
+  const additionalFormatting = params.additionalCellFormatter?.({
+    ...params,
+    col: params.col,
+  });
+  const additionalContentProps = {
+    className: additionalFormatting?.className,
+    title: additionalFormatting?.tooltip,
+  };
+  const hasAdditionalContentProps = Boolean(
+    additionalFormatting?.className || additionalFormatting?.tooltip,
+  );
+
   if (additionalFormatting?.html) {
     return (
       <div
-        className={additionalFormatting.className}
-        title={additionalFormatting.tooltip}
+        {...additionalContentProps}
         dangerouslySetInnerHTML={{
           __html: sanitizeHtml(additionalFormatting.html),
         }}
@@ -66,32 +73,40 @@ export const TextCellRenderer = (params: CellRendererProps) => {
     );
   }
   if (additionalFormatting && 'text' in additionalFormatting) {
-    return (
-      <div
-        className={additionalFormatting.className}
-        title={additionalFormatting.tooltip}
-      >
-        {additionalFormatting.text}
-      </div>
-    );
+    return <div {...additionalContentProps}>{additionalFormatting.text}</div>;
   }
 
   if (!(typeof value === 'string' || value instanceof Date)) {
-    return valueFormatted ?? value;
+    const content = valueFormatted ?? value;
+    return hasAdditionalContentProps ? (
+      <div {...additionalContentProps}>{content}</div>
+    ) : (
+      content
+    );
   }
 
   if (typeof value === 'string') {
     if (value.startsWith('http://') || value.startsWith('https://')) {
       return (
-        <a href={value} target="_blank" rel="noopener noreferrer">
+        <a
+          href={value}
+          target="_blank"
+          rel="noopener noreferrer"
+          {...additionalContentProps}
+        >
           {value}
         </a>
       );
     }
     if (allowRenderHtml && isProbablyHTML(value)) {
-      return <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }} />;
+      return (
+        <div
+          {...additionalContentProps}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }}
+        />
+      );
     }
   }
 
-  return <div>{valueFormatted ?? value}</div>;
+  return <div {...additionalContentProps}>{valueFormatted ?? value}</div>;
 };

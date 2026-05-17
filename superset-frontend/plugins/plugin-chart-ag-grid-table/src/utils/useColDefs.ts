@@ -25,6 +25,8 @@ import { extent as d3Extent, max as d3Max } from 'd3-array';
 import {
   AdditionalCellStyle,
   AdditionalCellFormatter,
+  AdditionalCellFormatterParams,
+  AdditionalCellFormatterResult,
   BasicColorFormatterType,
   CellRendererProps,
   InputColumn,
@@ -64,6 +66,72 @@ type UseColDefsProps = {
 };
 
 type ValueRange = [number, number];
+
+const FORMATTER_CACHE_KEY_SEPARATOR = '\u001f';
+
+const getFormatterCacheKey = (
+  params: AdditionalCellFormatterParams,
+  col: InputColumn,
+) =>
+  [
+    params.node?.id ?? '',
+    params.rowIndex ?? '',
+    params.colDef?.field ?? col.key,
+    String(params.value),
+    String(params.valueFormatted),
+  ].join(FORMATTER_CACHE_KEY_SEPARATOR);
+
+const normalizeFormatterParams = (
+  params: AdditionalCellFormatterParams,
+  col: InputColumn,
+): AdditionalCellFormatterParams => ({
+  data: params.data,
+  value: params.value,
+  valueFormatted: params.valueFormatted,
+  rowIndex: params.rowIndex,
+  colDef: params.colDef,
+  node: params.node,
+  col,
+});
+
+const createCachedAdditionalCellFormatter = (
+  additionalCellFormatter: AdditionalCellFormatter | undefined,
+  col: InputColumn,
+): AdditionalCellFormatter | undefined => {
+  if (!additionalCellFormatter) {
+    return undefined;
+  }
+
+  const rowCache = new WeakMap<
+    object,
+    Map<string, AdditionalCellFormatterResult | undefined>
+  >();
+  const fallbackCache = new Map<
+    string,
+    AdditionalCellFormatterResult | undefined
+  >();
+
+  return params => {
+    const cacheKey = getFormatterCacheKey(params, col);
+    const { data } = params;
+    const cache =
+      data && typeof data === 'object'
+        ? rowCache.get(data) ?? new Map()
+        : fallbackCache;
+
+    if (data && typeof data === 'object' && !rowCache.has(data)) {
+      rowCache.set(data, cache);
+    }
+
+    if (cache.has(cacheKey)) {
+      return cache.get(cacheKey);
+    }
+
+    const result = additionalCellFormatter(normalizeFormatterParams(params, col));
+    cache.set(cacheKey, result);
+    return result;
+  };
+};
 
 function getValueRange(
   key: string,
@@ -189,6 +257,10 @@ export const useColDefs = ({
       const isTextColumn =
         dataType === GenericDataType.String ||
         dataType === GenericDataType.Temporal;
+      const cachedAdditionalCellFormatter = createCachedAdditionalCellFormatter(
+        additionalCellFormatter,
+        col,
+      );
 
       const valueRange =
         !hasBasicColorFormatters &&
@@ -208,13 +280,16 @@ export const useColDefs = ({
         cellStyle: p =>
           getCellStyle({
             ...p,
+            ...(cachedAdditionalCellFormatter
+              ? { valueFormatted: valueFormatter(p, col) }
+              : {}),
             hasColumnColorFormatters,
             columnColorFormatters,
             hasBasicColorFormatters,
             basicColorFormatters,
             col,
             additionalCellStyle,
-            additionalCellFormatter,
+            additionalCellFormatter: cachedAdditionalCellFormatter,
           }),
         cellClass: p =>
           getCellClass({
@@ -257,7 +332,7 @@ export const useColDefs = ({
           valueRange,
           alignPositiveNegative: alignPN || alignPositiveNegative,
           colorPositiveNegative,
-          additionalCellFormatter,
+          additionalCellFormatter: cachedAdditionalCellFormatter,
         },
         context: {
           isMetric,

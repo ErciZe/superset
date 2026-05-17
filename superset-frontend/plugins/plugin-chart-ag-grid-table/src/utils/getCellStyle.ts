@@ -18,6 +18,7 @@
  */
 
 import { ColorFormatters } from '@superset-ui/chart-controls';
+import { DataRecordValue } from '@superset-ui/core';
 import { CellClassParams } from '@superset-ui/core/components/ThemedAgGridReact';
 import {
   AdditionalCellStyle,
@@ -34,6 +35,7 @@ type CellStyleParams = CellClassParams & {
     [Key: string]: BasicColorFormatterType;
   }[];
   col: InputColumn;
+  valueFormatted?: DataRecordValue;
   additionalCellStyle?: AdditionalCellStyle;
   additionalCellFormatter?: AdditionalCellFormatter;
 };

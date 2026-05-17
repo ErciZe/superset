@@ -81,7 +81,7 @@ type ControlSetRows = NonNullable<
   ControlPanelConfig['controlPanelSections'][number]
 >['controlSetRows'];
 
-const matrixControls: ControlSetRows = [
+const matrixModeControlRows: ControlSetRows = [
   [
     {
       name: 'matrix_mode_enabled',
@@ -95,6 +95,9 @@ const matrixControls: ControlSetRows = [
       },
     },
   ],
+];
+
+const matrixDetailControlRows: ControlSetRows = [
   [
     {
       name: 'matrix_rows',
@@ -458,7 +461,14 @@ const controlPanel: ControlPanelConfig = {
     if (index === 0) {
       return {
         ...section,
-        controlSetRows: [...section.controlSetRows, ...matrixControls],
+        controlSetRows: [
+          ...insertRowsAfterControl(
+            section.controlSetRows,
+            'query_mode',
+            matrixModeControlRows,
+          ),
+          ...matrixDetailControlRows,
+        ],
       };
     }
 
