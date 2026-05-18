@@ -29,6 +29,8 @@ import { t, withTheme } from '@superset-ui/core';
 
 import ControlHeader from 'src/explore/components/ControlHeader';
 
+const MODAL_EDITOR_HEIGHT = 'min(960px, calc(100vh - 180px))';
+
 const propTypes = {
   name: PropTypes.string,
   onChange: PropTypes.func,
@@ -59,6 +61,7 @@ const propTypes = {
   textAreaStyles: PropTypes.object,
   tooltipOptions: PropTypes.object,
   hotkeys: PropTypes.array,
+  formatValue: PropTypes.func,
 };
 
 const defaultProps = {
@@ -73,9 +76,10 @@ const defaultProps = {
   textAreaStyles: {},
   tooltipOptions: {},
   hotkeys: [],
+  formatValue: null,
 };
 
-class TextAreaControl extends Component {
+export class TextAreaControl extends Component {
   onControlChange(event) {
     const { value } = event.target;
     this.props.onChange(value);
@@ -85,14 +89,70 @@ class TextAreaControl extends Component {
     this.props.onChange(value);
   }
 
+  applyFormattedAreaEditorValue(editor, sourceValue, formattedValue) {
+    if (
+      typeof formattedValue !== 'string' ||
+      formattedValue === sourceValue ||
+      editor.getValue() !== sourceValue
+    ) {
+      return;
+    }
+    editor.setValue(formattedValue, -1);
+    this.props.onChange(formattedValue);
+  }
+
+  onAreaEditorBlur(_event, editor) {
+    if (!this.props.formatValue || !editor) {
+      return;
+    }
+    const value = editor.getValue();
+    try {
+      const formattedValue = this.props.formatValue(value);
+      if (typeof formattedValue?.then === 'function') {
+        formattedValue
+          .then(result =>
+            this.applyFormattedAreaEditorValue(editor, value, result),
+          )
+          .catch(() => {});
+        return;
+      }
+      this.applyFormattedAreaEditorValue(editor, value, formattedValue);
+    } catch (_error) {
+      // Submit-time validators surface formatter errors in the control state.
+    }
+  }
+
+  resizeEditorAfterMount(editor) {
+    if (!editor?.resize) {
+      return;
+    }
+
+    editor.container?.style?.setProperty(
+      'height',
+      MODAL_EDITOR_HEIGHT,
+      'important',
+    );
+    editor.resize(true);
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => editor.resize(true));
+    }
+    window.setTimeout(() => editor.resize(true), 100);
+  }
+
   renderEditor(inModal = false) {
-    const minLines = inModal ? 40 : this.props.minLines || 12;
+    const minLines = this.props.minLines || 12;
     if (this.props.language) {
       const style = {
         border: `1px solid ${this.props.theme.colorBorder}`,
-        minHeight: `${minLines}em`,
         width: 'auto',
         ...this.props.textAreaStyles,
+        ...(inModal
+          ? { height: MODAL_EDITOR_HEIGHT }
+          : { minHeight: `${minLines}em` }),
       };
       if (this.props.resize) {
         style.resize = this.props.resize;
@@ -108,21 +168,26 @@ class TextAreaControl extends Component {
             exec: keyConfig.func,
           });
         });
+        if (inModal) {
+          this.resizeEditorAfterMount(editor);
+        }
       };
       const codeEditor = (
         <div>
           <TextAreaEditor
+            {...this.props}
             mode={this.props.language}
             style={style}
-            minLines={minLines}
-            maxLines={inModal ? 1000 : this.props.maxLines}
+            height={inModal ? MODAL_EDITOR_HEIGHT : undefined}
+            minLines={inModal ? undefined : minLines}
+            maxLines={inModal ? undefined : this.props.maxLines}
             editorProps={{ $blockScrolling: true }}
             onLoad={onEditorLoad}
             defaultValue={this.props.initialValue}
             readOnly={this.props.readOnly}
             key={this.props.name}
-            {...this.props}
             onChange={this.onAreaEditorChange.bind(this)}
+            onBlur={this.onAreaEditorBlur.bind(this)}
           />
         </div>
       );

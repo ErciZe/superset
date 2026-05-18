@@ -455,6 +455,7 @@ export function matrixTransform(
         calculation === 'raw'
           ? formatRawValue(rawTotal, rowBucket.unit, valueFormatter)
           : rowTotal;
+      setRawValue(row, MATRIX_TOTAL_COL_ID, rawTotal ?? null);
     }
 
     if (calculation === 'row_rank') {
@@ -524,6 +525,9 @@ export function matrixTransform(
     data,
     columns: resultColumns,
     generatedColumnIds: sortedGeneratedColumnIds,
-    rawValueColumnIds: sortedGeneratedColumnIds.map(getMatrixRawValueField),
+    rawValueColumnIds: [
+      ...(showTotal ? [MATRIX_TOTAL_COL_ID] : []),
+      ...sortedGeneratedColumnIds,
+    ].map(getMatrixRawValueField),
   };
 }

@@ -21,9 +21,12 @@ import controlPanel from '../src/controlPanel';
 type ControlSetRows = ReadonlyArray<ReadonlyArray<unknown>>;
 type ControlConfig = {
   config?: {
+    default?: string;
+    description?: string;
     label?: string;
     choices?: Array<[string, string]>;
     type?: string;
+    validators?: Array<(value: string) => false | string>;
     visibility?: (args: {
       controls: Record<string, { value?: unknown }>;
     }) => boolean;
@@ -387,9 +390,22 @@ describe('AG Grid table scheme control panel', () => {
       getControl(controls, 'matrix_cell_formatter_expression')?.config,
     ).toMatchObject({
       type: 'TextAreaControl',
-      label: '单元格展示表达式',
+      label: '单元格 JS 回调函数',
       language: 'javascript',
     });
+    const formatterControl = getControl(
+      controls,
+      'matrix_cell_formatter_expression',
+    )?.config;
+    expect(formatterControl?.default).toContain('/*');
+    expect(formatterControl?.default).toContain('示例：退款金额占比绝对值超过 8%');
+    expect(formatterControl?.description).toContain('row');
+    expect(formatterControl?.validators?.[0]('({ rawValue }) => rawValue')).toBe(
+      false,
+    );
+    expect(formatterControl?.validators?.[0]('{ text: value }')).toMatch(
+      /must be a function/,
+    );
   });
 
   it('hides official conditional formatting while matrix mode is enabled', () => {

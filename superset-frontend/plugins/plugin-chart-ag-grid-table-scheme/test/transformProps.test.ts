@@ -139,7 +139,7 @@ describe('ag grid table scheme transformProps', () => {
     });
   });
 
-  it('passes a safe matrix cell formatter to the base AG Grid chart', () => {
+  it('passes a matrix cell callback formatter to the base AG Grid chart', () => {
     const result = transformProps({
       rawFormData: {
         query_mode: 'aggregate',
@@ -149,7 +149,7 @@ describe('ag grid table scheme transformProps', () => {
         matrix_value: 'value',
         matrix_show_total: false,
         matrix_cell_formatter_expression:
-          'row.metric_name === "Sales" ? { text: "¥" + rawValue } : { text: value }',
+          '({ row, rawValue, value }) => row.metric_name === "Sales" ? { text: "¥" + rawValue } : { text: value }',
       },
       queriesData: [
         {

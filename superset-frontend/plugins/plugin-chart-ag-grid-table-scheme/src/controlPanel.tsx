@@ -32,6 +32,11 @@ import {
 } from '@superset-ui/core';
 import officialControlPanel from '../../plugin-chart-ag-grid-table/src/controlPanel';
 import { MATRIX_CELL_COLOR_RULE_COLUMN } from './matrix/cellColorRules';
+import {
+  MATRIX_CELL_FORMATTER_CALLBACK_DEFAULT,
+  formatMatrixCellFormatterCallback,
+  validateMatrixCellFormatterCallback,
+} from './matrix/cellFormatter';
 
 const getQueryMode = (controls: ControlStateMapping): QueryMode => {
   const mode = controls?.query_mode?.value;
@@ -54,6 +59,29 @@ const matrixVisibility = ({
   controls,
 }: Pick<ControlPanelsContainerProps, 'controls'>) =>
   isAggMode({ controls }) && Boolean(controls?.matrix_mode_enabled?.value);
+
+const validateMatrixCellFormatterCallbackControl = (value: string) => {
+  try {
+    validateMatrixCellFormatterCallback(value);
+    return false;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+};
+
+const formatMatrixCellFormatterEditor = (editor: {
+  getValue: () => string;
+  setValue: (value: string, cursorPosition?: number) => void;
+}) => {
+  const source = editor.getValue();
+  return formatMatrixCellFormatterCallback(source)
+    .then(formattedValue => {
+      if (editor.getValue() === source && formattedValue !== source) {
+        editor.setValue(formattedValue, -1);
+      }
+    })
+    .catch(() => {});
+};
 
 const getRowScopeOptions = (
   matrixRows: unknown,
@@ -311,15 +339,48 @@ const matrixCellColorControls: ControlSetRows = [
       name: 'matrix_cell_formatter_expression',
       config: {
         type: 'TextAreaControl',
-        label: t('单元格展示表达式'),
-        default: '',
+        label: t('单元格 JS 回调函数'),
+        default: MATRIX_CELL_FORMATTER_CALLBACK_DEFAULT,
         renderTrigger: true,
         resetOnHide: false,
         language: 'javascript',
+        validators: [validateMatrixCellFormatterCallbackControl],
+        formatValue: formatMatrixCellFormatterCallback,
         visibility: matrixVisibility,
         description: t(
-          '使用单个安全 JavaScript 表达式格式化矩阵单元格。可用参数：row、cell、value、rawValue、column、rowIndex、colDef；唯一允许的全局对象是 console。',
+          '使用 JS 回调函数格式化矩阵单元格。参数：row 当前行，cell 当前单元格，value 展示值，rawValue 原始值，column 当前列，rowIndex 行索引，colDef AG Grid 列定义。返回 undefined/null 表示不处理；也可返回 text/html/tooltip/className/style。',
         ),
+        aboveEditorSection: (
+          <div>
+            <p>
+              {t(
+                '回调签名建议写为：({ row, cell, value, rawValue, column, rowIndex, colDef }) => { ... }',
+              )}
+            </p>
+            <p>
+              {t(
+                'style 支持字段：backgroundColor、color、fontWeight、fontStyle、textAlign、textDecoration、opacity。',
+              )}
+            </p>
+          </div>
+        ),
+        tooltipOptions: {
+          title: t(
+            '参数：row/cell/value/rawValue/column/rowIndex/colDef。返回 undefined/null 不处理，返回对象可设置 style、text、html、tooltip、className。',
+          ),
+        },
+        hotkeys: [
+          {
+            name: 'formatMatrixCellFormatterCallback',
+            key: 'Ctrl-Shift-F',
+            func: formatMatrixCellFormatterEditor,
+          },
+          {
+            name: 'formatMatrixCellFormatterCallbackMac',
+            key: 'Command-Shift-F',
+            func: formatMatrixCellFormatterEditor,
+          },
+        ],
       },
     },
   ],
@@ -364,13 +425,17 @@ const controlsHiddenInMatrixMode = new Set([
 ]);
 
 type VisibilityConfig = {
-  visibility?: (props: Pick<ControlPanelsContainerProps, 'controls'>) => boolean;
+  visibility?: (
+    props: Pick<ControlPanelsContainerProps, 'controls'>,
+  ) => boolean;
 };
 
-const withHiddenInMatrixVisibility = (
-  visibility?: VisibilityConfig['visibility'],
-): VisibilityConfig['visibility'] => props =>
-  !matrixVisibility(props) && (visibility ? visibility(props) : true);
+const withHiddenInMatrixVisibility =
+  (
+    visibility?: VisibilityConfig['visibility'],
+  ): VisibilityConfig['visibility'] =>
+  props =>
+    !matrixVisibility(props) && (visibility ? visibility(props) : true);
 
 const hideControlsInMatrixMode = (rows: ControlSetRows): ControlSetRows =>
   rows.map(row =>
@@ -378,7 +443,9 @@ const hideControlsInMatrixMode = (rows: ControlSetRows): ControlSetRows =>
       if (
         !control ||
         typeof control !== 'object' ||
-        !controlsHiddenInMatrixMode.has((control as { name?: string }).name ?? '')
+        !controlsHiddenInMatrixMode.has(
+          (control as { name?: string }).name ?? '',
+        )
       ) {
         return control;
       }

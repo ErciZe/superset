@@ -136,6 +136,7 @@ describe('matrixTransform', () => {
     });
 
     expect(result.rawValueColumnIds).toEqual([
+      getMatrixRawValueField(MATRIX_TOTAL_COL_ID),
       getMatrixRawValueField('__matrix_col__2026-05-01'),
       getMatrixRawValueField('__matrix_col__2026-05-02'),
     ]);
@@ -144,6 +145,8 @@ describe('matrixTransform', () => {
     );
     expect(result.data[0]).toMatchObject({
       metric_name: 'Profit %',
+      [MATRIX_TOTAL_COL_ID]: '9.79%',
+      [getMatrixRawValueField(MATRIX_TOTAL_COL_ID)]: 9.79,
       '__matrix_col__2026-05-01': '9.79%',
       [getMatrixRawValueField('__matrix_col__2026-05-01')]: 9.79,
       '__matrix_col__2026-05-02': null,
@@ -151,6 +154,8 @@ describe('matrixTransform', () => {
     });
     expect(result.data[1]).toMatchObject({
       metric_name: 'Sales',
+      [MATRIX_TOTAL_COL_ID]: '30.00',
+      [getMatrixRawValueField(MATRIX_TOTAL_COL_ID)]: 30,
       '__matrix_col__2026-05-01': '15.00',
       [getMatrixRawValueField('__matrix_col__2026-05-01')]: 15,
     });
@@ -186,6 +191,7 @@ describe('matrixTransform', () => {
     expect(result.data[0]).toMatchObject({
       metric_name: 'Profit %',
       [MATRIX_TOTAL_COL_ID]: '12.7538%',
+      [getMatrixRawValueField(MATRIX_TOTAL_COL_ID)]: 12.7538,
       '__matrix_col__2026-05-01': '9.79%',
     });
     expect(result.data[1]).toMatchObject({
@@ -224,6 +230,7 @@ describe('matrixTransform', () => {
     expect(result.data[0]).toMatchObject({
       metric_name: 'Profit %',
       [MATRIX_TOTAL_COL_ID]: null,
+      [getMatrixRawValueField(MATRIX_TOTAL_COL_ID)]: null,
       '__matrix_col__2026-05-01': '9.79%',
     });
     expect(result.data[1]).toMatchObject({

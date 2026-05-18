@@ -16,18 +16,26 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { createMatrixCellFormatter } from '../../src/matrix/cellFormatter';
+import {
+  MATRIX_CELL_FORMATTER_CALLBACK_DEFAULT,
+  createMatrixCellFormatter,
+  formatMatrixCellFormatterCallback,
+  validateMatrixCellFormatterCallback,
+} from '../../src/matrix/cellFormatter';
 
 describe('matrix cell formatter', () => {
-  it('formats matrix cells with whitelisted callback arguments', () => {
+  it('formats matrix cells with a JavaScript callback', () => {
     const formatter = createMatrixCellFormatter(`
-      row.metric_name === "Profit" && rawValue < 0
-        ? {
+      ({ row, rawValue, cell, column, rowIndex }) => {
+        if (row.metric_name === "Profit" && rawValue < 0) {
+          return {
             text: "(" + (rawValue * -1) + ")",
             style: { color: "#d33", fontWeight: "bold" },
             tooltip: column.label + " / " + rowIndex
-          }
-        : { text: cell.value }
+          };
+        }
+        return { text: cell.value };
+      }
     `);
 
     expect(
@@ -56,29 +64,101 @@ describe('matrix cell formatter', () => {
     });
   });
 
-  it('allows console without exposing browser globals', () => {
-    const formatter = createMatrixCellFormatter(`
-      (console.log(cell.field), { text: value })
-    `);
-
-    expect(formatter).toBeDefined();
-    expect(() =>
-      createMatrixCellFormatter('{ text: window.location.href }'),
-    ).toThrow(/window/);
-    expect(() =>
-      createMatrixCellFormatter('{ text: document.cookie }'),
-    ).toThrow(/document/);
+  it('uses the default commented example as documentation only', () => {
+    expect(validateMatrixCellFormatterCallback('')).toBe(false);
+    expect(
+      validateMatrixCellFormatterCallback(
+        MATRIX_CELL_FORMATTER_CALLBACK_DEFAULT,
+      ),
+    ).toBe(false);
+    expect(
+      createMatrixCellFormatter(MATRIX_CELL_FORMATTER_CALLBACK_DEFAULT),
+    ).toBeUndefined();
   });
 
-  it('blocks prototype escape properties', () => {
+  it('supports Math.abs threshold formatting for refund ratio rows', () => {
+    const formatter = createMatrixCellFormatter(`
+      ({ row, rawValue }) => {
+        if (
+          row.metric_name_with_unit === "退款金额占比（%）" &&
+          Math.abs(rawValue) > 8
+        ) {
+          return {
+            style: {
+              backgroundColor: "#ff4d4f",
+              color: "#fff",
+              fontWeight: "bold"
+            },
+            tooltip: "退款金额占比超过 8%"
+          };
+        }
+        return undefined;
+      }
+    `);
+
+    expect(
+      formatter?.({
+        data: {
+          metric_name_with_unit: '退款金额占比（%）',
+          __matrix_raw_value____matrix_total__: -10.12,
+        },
+        value: '-10.12%',
+        rowIndex: 1,
+        colDef: {
+          field: '__matrix_total__',
+          headerName: 'Total',
+        },
+        col: {
+          key: '__matrix_total__',
+          label: 'Total',
+          dataType: 'STRING',
+          config: {},
+        },
+      } as any),
+    ).toEqual({
+      style: {
+        backgroundColor: '#ff4d4f',
+        color: '#fff',
+        fontWeight: 'bold',
+      },
+      tooltip: '退款金额占比超过 8%',
+    });
+  });
+
+  it('validates callback source and returned fields', () => {
     expect(() =>
-      createMatrixCellFormatter('{ text: row.constructor.name }'),
-    ).toThrow(/constructor/);
+      validateMatrixCellFormatterCallback('{ text: value }'),
+    ).toThrow(/must be a function/);
     expect(() =>
-      createMatrixCellFormatter('{ text: row["__proto__"] }'),
-    ).toThrow(/__proto__/);
+      validateMatrixCellFormatterCallback(
+        '({ value }) => missingGlobal + value',
+      ),
+    ).toThrow(/missingGlobal/);
     expect(() =>
-      createMatrixCellFormatter('{ text: console.log.bind(console) }'),
-    ).toThrow(/bind/);
+      validateMatrixCellFormatterCallback('() => ({ onclick: "x" })'),
+    ).toThrow(/unsupported result field/);
+    expect(() =>
+      validateMatrixCellFormatterCallback(
+        '() => ({ style: { position: "fixed" } })',
+      ),
+    ).toThrow(/unsupported style field/);
+  });
+
+  it('formats callback source with prettier', async () => {
+    await expect(
+      formatMatrixCellFormatterCallback('({rawValue})=>({text:rawValue})'),
+    ).resolves.toBe(`({ rawValue }) => ({ text: rawValue });\n`);
+  });
+
+  it('preserves string literal values while formatting callback source', async () => {
+    await expect(
+      formatMatrixCellFormatterCallback('()=>({text:"a=>b"})'),
+    ).resolves.toBe(`() => ({ text: "a=>b" });\n`);
+  });
+
+  it('rejects invalid callback source while formatting', async () => {
+    await expect(
+      formatMatrixCellFormatterCallback('{ text: value }'),
+    ).rejects.toThrow(/must be a function/);
   });
 });
