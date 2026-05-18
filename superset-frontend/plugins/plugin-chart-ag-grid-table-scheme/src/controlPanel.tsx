@@ -20,6 +20,7 @@ import {
   ControlPanelConfig,
   ControlPanelState,
   ControlPanelsContainerProps,
+  ControlState,
   ControlStateMapping,
   sharedControls,
 } from '@superset-ui/chart-controls';
@@ -158,7 +159,20 @@ const matrixDetailControlRows: ControlSetRows = [
         label: t('矩阵指标值'),
         multi: false,
         resetOnHide: false,
+        validators: [],
         visibility: matrixVisibility,
+        mapStateToProps: (
+          state: ControlPanelState,
+          controlState: ControlState,
+        ) => ({
+          ...(sharedControls.metrics.mapStateToProps?.(state, controlState) ??
+            {}),
+          externalValidationErrors:
+            matrixVisibility({ controls: state.controls }) &&
+            ensureIsArray(controlState?.value).length === 0
+              ? [t('不能为空')]
+              : [],
+        }),
       },
     },
   ],

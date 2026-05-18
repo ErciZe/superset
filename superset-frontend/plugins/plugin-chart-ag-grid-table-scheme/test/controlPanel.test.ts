@@ -264,6 +264,71 @@ describe('AG Grid table scheme control panel', () => {
     });
   });
 
+  it('does not require matrix value while raw records mode is active', () => {
+    const sections = controlPanel.controlPanelSections.filter(
+      (section): section is NonNullable<typeof section> => Boolean(section),
+    );
+    const querySection = sections[0];
+
+    expect(querySection).toBeDefined();
+    if (!querySection) {
+      throw new Error('Expected query section to be available');
+    }
+
+    const matrixValueControl = getControl(
+      querySection.controlSetRows,
+      'matrix_value',
+    );
+    const mappedState = matrixValueControl?.config?.mapStateToProps?.(
+      {
+        controls: {
+          query_mode: { value: 'raw' },
+          matrix_mode_enabled: { value: false },
+        },
+        datasource: { columns: [], metrics: [] },
+        form_data: {},
+      },
+      { value: null },
+    );
+
+    expect(matrixValueControl?.config?.validators).toEqual([]);
+    expect(mappedState?.externalValidationErrors).toEqual([]);
+  });
+
+  it('requires matrix value only while matrix mode is active', () => {
+    const sections = controlPanel.controlPanelSections.filter(
+      (section): section is NonNullable<typeof section> => Boolean(section),
+    );
+    const querySection = sections[0];
+
+    expect(querySection).toBeDefined();
+    if (!querySection) {
+      throw new Error('Expected query section to be available');
+    }
+
+    const matrixValueControl = getControl(
+      querySection.controlSetRows,
+      'matrix_value',
+    );
+    const state = {
+      controls: {
+        query_mode: { value: 'aggregate' },
+        matrix_mode_enabled: { value: true },
+      },
+      datasource: { columns: [], metrics: [] },
+      form_data: {},
+    };
+
+    expect(
+      matrixValueControl?.config?.mapStateToProps?.(state, { value: null })
+        ?.externalValidationErrors,
+    ).toEqual(['不能为空']);
+    expect(
+      matrixValueControl?.config?.mapStateToProps?.(state, { value: 'value' })
+        ?.externalValidationErrors,
+    ).toEqual([]);
+  });
+
   it('uses Chinese labels for matrix-specific controls', () => {
     const sections = controlPanel.controlPanelSections.filter(
       (section): section is NonNullable<typeof section> => Boolean(section),
@@ -398,11 +463,13 @@ describe('AG Grid table scheme control panel', () => {
       'matrix_cell_formatter_expression',
     )?.config;
     expect(formatterControl?.default).toContain('/*');
-    expect(formatterControl?.default).toContain('示例：退款金额占比绝对值超过 8%');
-    expect(formatterControl?.description).toContain('row');
-    expect(formatterControl?.validators?.[0]('({ rawValue }) => rawValue')).toBe(
-      false,
+    expect(formatterControl?.default).toContain(
+      '示例：退款金额占比绝对值超过 8%',
     );
+    expect(formatterControl?.description).toContain('row');
+    expect(
+      formatterControl?.validators?.[0]('({ rawValue }) => rawValue'),
+    ).toBe(false);
     expect(formatterControl?.validators?.[0]('{ text: value }')).toMatch(
       /must be a function/,
     );
