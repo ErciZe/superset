@@ -144,7 +144,7 @@ const compileMatrixCellFormatterCallback = (source: string) => {
     throw new Error('Matrix cell formatter callback must be a function.');
   }
   // eslint-disable-next-line no-new-func
-  const callback = new Function(`"use strict"; return (${source});`)();
+  const callback = new Function(`"use strict"; return ${source};`)();
   if (typeof callback !== 'function') {
     throw new Error('Matrix cell formatter callback must be a function.');
   }

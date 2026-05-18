@@ -145,6 +145,42 @@ describe('matrix cell formatter', () => {
   });
 
   it('formats callback source with prettier', async () => {
+    const formatted = await formatMatrixCellFormatterCallback(
+      '({rawValue})=>({text:rawValue})',
+    );
+
+    expect(formatted).toBe(`({ rawValue }) => ({ text: rawValue });\n`);
+    expect(validateMatrixCellFormatterCallback(formatted)).toBe(false);
+    expect(
+      createMatrixCellFormatter(formatted)?.({
+        data: {
+          __matrix_raw_value____matrix_col__sample: 12,
+        },
+        value: '12',
+        rowIndex: 0,
+        colDef: {
+          field: '__matrix_col__sample',
+          headerName: '示例列',
+        },
+        col: {
+          key: '__matrix_col__sample',
+          label: '示例列',
+          dataType: 'STRING',
+          config: {},
+        },
+      } as any),
+    ).toEqual({ text: 12 });
+  });
+
+  it('validates callback source with a trailing semicolon', () => {
+    expect(
+      validateMatrixCellFormatterCallback(
+        '({ rawValue }) => ({ text: rawValue });',
+      ),
+    ).toBe(false);
+  });
+
+  it('keeps formatted callback source stable when re-validating', async () => {
     await expect(
       formatMatrixCellFormatterCallback('({rawValue})=>({text:rawValue})'),
     ).resolves.toBe(`({ rawValue }) => ({ text: rawValue });\n`);
