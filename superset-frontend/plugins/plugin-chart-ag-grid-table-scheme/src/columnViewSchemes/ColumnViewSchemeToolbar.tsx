@@ -18,7 +18,7 @@
  */
 import { useState } from 'react';
 import { styled, t } from '@superset-ui/core';
-import { Button, Input, Modal, Select, Space } from 'antd';
+import { Button, Input, Modal, Popconfirm, Select, Space } from 'antd';
 import type {
   ColDef,
   GridReadyEvent,
@@ -134,6 +134,9 @@ export default function ColumnViewSchemeToolbar({
   const isGridReady = Boolean(gridApi);
   const hasActiveScheme = activeScheme !== null;
   const trimmedSchemeName = newSchemeName.trim();
+  const deleteConfirmTitle = activeScheme
+    ? t('确认删除列配置方案“%s”？', activeScheme.name)
+    : '';
 
   return (
     <Toolbar>
@@ -192,14 +195,22 @@ export default function ColumnViewSchemeToolbar({
           {t('重置')}
         </Button>
         {schemeManagementEnabled && hasActiveScheme && (
-          <Button
-            danger
+          <Popconfirm
+            cancelText={t('取消')}
+            description={
+              activeScheme.is_default
+                ? t('该方案是默认方案，删除后将取消当前默认方案。')
+                : undefined
+            }
             disabled={isBusy}
-            loading={deleting}
-            onClick={deleteActiveScheme}
+            okText={t('确定')}
+            onConfirm={deleteActiveScheme}
+            title={deleteConfirmTitle}
           >
-            {t('删除')}
-          </Button>
+            <Button danger disabled={isBusy} loading={deleting}>
+              {t('删除')}
+            </Button>
+          </Popconfirm>
         )}
       </Space>
       <Modal

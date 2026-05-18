@@ -27,24 +27,24 @@ const Content = styled.div`
   ${({ theme }) => `
     border-top: 1px solid ${theme.colorBorderSecondary};
     display: grid;
-    gap: ${theme.sizeUnit * 4}px;
-    grid-template-columns: minmax(0, 1fr) 320px;
-    margin-top: ${theme.sizeUnit * 4}px;
-    padding-top: ${theme.sizeUnit * 4}px;
+    gap: ${theme.sizeUnit * 3}px;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    margin-top: ${theme.sizeUnit * 3}px;
+    padding-top: ${theme.sizeUnit * 3}px;
   `}
 `;
 
 const LeftPane = styled.div`
   ${({ theme }) => `
     border-right: 1px solid ${theme.colorBorderSecondary};
-    max-height: 560px;
+    max-height: 520px;
     overflow: auto;
-    padding-right: ${theme.sizeUnit * 4}px;
+    padding-right: ${theme.sizeUnit * 3}px;
   `}
 `;
 
 const RightPane = styled.div`
-  max-height: 560px;
+  max-height: 520px;
   overflow: auto;
 `;
 
@@ -85,11 +85,11 @@ const SelectedItem = styled.div`
     background: ${theme.colorFillQuaternary};
     border-radius: ${theme.borderRadius}px;
     display: grid;
-    gap: ${theme.sizeUnit * 2}px;
-    grid-template-columns: 20px 28px minmax(0, 1fr) auto auto;
-    margin-bottom: ${theme.sizeUnit * 2}px;
-    min-height: 40px;
-    padding: ${theme.sizeUnit * 2}px;
+    gap: ${theme.sizeUnit}px;
+    grid-template-columns: 18px 22px minmax(0, 1fr) auto auto;
+    margin-bottom: ${theme.sizeUnit}px;
+    min-height: 32px;
+    padding: ${theme.sizeUnit}px ${theme.sizeUnit * 1.5}px;
   `}
 `;
 
@@ -124,16 +124,25 @@ const SortableSelectedItem = SortableElement(
     <SelectedItem>
       <DragHandle />
       <OrderNumber>{order}</OrderNumber>
-      <ColumnLabel title={item.label}>{item.label}</ColumnLabel>
+      <ColumnLabel data-test="column-view-selected-label" title={item.label}>
+        {item.label}
+      </ColumnLabel>
       <Button
         size="small"
         type={item.pinned ? 'primary' : 'default'}
+        aria-label={item.pinned ? t('取消固定') : t('固定')}
         onClick={() => onTogglePinned(item.colId)}
       >
-        {item.pinned ? t('取消固定') : t('固定')}
+        {item.pinned ? t('取消') : t('固定')}
       </Button>
-      <Button size="small" type="text" onClick={() => onRemove(item.colId)}>
-        x
+      <Button
+        aria-label={t('移除列')}
+        icon={<Icons.CloseOutlined iconSize="s" />}
+        size="small"
+        type="text"
+        onClick={() => onRemove(item.colId)}
+      >
+        {null}
       </Button>
     </SelectedItem>
   ),
@@ -237,7 +246,32 @@ export default function ColumnViewSettingsModal({
   };
 
   const togglePinned = (colId: string) => {
-    updateDraftSetting(colId, item => ({ ...item, pinned: !item.pinned }));
+    setDraftSettings(current => {
+      const target = current.find(item => item.colId === colId);
+      if (!target) {
+        throw new Error(`Column setting ${colId} was not loaded.`);
+      }
+      if (target.pinned) {
+        return current.map(item =>
+          item.colId === colId ? { ...item, pinned: false } : item,
+        );
+      }
+
+      const nextTarget = { ...target, pinned: true };
+      const withoutTarget = current.filter(item => item.colId !== colId);
+      const visibleWithoutTarget = withoutTarget.filter(item => item.visible);
+      const hiddenSettings = withoutTarget.filter(item => !item.visible);
+      const insertIndex = visibleWithoutTarget.findIndex(item => !item.pinned);
+      if (insertIndex === -1) {
+        return [...visibleWithoutTarget, nextTarget, ...hiddenSettings];
+      }
+      return [
+        ...visibleWithoutTarget.slice(0, insertIndex),
+        nextTarget,
+        ...visibleWithoutTarget.slice(insertIndex),
+        ...hiddenSettings,
+      ];
+    });
   };
 
   const handleSortEnd = ({
