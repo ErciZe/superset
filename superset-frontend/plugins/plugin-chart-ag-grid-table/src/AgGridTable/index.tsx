@@ -92,6 +92,15 @@ ModuleRegistry.registerModules([AllCommunityModule, ClientSideRowModelModule]);
 
 const isSearchFocused = new Map<string, boolean>();
 
+const getColumnDefKey = (colDef: ColDef): string => {
+  if ('children' in colDef && Array.isArray(colDef.children)) {
+    return `${colDef.headerName ?? ''}(${colDef.children
+      .map(getColumnDefKey)
+      .join(',')})`;
+  }
+  return String(colDef.colId ?? colDef.field ?? colDef.headerName ?? '');
+};
+
 const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
   ({
     gridHeight,
@@ -128,6 +137,10 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
     const rowData = useMemo(() => data, [data]);
     const containerRef = useRef<HTMLDivElement>(null);
     const [gridApi, setGridApi] = useState<GridApi>();
+    const columnDefsKey = useMemo(
+      () => colDefsFromProps.map(getColumnDefKey).join('|'),
+      [colDefsFromProps],
+    );
 
     const searchId = `search-${id}`;
     const gridInitialState: GridState = {
@@ -315,6 +328,7 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
         </div>
 
         <ThemedAgGridReact
+          key={columnDefsKey}
           ref={gridRef}
           onGridReady={onGridReady}
           className="ag-container"

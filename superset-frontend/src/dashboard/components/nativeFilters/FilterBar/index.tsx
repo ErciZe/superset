@@ -185,6 +185,20 @@ const FilterBar: FC<FiltersBarProps> = ({
       filter: Pick<Filter, 'id'> & Partial<Filter>,
       dataMask: Partial<DataMask>,
     ) => {
+      const baseDataMask = {
+        ...(getInitialDataMask(filter.id) as DataMaskWithId),
+        ...dataMask,
+      };
+      const hasRequiredValue =
+        filter.controlValues?.enableEmptyFilter &&
+        baseDataMask.filterState?.value == null;
+      const nextDataMask = {
+        ...baseDataMask,
+        filterState: {
+          ...baseDataMask.filterState,
+          validateStatus: hasRequiredValue ? 'error' : undefined,
+        },
+      };
       setDataMaskSelected(draft => {
         const isFirstTimeInitialization =
           !initializedFilters.has(filter.id) &&
@@ -208,27 +222,20 @@ const FilterBar: FC<FiltersBarProps> = ({
         ) {
           setInitializedFilters(prev => new Set(prev).add(filter.id));
         }
-
-        const baseDataMask = {
-          ...(getInitialDataMask(filter.id) as DataMaskWithId),
-          ...dataMask,
-        };
-
-        // Recalculate validation status
-        const hasRequiredValue =
-          filter.controlValues?.enableEmptyFilter &&
-          baseDataMask.filterState?.value == null;
-
-        draft[filter.id] = {
-          ...baseDataMask,
-          filterState: {
-            ...baseDataMask.filterState,
-            validateStatus: hasRequiredValue ? 'error' : undefined,
-          },
-        };
+        draft[filter.id] = nextDataMask;
       });
+      if (filter.filterType === 'filter_time') {
+        dispatch(updateDataMask(filter.id, nextDataMask));
+        setUpdateKey(1);
+      }
     },
-    [dispatch, setDataMaskSelected, initializedFilters, setInitializedFilters],
+    [
+      dispatch,
+      setDataMaskSelected,
+      initializedFilters,
+      setInitializedFilters,
+      setUpdateKey,
+    ],
   );
 
   useEffect(() => {
