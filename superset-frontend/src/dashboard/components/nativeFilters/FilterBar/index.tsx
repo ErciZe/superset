@@ -139,6 +139,13 @@ const publishDataMask = debounce(
   Constants.SLOW_DEBOUNCE,
 );
 
+export const shouldApplyFilterInstantly = (
+  filter: Pick<Filter, 'id'> & Partial<Filter>,
+  dataMask: Partial<DataMask>,
+) =>
+  filter.filterType === 'filter_time' ||
+  typeof dataMask.extraFormData?.time_range === 'string';
+
 const FilterBar: FC<FiltersBarProps> = ({
   orientation = FilterBarOrientation.Vertical,
   verticalConfig,
@@ -224,9 +231,9 @@ const FilterBar: FC<FiltersBarProps> = ({
         }
         draft[filter.id] = nextDataMask;
       });
-      if (filter.filterType === 'filter_time') {
+      if (shouldApplyFilterInstantly(filter, nextDataMask)) {
         dispatch(updateDataMask(filter.id, nextDataMask));
-        setUpdateKey(1);
+        setUpdateKey(prev => prev + 1);
       }
     },
     [
@@ -285,7 +292,7 @@ const FilterBar: FC<FiltersBarProps> = ({
 
   const handleApply = useCallback(() => {
     dispatch(logEvent(LOG_ACTIONS_CHANGE_DASHBOARD_FILTER, {}));
-    setUpdateKey(1);
+    setUpdateKey(prev => prev + 1);
 
     Object.entries(dataMaskSelected).forEach(([filterId, dataMask]) => {
       if (dataMask) {

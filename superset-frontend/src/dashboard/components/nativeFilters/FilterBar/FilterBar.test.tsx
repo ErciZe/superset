@@ -25,7 +25,7 @@ import { TimeFilterPlugin, SelectFilterPlugin } from 'src/filters/components';
 import fetchMock from 'fetch-mock';
 import { FilterBarOrientation } from 'src/dashboard/types';
 import { FILTER_BAR_TEST_ID } from './utils';
-import FilterBar from '.';
+import FilterBar, { shouldApplyFilterInstantly } from '.';
 import { FILTERS_CONFIG_MODAL_TEST_ID } from '../FiltersConfigModal/FiltersConfigModal';
 
 jest.useFakeTimers();
@@ -348,5 +348,43 @@ describe('FilterBar', () => {
 
     const { container } = renderWrapper(openedBarProps, stateWithFilter);
     expect(container).toBeInTheDocument();
+  });
+
+  it('should apply time-range data masks instantly even without filter metadata', () => {
+    expect(
+      shouldApplyFilterInstantly(
+        { id: 'NATIVE_FILTER-biz_date' },
+        {
+          extraFormData: {
+            time_range: '2026-05-10 : 2026-05-13',
+          },
+          filterState: {
+            value: '2026-05-10 : 2026-05-13',
+          },
+        },
+      ),
+    ).toBe(true);
+  });
+
+  it('should not apply non-time filter data masks instantly', () => {
+    expect(
+      shouldApplyFilterInstantly(
+        { id: 'NATIVE_FILTER-store', filterType: 'filter_select' },
+        {
+          extraFormData: {
+            filters: [
+              {
+                col: 'store',
+                op: 'IN',
+                val: ['A'],
+              },
+            ],
+          },
+          filterState: {
+            value: ['A'],
+          },
+        },
+      ),
+    ).toBe(false);
   });
 });
