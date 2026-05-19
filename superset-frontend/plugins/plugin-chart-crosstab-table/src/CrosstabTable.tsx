@@ -16,12 +16,71 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import type { CrosstabChartProps } from './types';
+import { useMemo } from 'react';
+import { ThemedAgGridReact } from '@superset-ui/core/components';
+import type { DataRecordValue } from '@superset-ui/core';
+import {
+  AllCommunityModule,
+  ClientSideRowModelModule,
+  type ColDef,
+  type ValueFormatterParams,
+  ModuleRegistry,
+} from '@superset-ui/core/components/ThemedAgGridReact';
+import type { CrosstabChartProps, CrosstabConditionalRule } from './types';
+import {
+  formatCrosstabValue,
+  resolveConditionalStyle,
+} from './crosstab/formatting';
 
-export default function CrosstabTable({ height, width }: CrosstabChartProps) {
+ModuleRegistry.registerModules([AllCommunityModule, ClientSideRowModelModule]);
+
+function getMetricFromColumnId(columnId: string) {
+  return columnId.split('__metric__')[1];
+}
+
+export default function CrosstabTable({
+  columns,
+  formData,
+  height,
+  rowData,
+  width,
+}: CrosstabChartProps) {
+  const numberFormat = formData.numberFormat;
+  const conditionalFormatting: CrosstabConditionalRule[] =
+    formData.conditionalFormatting ?? [];
+  const columnDefs = useMemo<ColDef[]>(
+    () =>
+      columns.map(column => {
+        const metric = getMetricFromColumnId(column.key);
+        const rules = conditionalFormatting.filter(
+          rule => !rule.metric || rule.metric === metric,
+        );
+
+        return {
+          field: column.key,
+          colId: column.key,
+          headerName: column.label,
+          valueFormatter: ({ value }: ValueFormatterParams) =>
+            formatCrosstabValue(value as DataRecordValue, numberFormat),
+          cellStyle: ({ value }) => {
+            const { arrow, ...style } = resolveConditionalStyle(
+              value as DataRecordValue,
+              rules,
+            );
+            return style;
+          },
+        };
+      }),
+    [columns, conditionalFormatting, numberFormat],
+  );
+
   return (
     <div data-test="crosstab-table" style={{ height, width }}>
-      Crosstab Table
+      <ThemedAgGridReact
+        rowData={rowData}
+        columnDefs={columnDefs}
+        enableCellTextSelection
+      />
     </div>
   );
 }
