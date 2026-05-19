@@ -30,4 +30,24 @@ describe('crosstab domain', () => {
     expect(() => buildColumnTuples(records, ['biz_date', 'shop_name'], 3))
       .toThrow('Crosstab generated 4 columns, which exceeds the limit of 3.');
   });
+
+  it('fails before materializing tuples when domain cardinality exceeds the limit', () => {
+    const highCardinalityRecords = [
+      { month: '2026-05', shop: 'A' },
+      { month: '2026-05', shop: 'B' },
+      { month: '2026-05', shop: 'C' },
+      { month: '2026-06', shop: 'A' },
+      { month: '2026-06', shop: 'B' },
+      { month: '2026-06', shop: 'C' },
+      { month: '2026-07', shop: 'A' },
+      { month: '2026-07', shop: 'B' },
+      { month: '2026-07', shop: 'C' },
+    ];
+
+    expect(() => buildColumnTuples(
+      highCardinalityRecords,
+      ['month', 'shop'],
+      8,
+    )).toThrow('Crosstab generated 9 columns, which exceeds the limit of 8.');
+  });
 });

@@ -7,13 +7,17 @@ export type EncodedValue =
 const SUPPORTED_TYPES = new Set(['null', 'string', 'number', 'boolean']);
 
 export function encodeKey(value: unknown): string {
-  if (value === null || value === undefined) {
+  if (value === null) {
     return 'null:0:';
   }
 
   const type = typeof value;
   if (type !== 'string' && type !== 'number' && type !== 'boolean') {
     throw new Error(`Unsupported crosstab key value type: ${type}`);
+  }
+
+  if (type === 'number' && !Number.isFinite(value)) {
+    throw new Error(`Unsupported crosstab key number value: ${value}`);
   }
 
   const raw = String(value);
@@ -68,6 +72,9 @@ export function decodeKey(encoded: string): EncodedValue {
     const value = Number(raw);
     if (!Number.isFinite(value)) {
       throw new Error(`Invalid crosstab number key value: ${raw}`);
+    }
+    if (encodeKey(value) !== encoded) {
+      throw new Error(`Invalid crosstab number key encoding: ${encoded}`);
     }
     return { type, value };
   }

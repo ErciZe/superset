@@ -37,10 +37,16 @@ export function buildColumnTuples(
   columnFields: string[],
   maxGeneratedColumns: number,
 ): unknown[][] {
-  const tuples = cartesianProduct(buildColumnDomains(records, columnFields));
-  if (tuples.length > maxGeneratedColumns) {
-    throw new Error(ERR_COLUMN_LIMIT(tuples.length, maxGeneratedColumns));
-  }
+  const domains = buildColumnDomains(records, columnFields);
+  let generatedColumnCount = 1;
+  domains.forEach(domain => {
+    generatedColumnCount *= domain.length;
+    if (generatedColumnCount > maxGeneratedColumns) {
+      throw new Error(
+        ERR_COLUMN_LIMIT(generatedColumnCount, maxGeneratedColumns),
+      );
+    }
+  });
 
-  return tuples;
+  return cartesianProduct(domains);
 }
