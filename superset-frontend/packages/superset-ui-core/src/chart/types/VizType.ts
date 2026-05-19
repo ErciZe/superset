@@ -30,6 +30,7 @@ export enum VizType {
   Chord = 'chord',
   Compare = 'compare',
   CountryMap = 'country_map',
+  CrosstabTable = 'crosstab-table',
   Funnel = 'funnel',
   Gantt = 'gantt_chart',
   Gauge = 'gauge_chart',

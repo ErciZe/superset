@@ -82,6 +82,7 @@ import { HandlebarsChartPlugin } from '@superset-ui/plugin-chart-handlebars';
 import { FilterPlugins } from 'src/constants';
 import AgGridTableChartPlugin from '@superset-ui/plugin-chart-ag-grid-table';
 import AgGridTableSchemeChartPlugin from '@superset-ui/plugin-chart-ag-grid-table-scheme';
+import CrosstabTableChartPlugin from '@superset-ui/plugin-chart-crosstab-table';
 import TimeTableChartPlugin from '../TimeTable';
 
 export default class MainPreset extends Preset {
@@ -97,7 +98,12 @@ export default class MainPreset extends Preset {
       : [];
 
     const agGridTablePlugin = isFeatureEnabled(FeatureFlag.AgGridTableEnabled)
-      ? [new AgGridTableChartPlugin().configure({ key: VizType.TableAgGrid })]
+      ? [
+          new AgGridTableChartPlugin().configure({ key: VizType.TableAgGrid }),
+          new CrosstabTableChartPlugin().configure({
+            key: VizType.CrosstabTable,
+          }),
+        ]
       : [];
 
     const agGridTableSchemePlugin =
