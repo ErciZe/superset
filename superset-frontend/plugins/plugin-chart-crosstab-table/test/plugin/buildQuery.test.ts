@@ -35,7 +35,7 @@ describe('crosstab buildQuery', () => {
   });
 
   it('rejects server pagination', () => {
-    expect(() =>
+    try {
       buildQuery({
         datasource: '11__table',
         viz_type: 'crosstab-table',
@@ -43,7 +43,12 @@ describe('crosstab buildQuery', () => {
         groupbyColumns: ['pay_type'],
         metrics: ['amount'],
         serverPagination: true,
-      } as never),
-    ).toThrow('Crosstab table does not support server pagination in v1.');
+      } as never);
+      throw new Error('Expected buildQuery to throw');
+    } catch (error) {
+      expect((error as Error).message).toBe(
+        'Crosstab table does not support server pagination in v1.',
+      );
+    }
   });
 });
