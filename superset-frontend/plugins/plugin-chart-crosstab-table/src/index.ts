@@ -20,6 +20,7 @@ import { Behavior, ChartMetadata, ChartPlugin, t } from '@superset-ui/core';
 import buildQuery from './plugin/buildQuery';
 import controlPanel from './plugin/controlPanel';
 import transformProps from './plugin/transformProps';
+import thumbnail from '../../plugin-chart-ag-grid-table/src/images/thumbnail.png';
 import type { CrosstabChartProps, CrosstabFormData } from './types';
 
 export * from './types';
@@ -34,6 +35,7 @@ const metadata = new ChartMetadata({
   description: t('Crosstab table chart.'),
   name: t('Crosstab Table'),
   tags: [t('Tabular'), t('Business'), t('Report')],
+  thumbnail,
 });
 
 export default class CrosstabTableChartPlugin extends ChartPlugin<

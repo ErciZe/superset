@@ -17,15 +17,16 @@
  * under the License.
  */
 import type { ChartProps } from '@superset-ui/core';
-import type { CrosstabChartProps } from '../types';
+import type { CrosstabChartProps, CrosstabFormData } from '../types';
 
-export default function transformProps(chartProps: ChartProps) {
+export default function transformProps(
+  chartProps: ChartProps<CrosstabFormData>,
+): CrosstabChartProps {
   return {
     ...chartProps,
-    rawFormData: chartProps.rawFormData,
-    queriesData: chartProps.queriesData,
     rowData: [],
     columns: [],
     columnTree: [],
-  } as CrosstabChartProps;
+    generatedColumnIds: [],
+  };
 }

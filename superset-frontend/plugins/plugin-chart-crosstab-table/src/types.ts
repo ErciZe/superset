@@ -17,7 +17,6 @@
  * under the License.
  */
 import {
-  ChartDataResponseResult,
   ChartProps,
   DataRecord,
   QueryFormColumn,
@@ -27,11 +26,12 @@ import {
 import type { DataColumnMeta } from '@superset-ui/plugin-chart-ag-grid-table/src/types';
 
 export type CrosstabConditionalRule = {
+  metric?: string;
   operator: '>' | '>=' | '<' | '<=' | '=' | '!=';
   value: number;
   color?: string;
   backgroundColor?: string;
-  arrow?: string;
+  arrow?: 'up' | 'down';
 };
 
 export interface CrosstabFormData extends QueryFormData {
@@ -50,18 +50,19 @@ export interface CrosstabFormData extends QueryFormData {
 }
 
 export type CrosstabColumnNode = {
-  key: string;
+  id: string;
   label: string;
   children?: CrosstabColumnNode[];
+  metric?: string;
+  field?: string;
 };
 
 export type CrosstabEngineResult = {
   rowData: DataRecord[];
   columns: DataColumnMeta[];
   columnTree: CrosstabColumnNode[];
+  generatedColumnIds: string[];
 };
 
-export interface CrosstabChartProps extends ChartProps, CrosstabEngineResult {
-  rawFormData: CrosstabFormData;
-  queriesData: ChartDataResponseResult[];
-}
+export type CrosstabChartProps = ChartProps<CrosstabFormData> &
+  CrosstabEngineResult;
