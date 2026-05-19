@@ -49,6 +49,18 @@ export interface CrosstabFormData extends QueryFormData {
   serverPagination?: boolean;
 }
 
+export type CrosstabBuildOptions = {
+  rowFields: string[];
+  columnFields: string[];
+  metricFields: string[];
+  showRowSubtotals: boolean;
+  showRowTotals: boolean;
+  showColumnTotals: boolean;
+  showColumnSubtotals: boolean;
+  maxGeneratedColumns: number;
+  defaultRowExpandedDepth: number;
+};
+
 export type CrosstabColumnNode = {
   id: string;
   label: string;
