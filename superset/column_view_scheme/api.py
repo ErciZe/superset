@@ -18,11 +18,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from flask import g, request, Response
+from flask import current_app, g, request, Response
 from flask_appbuilder.api import expose, protect, safe
 from marshmallow import ValidationError
 
-from superset import is_feature_enabled, security_manager
+from superset import db, is_feature_enabled, security_manager
 from superset.commands.chart.exceptions import ChartNotFoundError
 from superset.commands.exceptions import CommandException
 from superset.column_view_scheme.commands.create import CreateColumnViewSchemeCommand
@@ -72,7 +72,19 @@ class ColumnViewSchemeRestApi(BaseSupersetApi):
         user = getattr(g, "user", None)
         if user is None or getattr(user, "is_anonymous", False):
             return None
-        return getattr(user, "id", None)
+        user_id = getattr(user, "id", None)
+        if user_id is not None:
+            return user_id
+        if security_manager.is_guest_user(user):
+            storage_username = (
+                current_app.config.get("COLUMN_VIEW_SCHEME_GUEST_USERNAME")
+                or getattr(user, "username", None)
+            )
+            if storage_username:
+                storage_user = security_manager.find_user(username=storage_username)
+                if storage_user is not None and getattr(storage_user, "is_active", True):
+                    return getattr(storage_user, "id", None)
+        return None
 
     def _parse_required_chart_id(self) -> int | None:
         return request.args.get("chart_id", type=int)
@@ -80,7 +92,31 @@ class ColumnViewSchemeRestApi(BaseSupersetApi):
     def _parse_dashboard_id(self) -> int | None:
         return request.args.get("dashboard_id", type=int)
 
-    def _ensure_chart_access(self, chart_id: int) -> Response | None:
+    def _ensure_chart_access(
+        self,
+        chart_id: int,
+        dashboard_id: int | None = None,
+    ) -> Response | None:
+        user = getattr(g, "user", None)
+        if security_manager.is_guest_user(user):
+            if dashboard_id is None:
+                return self.response_403()
+            exists = db.session.execute(
+                db.text(
+                    """
+                    select 1
+                    from dashboard_slices
+                    where dashboard_id = :dashboard_id
+                      and slice_id = :chart_id
+                    limit 1
+                    """
+                ),
+                {"dashboard_id": dashboard_id, "chart_id": chart_id},
+            ).scalar()
+            if not exists:
+                return self.response_404()
+            return None
+
         try:
             chart = ChartDAO.get_by_id_or_uuid(str(chart_id))
         except ChartNotFoundError:
@@ -89,17 +125,20 @@ class ColumnViewSchemeRestApi(BaseSupersetApi):
             return self.response_403()
         return None
 
-    def _permission_context(self, chart_id: int | None) -> tuple[int, Response | None]:
+    def _permission_context(
+        self,
+        chart_id: int | None,
+        dashboard_id: int | None = None,
+    ) -> tuple[int, Response | None]:
         user_id = self._current_user_id()
         if user_id is None:
             return 0, self.response_403()
         if chart_id is None:
             return user_id, self.response(422, message={"chart_id": ["Missing data."]})
-        access_response = self._ensure_chart_access(chart_id)
+        access_response = self._ensure_chart_access(chart_id, dashboard_id)
         if access_response is not None:
             return user_id, access_response
         return user_id, None
-
     def _get_user_scheme(
         self,
         scheme_id: int,
@@ -125,7 +164,10 @@ class ColumnViewSchemeRestApi(BaseSupersetApi):
         if response is not None:
             return response
         chart_id = self._parse_required_chart_id()
-        user_id, response = self._permission_context(chart_id)
+        user_id, response = self._permission_context(
+            chart_id,
+            self._parse_dashboard_id(),
+        )
         if response is not None:
             return response
         assert chart_id is not None
@@ -146,7 +188,10 @@ class ColumnViewSchemeRestApi(BaseSupersetApi):
         if response is not None:
             return response
         chart_id = self._parse_required_chart_id()
-        user_id, response = self._permission_context(chart_id)
+        user_id, response = self._permission_context(
+            chart_id,
+            self._parse_dashboard_id(),
+        )
         if response is not None:
             return response
         assert chart_id is not None
@@ -174,7 +219,10 @@ class ColumnViewSchemeRestApi(BaseSupersetApi):
             item = self.add_model_schema.load(request.json)
         except ValidationError as ex:
             return self.response(422, message=ex.messages)
-        user_id, response = self._permission_context(item["chart_id"])
+        user_id, response = self._permission_context(
+            item["chart_id"],
+            item.get("dashboard_id"),
+        )
         if response is not None:
             return response
         try:
@@ -202,7 +250,7 @@ class ColumnViewSchemeRestApi(BaseSupersetApi):
         if response is not None:
             return response
         assert existing is not None
-        response = self._ensure_chart_access(existing.chart_id)
+        response = self._ensure_chart_access(existing.chart_id, existing.dashboard_id)
         if response is not None:
             return response
         try:
@@ -224,7 +272,7 @@ class ColumnViewSchemeRestApi(BaseSupersetApi):
         if response is not None:
             return response
         assert existing is not None
-        response = self._ensure_chart_access(existing.chart_id)
+        response = self._ensure_chart_access(existing.chart_id, existing.dashboard_id)
         if response is not None:
             return response
         try:
@@ -246,7 +294,7 @@ class ColumnViewSchemeRestApi(BaseSupersetApi):
         if response is not None:
             return response
         assert existing is not None
-        response = self._ensure_chart_access(existing.chart_id)
+        response = self._ensure_chart_access(existing.chart_id, existing.dashboard_id)
         if response is not None:
             return response
         try:
