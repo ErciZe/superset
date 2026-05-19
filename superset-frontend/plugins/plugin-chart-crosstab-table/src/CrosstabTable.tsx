@@ -23,6 +23,7 @@ import {
   AllCommunityModule,
   ClientSideRowModelModule,
   type ColDef,
+  type CustomCellRendererProps,
   type ValueFormatterParams,
   ModuleRegistry,
 } from '@superset-ui/core/components/ThemedAgGridReact';
@@ -36,6 +37,22 @@ ModuleRegistry.registerModules([AllCommunityModule, ClientSideRowModelModule]);
 
 function getMetricFromColumnId(columnId: string) {
   return columnId.split('__metric__')[1];
+}
+
+function renderFormattedCell(
+  { value }: CustomCellRendererProps,
+  rules: CrosstabConditionalRule[],
+  numberFormat?: string,
+) {
+  const cellValue = value as DataRecordValue;
+  const formattedValue = formatCrosstabValue(cellValue, numberFormat);
+  const { arrow } = resolveConditionalStyle(cellValue, rules);
+
+  if (!arrow || formattedValue === '') {
+    return formattedValue;
+  }
+
+  return `${arrow === 'up' ? '↑' : '↓'} ${formattedValue}`;
 }
 
 export default function CrosstabTable({
@@ -62,12 +79,17 @@ export default function CrosstabTable({
           headerName: column.label,
           valueFormatter: ({ value }: ValueFormatterParams) =>
             formatCrosstabValue(value as DataRecordValue, numberFormat),
+          cellRenderer: (params: CustomCellRendererProps) =>
+            renderFormattedCell(params, rules, numberFormat),
           cellStyle: ({ value }) => {
             const { arrow, ...style } = resolveConditionalStyle(
               value as DataRecordValue,
               rules,
             );
-            return style;
+            return {
+              color: style.color ?? '',
+              backgroundColor: style.backgroundColor ?? '',
+            };
           },
         };
       }),

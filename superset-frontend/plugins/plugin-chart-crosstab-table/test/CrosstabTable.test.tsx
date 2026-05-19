@@ -37,6 +37,29 @@ jest.mock('@superset-ui/core/components', () => {
             <tr key={rowIndex}>
               {columnDefs.map(columnDef => {
                 const value = row[columnDef.field ?? ''];
+                const style =
+                  typeof columnDef.cellStyle === 'function'
+                    ? columnDef.cellStyle({
+                        value,
+                        data: row,
+                        node: undefined,
+                        column: undefined,
+                        colDef: columnDef,
+                        api: undefined,
+                        context: undefined,
+                      } as never)
+                    : columnDef.cellStyle;
+                const rendered =
+                  typeof columnDef.cellRenderer === 'function'
+                    ? columnDef.cellRenderer({
+                        value,
+                        data: row,
+                        node: undefined,
+                        colDef: columnDef,
+                        api: undefined,
+                        context: undefined,
+                      } as never)
+                    : undefined;
                 const formatted =
                   typeof columnDef.valueFormatter === 'function'
                     ? columnDef.valueFormatter({
@@ -50,7 +73,11 @@ jest.mock('@superset-ui/core/components', () => {
                       } as never)
                     : value;
 
-                return <td key={columnDef.colId}>{formatted as string}</td>;
+                return (
+                  <td key={columnDef.colId} style={style as never}>
+                    {(rendered ?? formatted) as string}
+                  </td>
+                );
               })}
             </tr>
           ))}
@@ -102,5 +129,57 @@ describe('CrosstabTable', () => {
     });
     expect(screen.getByText('A')).toBeInTheDocument();
     expect(screen.getByText('1,234.6')).toBeInTheDocument();
+  });
+
+  it('renders conditional arrows and clears stale conditional style keys', () => {
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+        numberFormat: ',.0f',
+        conditionalFormatting: [
+          {
+            metric: 'amount',
+            operator: '>=',
+            value: 10,
+            color: 'green',
+            backgroundColor: 'white',
+            arrow: 'up',
+          },
+        ],
+      },
+      rowData: [
+        {
+          '__crosstab_col__string:4:Cash__metric__amount': 12,
+        },
+        {
+          '__crosstab_col__string:4:Cash__metric__amount': 2,
+        },
+      ],
+      columns: [
+        {
+          key: '__crosstab_col__string:4:Cash__metric__amount',
+          label: 'Cash amount',
+          dataType: GenericDataType.Numeric,
+          isMetric: true,
+          isNumeric: true,
+        },
+      ],
+      columnTree: [],
+      generatedColumnIds: ['__crosstab_col__string:4:Cash__metric__amount'],
+    } as unknown as CrosstabChartProps;
+
+    render(<CrosstabTable {...props} />);
+
+    expect(screen.getByText('↑ 12')).toHaveStyle({
+      color: 'green',
+      backgroundColor: 'white',
+    });
+    expect(screen.getByText('2')).toHaveStyle({
+      color: '',
+      backgroundColor: '',
+    });
   });
 });
