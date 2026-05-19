@@ -40,6 +40,7 @@ import {
   t,
   ClientErrorObject,
   getClientErrorObject,
+  fetchTimeRange,
 } from '@superset-ui/core';
 import { useDispatch, useSelector } from 'react-redux';
 import { isEqual, isEqualWith } from 'lodash';
@@ -47,7 +48,13 @@ import { getChartDataRequest } from 'src/components/Chart/chartAction';
 import { ErrorAlert, ErrorMessageWithStackTrace } from 'src/components';
 import { Loading, Constants } from '@superset-ui/core/components';
 import { waitForAsyncData } from 'src/middleware/asyncEvent';
-import { FilterBarOrientation, RootState } from 'src/dashboard/types';
+import {
+  ChartsState,
+  FilterBarOrientation,
+  RootState,
+} from 'src/dashboard/types';
+import { TimeRangeBounds } from 'src/explore/components/controls/DateFilterControl/types';
+import { mergeTimeRangeBounds } from 'src/explore/components/controls/DateFilterControl/utils';
 import {
   onFiltersRefreshSuccess,
   setDirectPathToChild,
@@ -58,6 +65,7 @@ import { FilterControlProps } from './types';
 import { getFormData } from '../../utils';
 import { useFilterDependencies } from './state';
 import { useFilterOutlined } from '../useFilterOutlined';
+import { getChartTimeRangeSourceValues } from './timeRangeBounds';
 
 const HEIGHT = 32;
 
@@ -114,11 +122,13 @@ const FilterValue: FC<FilterControlProps> = ({
   const dashboardId = useSelector<RootState, number>(
     state => state.dashboardInfo.id,
   );
+  const charts = useSelector<RootState, ChartsState>(state => state.charts);
 
   const [error, setError] = useState<ClientErrorObject>();
   const [formData, setFormData] = useState<Partial<QueryFormData>>({
     inView: false,
   });
+  const [timeRangeBounds, setTimeRangeBounds] = useState<TimeRangeBounds>();
   const [ownState, setOwnState] = useState<JsonObject>({});
   const [inViewFirstTime, setInViewFirstTime] = useState(inView);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -161,7 +171,10 @@ const FilterValue: FC<FilterControlProps> = ({
       adhoc_filters,
       time_range,
       dashboardId,
-    });
+    }) as Partial<QueryFormData> & { timeRangeBounds?: TimeRangeBounds };
+    if (filterType === 'filter_time' && timeRangeBounds) {
+      newFormData.timeRangeBounds = timeRangeBounds;
+    }
     const filterOwnState = filter.dataMask?.ownState || {};
     if (filter?.cascadeParentIds?.length) {
       // Prevent unnecessary backend requests by validating parent filter selections first
@@ -259,11 +272,41 @@ const FilterValue: FC<FilterControlProps> = ({
     groupby,
     handleFilterLoadFinish,
     filter,
+    filterType,
     hasDataSource,
     isRefreshing,
     shouldRefresh,
     dataMaskSelected,
+    timeRangeBounds,
   ]);
+
+  const chartTimeRangeSources = useMemo(
+    () =>
+      filterType === 'filter_time'
+        ? getChartTimeRangeSourceValues(charts, filter.chartsInScope)
+        : [],
+    [charts, filter.chartsInScope, filterType],
+  );
+
+  useEffect(() => {
+    if (!chartTimeRangeSources.length) {
+      setTimeRangeBounds(undefined);
+      return undefined;
+    }
+
+    let ignore = false;
+    Promise.all(
+      chartTimeRangeSources.map(source => fetchTimeRange(source)),
+    ).then(ranges => {
+      if (!ignore) {
+        setTimeRangeBounds(mergeTimeRangeBounds(ranges));
+      }
+    });
+
+    return () => {
+      ignore = true;
+    };
+  }, [chartTimeRangeSources]);
 
   useEffect(() => {
     if (outlinedFilterId && outlinedFilterId === filter.id) {

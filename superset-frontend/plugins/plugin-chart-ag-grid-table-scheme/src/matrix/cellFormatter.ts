@@ -43,7 +43,7 @@ const FORMATTER_RESULT_WHITELIST = new Set([
 ]);
 
 export const MATRIX_CELL_FORMATTER_CALLBACK_DEFAULT = `/*
- * 示例：退款金额占比绝对值超过 8% 时标记红色背景
+ * 示例：看板阈值背景色标记
  *
  * 可用参数：
  * row      当前矩阵行完整数据
@@ -55,10 +55,51 @@ export const MATRIX_CELL_FORMATTER_CALLBACK_DEFAULT = `/*
  * colDef   AG Grid 列定义
  *
  * 回调示例：
- * ({ row, rawValue }) => {
+ * ({ row, rawValue, value: displayValue }) => {
+ *   const metricName = String(
+ *     row.metric_name_with_unit ?? row.metric_name ?? "",
+ *   )
+ *     .replace(/（/g, "(")
+ *     .replace(/）/g, ")")
+ *     .replace(/\\s+/g, "");
+ *   const metricBaseName = metricName.replace(/\\([^)]*\\)$/, "");
+ *   const rawInput = rawValue ?? displayValue;
+ *   const rawNumber =
+ *     typeof rawInput === "number"
+ *       ? rawInput
+ *       : Number(String(rawInput).replace(/[%，,]/g, ""));
+ *   const value =
+ *     Math.abs(rawNumber) > 1 ? Math.abs(rawNumber) / 100 : Math.abs(rawNumber);
+ *   const redThresholds = {
+ *     退款金额占比: 0.08,
+ *     FBA发货费占比: 0.3,
+ *     总仓储费占比: 0.02,
+ *     广告花费占比: 0.23,
+ *     采购成本占比: 0.17,
+ *   };
+ *
+ *   if (!Number.isFinite(rawNumber)) {
+ *     return undefined;
+ *   }
+ *
  *   if (
- *     row.metric_name_with_unit === "退款金额占比（%）" &&
- *     Math.abs(rawValue) > 8
+ *     metricBaseName === "广告花费占比" &&
+ *     value >= 0 &&
+ *     value < 0.18
+ *   ) {
+ *     return {
+ *       style: {
+ *         backgroundColor: "#52c41a",
+ *         color: "#fff",
+ *         fontWeight: "bold",
+ *       },
+ *       tooltip: "广告花费占比低于 18%",
+ *     };
+ *   }
+ *
+ *   if (
+ *     Object.prototype.hasOwnProperty.call(redThresholds, metricBaseName) &&
+ *     value >= redThresholds[metricBaseName]
  *   ) {
  *     return {
  *       style: {
@@ -66,7 +107,7 @@ export const MATRIX_CELL_FORMATTER_CALLBACK_DEFAULT = `/*
  *         color: "#fff",
  *         fontWeight: "bold",
  *       },
- *       tooltip: "退款金额占比超过 8%",
+ *       tooltip: metricName + "超过阈值",
  *     };
  *   }
  *

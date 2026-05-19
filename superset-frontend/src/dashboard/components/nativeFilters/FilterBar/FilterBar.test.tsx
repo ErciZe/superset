@@ -350,7 +350,23 @@ describe('FilterBar', () => {
     expect(container).toBeInTheDocument();
   });
 
-  it('should apply time-range data masks instantly even without filter metadata', () => {
+  it('should apply time filters instantly', () => {
+    expect(
+      shouldApplyFilterInstantly(
+        { id: 'NATIVE_FILTER-biz_date', filterType: 'filter_time' },
+        {
+          extraFormData: {
+            time_range: '2026-05-10 : 2026-05-13',
+          },
+          filterState: {
+            value: '2026-05-10 : 2026-05-13',
+          },
+        },
+      ),
+    ).toBe(true);
+  });
+
+  it('should not apply time-range data masks instantly without time filter metadata', () => {
     expect(
       shouldApplyFilterInstantly(
         { id: 'NATIVE_FILTER-biz_date' },
@@ -363,7 +379,7 @@ describe('FilterBar', () => {
           },
         },
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('should not apply non-time filter data masks instantly', () => {

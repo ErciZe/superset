@@ -100,7 +100,7 @@ describe('ag grid table scheme transformProps', () => {
         matrix_columns: ['biz_date'],
         matrix_value: 'value',
         matrix_unit_field: 'unit',
-        matrix_show_total: false,
+        matrix_show_total: true,
         matrix_cell_color_rules: [
           {
             column: 'matrix_value_cells',
@@ -121,6 +121,15 @@ describe('ag grid table scheme transformProps', () => {
             },
           ],
         },
+        {
+          data: [
+            {
+              metric_name: 'Sales',
+              value: 15,
+              unit: '件',
+            },
+          ],
+        },
       ],
       hooks: {},
       filterState: { filters: {} },
@@ -128,6 +137,15 @@ describe('ag grid table scheme transformProps', () => {
     } as any);
 
     expect(result.columnColorFormatters).toEqual([]);
+    expect(
+      result.additionalCellStyle?.({
+        colDef: { field: '__matrix_total' },
+        value: '15.00',
+        data: result.data[0],
+      } as any),
+    ).toEqual({
+      backgroundColor: '#00aa00',
+    });
     expect(
       result.additionalCellStyle?.({
         colDef: { field: '__matrix_col__2026-05-01' },

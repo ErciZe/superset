@@ -125,6 +125,145 @@ describe('matrix cell formatter', () => {
     });
   });
 
+  it('formats dashboard threshold backgrounds from raw ratio values', () => {
+    const formatter = createMatrixCellFormatter(`
+      ({ row, rawValue, value: displayValue }) => {
+        const metricName = String(
+          row.metric_name_with_unit ?? row.metric_name ?? "",
+        )
+          .replace(/（/g, "(")
+          .replace(/）/g, ")")
+          .replace(/\\s+/g, "");
+        const metricBaseName = metricName.replace(/\\([^)]*\\)$/, "");
+        const rawInput = rawValue ?? displayValue;
+        const rawNumber =
+          typeof rawInput === "number"
+            ? rawInput
+            : Number(String(rawInput).replace(/[%，,]/g, ""));
+        const value =
+          Math.abs(rawNumber) > 1 ? Math.abs(rawNumber) / 100 : Math.abs(rawNumber);
+        const redThresholds = {
+          退款金额占比: 0.08,
+          FBA发货费占比: 0.3,
+          总仓储费占比: 0.02,
+          广告花费占比: 0.23,
+          采购成本占比: 0.17,
+        };
+
+        if (!Number.isFinite(rawNumber)) {
+          return undefined;
+        }
+
+        if (
+          metricBaseName === "广告花费占比" &&
+          value >= 0 &&
+          value < 0.18
+        ) {
+          return {
+            style: {
+              backgroundColor: "#52c41a",
+              color: "#fff",
+              fontWeight: "bold",
+            },
+            tooltip: "广告花费占比低于 18%",
+          };
+        }
+
+        if (
+          Object.prototype.hasOwnProperty.call(redThresholds, metricBaseName) &&
+          value >= redThresholds[metricBaseName]
+        ) {
+          return {
+            style: {
+              backgroundColor: "#ff4d4f",
+              color: "#fff",
+              fontWeight: "bold",
+            },
+            tooltip: metricName + "超过阈值",
+          };
+        }
+
+        return undefined;
+      }
+    `);
+
+    const baseParams = {
+      value: '10.00%',
+      rowIndex: 0,
+      colDef: {
+        field: '__matrix_col__2026',
+        headerName: '2026',
+      },
+      col: {
+        key: '__matrix_col__2026',
+        label: '2026',
+        dataType: 'STRING',
+        config: {},
+      },
+    };
+
+    expect(
+      formatter?.({
+        ...baseParams,
+        value: '-8.00%',
+        data: {
+          metric_name_with_unit: '退款金额占比（%）',
+        },
+      } as any),
+    ).toEqual({
+      style: {
+        backgroundColor: '#ff4d4f',
+        color: '#fff',
+        fontWeight: 'bold',
+      },
+      tooltip: '退款金额占比(%)超过阈值',
+    });
+
+    expect(
+      formatter?.({
+        ...baseParams,
+        data: {
+          metric_name_with_unit: '广告花费占比（求和）',
+          __matrix_raw_value____matrix_col__2026: -17,
+        },
+      } as any),
+    ).toEqual({
+      style: {
+        backgroundColor: '#52c41a',
+        color: '#fff',
+        fontWeight: 'bold',
+      },
+      tooltip: '广告花费占比低于 18%',
+    });
+
+    expect(
+      formatter?.({
+        ...baseParams,
+        data: {
+          metric_name_with_unit: '广告花费占比(求和)',
+          __matrix_raw_value____matrix_col__2026: 0.23,
+        },
+      } as any),
+    ).toEqual({
+      style: {
+        backgroundColor: '#ff4d4f',
+        color: '#fff',
+        fontWeight: 'bold',
+      },
+      tooltip: '广告花费占比(求和)超过阈值',
+    });
+
+    expect(
+      formatter?.({
+        ...baseParams,
+        data: {
+          metric_name_with_unit: 'FBA发货费占比(求和)',
+          __matrix_raw_value____matrix_col__2026: 0.299,
+        },
+      } as any),
+    ).toBeUndefined();
+  });
+
   it('validates callback source and returned fields', () => {
     expect(() =>
       validateMatrixCellFormatterCallback('{ text: value }'),

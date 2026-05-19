@@ -31,7 +31,7 @@ import {
   getMatrixCellColorFormatters,
 } from './matrix/cellColorRules';
 import { createMatrixCellFormatter } from './matrix/cellFormatter';
-import { matrixTransform } from './matrix/matrixTransform';
+import { matrixTransform, MATRIX_TOTAL_COL_ID } from './matrix/matrixTransform';
 import { shouldUseMatrixRawTotalSummary } from './matrix/summary';
 import type { MatrixFormData, MatrixTransformConfig } from './matrix/types';
 
@@ -197,7 +197,13 @@ export default function transformProps(chartProps: TableChartProps) {
   );
   const matrixCellColorFormatters = getMatrixCellColorFormatters({
     rules: formData.matrix_cell_color_rules,
-    generatedColumnIds: matrixResult.generatedColumnIds,
+    generatedColumnIds: matrixResult.columns
+      .map(column => column.key)
+      .filter(
+        columnId =>
+          columnId === MATRIX_TOTAL_COL_ID ||
+          matrixResult.generatedColumnIds.includes(columnId),
+      ),
     data: matrixResult.data,
     theme: chartProps.theme,
   });

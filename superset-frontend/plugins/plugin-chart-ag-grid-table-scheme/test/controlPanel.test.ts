@@ -463,9 +463,9 @@ describe('AG Grid table scheme control panel', () => {
       'matrix_cell_formatter_expression',
     )?.config;
     expect(formatterControl?.default).toContain('/*');
-    expect(formatterControl?.default).toContain(
-      '示例：退款金额占比绝对值超过 8%',
-    );
+    expect(formatterControl?.default).toContain('示例：看板阈值背景色标记');
+    expect(formatterControl?.default).toContain('FBA发货费占比');
+    expect(formatterControl?.default).toContain('广告花费占比低于 18%');
     expect(formatterControl?.description).toContain('row');
     expect(
       formatterControl?.validators?.[0]('({ rawValue }) => rawValue'),

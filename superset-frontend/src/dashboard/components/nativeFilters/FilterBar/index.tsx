@@ -141,10 +141,8 @@ const publishDataMask = debounce(
 
 export const shouldApplyFilterInstantly = (
   filter: Pick<Filter, 'id'> & Partial<Filter>,
-  dataMask: Partial<DataMask>,
-) =>
-  filter.filterType === 'filter_time' ||
-  typeof dataMask.extraFormData?.time_range === 'string';
+  _dataMask: Partial<DataMask>,
+) => filter.filterType === 'filter_time';
 
 const FilterBar: FC<FiltersBarProps> = ({
   orientation = FilterBarOrientation.Vertical,

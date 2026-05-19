@@ -23,10 +23,12 @@ import {
   FilterState,
   QueryFormData,
 } from '@superset-ui/core';
+import { TimeRangeBounds } from 'src/explore/components/controls/DateFilterControl/types';
 import { PluginFilterHooks, PluginFilterStylesProps } from '../types';
 
 interface PluginFilterTimeCustomizeProps {
   defaultValue?: string | null;
+  timeRangeBounds?: TimeRangeBounds;
 }
 
 export type PluginFilterSelectQueryFormData = QueryFormData &

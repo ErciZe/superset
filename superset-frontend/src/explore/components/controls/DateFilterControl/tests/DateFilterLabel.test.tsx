@@ -22,10 +22,17 @@ import configureStore from 'redux-mock-store';
 
 import { render, screen, userEvent } from 'spec/helpers/testing-library';
 
-import { NO_TIME_RANGE } from '@superset-ui/core';
+import { NO_TIME_RANGE, fetchTimeRange } from '@superset-ui/core';
 import DateFilterLabel from '..';
 import { DateFilterControlProps } from '../types';
 import { DateFilterTestKey } from '../utils';
+
+jest.mock('@superset-ui/core', () => ({
+  ...jest.requireActual('@superset-ui/core'),
+  fetchTimeRange: jest.fn(),
+}));
+
+const mockedFetchTimeRange = fetchTimeRange as jest.Mock;
 
 const mockStore = configureStore([thunk]);
 
@@ -34,6 +41,15 @@ const defaultProps = {
   onClosePopover: jest.fn(),
   onOpenPopover: jest.fn(),
 };
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockedFetchTimeRange.mockImplementation(async (timeRange: string) => ({
+    value: timeRange,
+    since: '2024-01-15T00:00:00',
+    until: '2024-02-01T00:00:00',
+  }));
+});
 
 function setup(
   props: Omit<DateFilterControlProps, 'name'> = defaultProps,
@@ -92,4 +108,28 @@ test('Open and close popover', () => {
   userEvent.click(screen.getByText('APPLY'));
   expect(defaultProps.onClosePopover).toHaveBeenCalled();
   expect(screen.queryByText('Edit time range')).not.toBeInTheDocument();
+});
+
+test('DateFilter blocks applying a range outside chart filter bounds', async () => {
+  mockedFetchTimeRange.mockResolvedValue({
+    value: '2023-12-31 ≤ col < 2024-02-01',
+    since: '2023-12-31T00:00:00',
+    until: '2024-02-01T00:00:00',
+  });
+
+  render(
+    setup({
+      ...defaultProps,
+      value: '2023-12-31 : 2024-02-01',
+      timeRangeBounds: {
+        min: '2024-01-01T00:00:00',
+        max: '2024-04-01T00:00:00',
+      },
+    }),
+  );
+
+  userEvent.click(screen.getByText('2023-12-31 : 2024-02-01'));
+
+  expect(await screen.findByText(/chart filter bounds/i)).toBeInTheDocument();
+  expect(screen.getByTestId(DateFilterTestKey.ApplyButton)).toBeDisabled();
 });

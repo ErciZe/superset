@@ -106,6 +106,16 @@ export type FrameComponentProps = {
   isOverflowingFilterBar?: boolean;
 };
 
+export type TimeRangeBounds = {
+  min?: string;
+  max?: string;
+};
+
+export type ResolvedTimeRange = {
+  since?: string;
+  until?: string;
+};
+
 export interface DateFilterControlProps {
   name: string;
   onChange: (timeRange: string) => void;
@@ -113,4 +123,5 @@ export interface DateFilterControlProps {
   onOpenPopover?: () => void;
   onClosePopover?: () => void;
   isOverflowingFilterBar?: boolean;
+  timeRangeBounds?: TimeRangeBounds;
 }
