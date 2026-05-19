@@ -39,6 +39,12 @@ export function buildColumnTuples(
 ): unknown[][] {
   const domains = buildColumnDomains(records, columnFields);
   let generatedColumnCount = 1;
+  if (generatedColumnCount > maxGeneratedColumns) {
+    throw new Error(
+      ERR_COLUMN_LIMIT(generatedColumnCount, maxGeneratedColumns),
+    );
+  }
+
   domains.forEach(domain => {
     generatedColumnCount *= domain.length;
     if (generatedColumnCount > maxGeneratedColumns) {

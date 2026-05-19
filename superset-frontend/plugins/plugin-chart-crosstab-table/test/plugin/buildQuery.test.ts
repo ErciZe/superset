@@ -21,12 +21,16 @@ describe('crosstab buildQuery', () => {
       time_range: 'No filter',
     } as never);
 
+    expect(queryContext.queries).toHaveLength(1);
     expect(queryContext.queries[0].columns).toEqual([
       'contract_type',
       'year',
       'pay_type',
     ]);
+    expect(queryContext.queries[0].row_limit).toBe(10000);
     expect(queryContext.queries[0].metrics).toEqual(['amount', 'profit']);
+    expect(queryContext.queries[0].is_timeseries).toBe(false);
+    expect(queryContext.queries[0].post_processing).toEqual([]);
     expect(queryContext.queries[0].filters).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ col: 'org_id', op: '==', val: 1 }),

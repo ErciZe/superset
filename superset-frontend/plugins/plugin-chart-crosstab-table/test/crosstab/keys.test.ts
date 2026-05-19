@@ -1,5 +1,14 @@
 import { decodeKey, encodeKey, encodeTuple } from '../../src/crosstab/keys';
 
+function expectErrorMessage(callback: () => unknown, message: string) {
+  try {
+    callback();
+    throw new Error('Expected callback to throw');
+  } catch (error) {
+    expect((error as Error).message).toBe(message);
+  }
+}
+
 describe('crosstab keys', () => {
   it('separates type, length, and display value', () => {
     expect(encodeKey(null)).toBe('null:0:');
@@ -29,51 +38,63 @@ describe('crosstab keys', () => {
   });
 
   it('rejects unsupported encode inputs', () => {
-    expect(() => encodeKey(undefined)).toThrow(
+    expectErrorMessage(
+      () => encodeKey(undefined),
       'Unsupported crosstab key value type: undefined',
     );
-    expect(() => encodeKey({ value: 'A' })).toThrow(
+    expectErrorMessage(
+      () => encodeKey({ value: 'A' }),
       'Unsupported crosstab key value type: object',
     );
   });
 
   it('rejects non-finite encode inputs', () => {
-    expect(() => encodeKey(NaN)).toThrow(
+    expectErrorMessage(
+      () => encodeKey(NaN),
       'Unsupported crosstab key number value: NaN',
     );
-    expect(() => encodeKey(Infinity)).toThrow(
+    expectErrorMessage(
+      () => encodeKey(Infinity),
       'Unsupported crosstab key number value: Infinity',
     );
-    expect(() => encodeKey(-Infinity)).toThrow(
+    expectErrorMessage(
+      () => encodeKey(-Infinity),
       'Unsupported crosstab key number value: -Infinity',
     );
   });
 
   it('rejects invalid encoded keys', () => {
-    expect(() => decodeKey('date:10:2026-05-01')).toThrow(
+    expectErrorMessage(
+      () => decodeKey('date:10:2026-05-01'),
       'Invalid crosstab key type: date',
     );
-    expect(() => decodeKey('string:x:value')).toThrow(
+    expectErrorMessage(
+      () => decodeKey('string:x:value'),
       'Invalid crosstab key length: x',
     );
-    expect(() => decodeKey('string:4:value')).toThrow(
+    expectErrorMessage(
+      () => decodeKey('string:4:value'),
       'Invalid crosstab key length: expected 4, received 5',
     );
-    expect(() => decodeKey('boolean:3:yes')).toThrow(
+    expectErrorMessage(
+      () => decodeKey('boolean:3:yes'),
       'Invalid crosstab boolean key value: yes',
     );
-    expect(() => decodeKey('number:8:Infinity')).toThrow(
+    expectErrorMessage(
+      () => decodeKey('number:8:Infinity'),
       'Invalid crosstab number key value: Infinity',
     );
-    expect(() => decodeKey('number:0:')).toThrow(
+    expectErrorMessage(
+      () => decodeKey('number:0:'),
       'Invalid crosstab number key encoding: number:0:',
     );
-    expect(() => decodeKey('number:2:01')).toThrow(
+    expectErrorMessage(
+      () => decodeKey('number:2:01'),
       'Invalid crosstab number key encoding: number:2:01',
     );
   });
 
   it('builds tuple keys without separator collisions', () => {
-    expect(encodeTuple(['A/B', 'C'])).not.toBe(encodeTuple(['A', 'B/C']));
+    expect(encodeTuple(['A|B', 'C'])).not.toBe(encodeTuple(['A', 'B|C']));
   });
 });
