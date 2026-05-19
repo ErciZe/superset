@@ -34,6 +34,34 @@ describe('crosstab buildQuery', () => {
     );
   });
 
+  it('de-duplicates overlapping row and column dimensions while preserving order', () => {
+    const queryContext = buildQuery({
+      datasource: '11__table',
+      viz_type: 'crosstab-table',
+      groupbyRows: ['contract_type', 'year'],
+      groupbyColumns: ['year', 'pay_type'],
+      metrics: ['amount'],
+    } as never);
+
+    expect(queryContext.queries[0].columns).toEqual([
+      'contract_type',
+      'year',
+      'pay_type',
+    ]);
+  });
+
+  it('normalizes scalar metrics to an array', () => {
+    const queryContext = buildQuery({
+      datasource: '11__table',
+      viz_type: 'crosstab-table',
+      groupbyRows: ['contract_type'],
+      groupbyColumns: ['pay_type'],
+      metrics: 'amount',
+    } as never);
+
+    expect(queryContext.queries[0].metrics).toEqual(['amount']);
+  });
+
   it('rejects server pagination', () => {
     try {
       buildQuery({

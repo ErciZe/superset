@@ -21,8 +21,11 @@ import {
   buildQueryContext,
   ensureIsArray,
   QueryFormColumn,
+  QueryFormMetric,
 } from '@superset-ui/core';
 import type { CrosstabFormData } from '../types';
+
+const unique = <T>(values: T[]): T[] => [...new Set(values)];
 
 const buildQuery: BuildQuery<CrosstabFormData> = formData => {
   if (formData.serverPagination) {
@@ -33,12 +36,13 @@ const buildQuery: BuildQuery<CrosstabFormData> = formData => {
   const columnDimensions = ensureIsArray<QueryFormColumn>(
     formData.groupbyColumns,
   );
+  const metrics = ensureIsArray<QueryFormMetric>(formData.metrics);
 
   return buildQueryContext(formData, baseQueryObject => [
     {
       ...baseQueryObject,
-      columns: [...rowDimensions, ...columnDimensions],
-      metrics: formData.metrics || [],
+      columns: unique([...rowDimensions, ...columnDimensions]),
+      metrics,
       is_timeseries: false,
       post_processing: [],
     },
