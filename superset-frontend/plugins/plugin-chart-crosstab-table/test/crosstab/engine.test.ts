@@ -111,7 +111,30 @@ describe('buildCrosstab', () => {
         isNumeric: true,
       }),
     ]);
-    expect(result.columnTree).toEqual([]);
+    expect(result.columnTree).toEqual([
+      expect.objectContaining({
+        id: 'string:4:Cash',
+        label: 'Cash',
+        children: [
+          expect.objectContaining({
+            id: '__crosstab_col__string:4:Cash__metric__amount',
+            label: 'amount',
+            field: '__crosstab_col__string:4:Cash__metric__amount',
+            metric: 'amount',
+          }),
+          expect.objectContaining({
+            id: '__crosstab_col__string:4:Cash__metric__profit',
+            label: 'profit',
+            field: '__crosstab_col__string:4:Cash__metric__profit',
+            metric: 'profit',
+          }),
+        ],
+      }),
+      expect.objectContaining({
+        id: 'string:6:Credit',
+        label: 'Credit',
+      }),
+    ]);
   });
 
   it('keeps missing generated cells blank and excludes blanks from totals', () => {

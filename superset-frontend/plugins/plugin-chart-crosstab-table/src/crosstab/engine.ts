@@ -1,6 +1,10 @@
 import { GenericDataType, type DataRecord } from '@superset-ui/core';
 import type { DataColumnMeta } from '@superset-ui/plugin-chart-ag-grid-table/src/types';
-import type { CrosstabBuildOptions, CrosstabEngineResult } from '../types';
+import type {
+  CrosstabBuildOptions,
+  CrosstabColumnNode,
+  CrosstabEngineResult,
+} from '../types';
 import { buildColumnTuples, ERR_COLUMN_LIMIT } from './domain';
 import { encodeTuple } from './keys';
 import { addNumeric } from './totals';
@@ -24,6 +28,44 @@ const RESERVED_FIELD_IDS = new Set([
 
 function metricColumnId(tuple: unknown[], metric: string) {
   return `${CROSSTAB_COLUMN_PREFIX}${encodeTuple(tuple)}__metric__${metric}`;
+}
+
+export function buildColumnTree(
+  columnTuples: unknown[][],
+  metricFields: string[],
+): CrosstabColumnNode[] {
+  const roots: CrosstabColumnNode[] = [];
+
+  columnTuples.forEach(tuple => {
+    let siblings = roots;
+
+    tuple.forEach((value, index) => {
+      const id = encodeTuple(tuple.slice(0, index + 1));
+      let node = siblings.find(child => child.id === id);
+
+      if (!node) {
+        node = {
+          id,
+          label: String(value ?? ''),
+          children: [],
+        };
+        siblings.push(node);
+      }
+
+      siblings = node.children ?? [];
+    });
+
+    siblings.push(
+      ...metricFields.map(metric => ({
+        id: metricColumnId(tuple, metric),
+        label: metric,
+        field: metricColumnId(tuple, metric),
+        metric,
+      })),
+    );
+  });
+
+  return roots;
 }
 
 function buildRowKey(record: DataRecord, rowFields: string[]) {
@@ -149,7 +191,7 @@ export function buildCrosstab(
   return {
     rowData,
     generatedColumnIds,
-    columnTree: [],
+    columnTree: buildColumnTree(columnTuples, metricFields),
     columns: [
       ...rowFields.map(field =>
         columnMeta(field, field, GenericDataType.String),
