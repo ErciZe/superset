@@ -278,5 +278,21 @@ describe('buildCrosstab', () => {
         }),
       ERR_RESERVED_FIELD,
     );
+
+    expectErrorMessage(
+      () =>
+        buildCrosstab(records, {
+          rowFields: ['__crosstab_col__string:4:Cash__metric__amount'],
+          columnFields: ['pay_type'],
+          metricFields: ['amount'],
+          showRowSubtotals: false,
+          showRowTotals: true,
+          showColumnTotals: true,
+          showColumnSubtotals: false,
+          maxGeneratedColumns: 20,
+          defaultRowExpandedDepth: 1,
+        }),
+      ERR_RESERVED_FIELD,
+    );
   });
 });

@@ -52,7 +52,13 @@ function assertUniqueFields(fields: string[]) {
 }
 
 function assertNoReservedFields(fields: string[]) {
-  if (fields.some(field => RESERVED_FIELD_IDS.has(field))) {
+  if (
+    fields.some(
+      field =>
+        RESERVED_FIELD_IDS.has(field) ||
+        field.startsWith(CROSSTAB_COLUMN_PREFIX),
+    )
+  ) {
     throw new Error(ERR_RESERVED_FIELD);
   }
 }
