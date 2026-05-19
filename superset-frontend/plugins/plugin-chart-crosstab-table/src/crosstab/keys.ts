@@ -82,5 +82,5 @@ export function decodeKey(encoded: string): EncodedValue {
   if (raw !== 'true' && raw !== 'false') {
     throw new Error(`Invalid crosstab boolean key value: ${raw}`);
   }
-  return { type, value: raw === 'true' };
+  return { type: 'boolean', value: raw === 'true' };
 }

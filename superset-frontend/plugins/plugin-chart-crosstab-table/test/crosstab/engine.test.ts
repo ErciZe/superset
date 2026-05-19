@@ -1,8 +1,12 @@
+import { GenericDataType } from '@superset-ui/core';
 import {
   CROSSTAB_TOTAL_COLUMN_ID,
+  ERR_DUPLICATE_FIELD,
   ERR_REQUIRED_FIELDS,
+  ERR_RESERVED_FIELD,
   buildCrosstab,
 } from '../../src/crosstab/engine';
+import { ERR_COLUMN_LIMIT } from '../../src/crosstab/domain';
 import { ERR_NON_NUMERIC_TOTAL } from '../../src/crosstab/totals';
 
 function expectErrorMessage(callback: () => unknown, message: string) {
@@ -58,6 +62,55 @@ describe('buildCrosstab', () => {
       '__crosstab_col__string:6:Credit__metric__profit': 1,
       [CROSSTAB_TOTAL_COLUMN_ID]: 28,
     });
+    expect(result.columns).toEqual([
+      expect.objectContaining({
+        key: 'contract_type',
+        label: 'contract_type',
+        dataType: GenericDataType.String,
+        isMetric: false,
+      }),
+      expect.objectContaining({
+        key: 'year',
+        label: 'year',
+        dataType: GenericDataType.String,
+        isMetric: false,
+      }),
+      expect.objectContaining({
+        key: '__crosstab_col__string:4:Cash__metric__amount',
+        label: '__crosstab_col__string:4:Cash__metric__amount',
+        dataType: GenericDataType.Numeric,
+        isMetric: true,
+        isNumeric: true,
+      }),
+      expect.objectContaining({
+        key: '__crosstab_col__string:4:Cash__metric__profit',
+        label: '__crosstab_col__string:4:Cash__metric__profit',
+        dataType: GenericDataType.Numeric,
+        isMetric: true,
+        isNumeric: true,
+      }),
+      expect.objectContaining({
+        key: '__crosstab_col__string:6:Credit__metric__amount',
+        label: '__crosstab_col__string:6:Credit__metric__amount',
+        dataType: GenericDataType.Numeric,
+        isMetric: true,
+        isNumeric: true,
+      }),
+      expect.objectContaining({
+        key: '__crosstab_col__string:6:Credit__metric__profit',
+        label: '__crosstab_col__string:6:Credit__metric__profit',
+        dataType: GenericDataType.Numeric,
+        isMetric: true,
+        isNumeric: true,
+      }),
+      expect.objectContaining({
+        key: CROSSTAB_TOTAL_COLUMN_ID,
+        label: 'Total',
+        dataType: GenericDataType.Numeric,
+        isMetric: true,
+        isNumeric: true,
+      }),
+    ]);
     expect(result.columnTree).toEqual([]);
   });
 
@@ -156,6 +209,74 @@ describe('buildCrosstab', () => {
           },
         ),
       ERR_NON_NUMERIC_TOTAL,
+    );
+  });
+
+  it('counts metric fan-out against the generated column limit', () => {
+    expectErrorMessage(
+      () =>
+        buildCrosstab(records, {
+          rowFields: ['contract_type'],
+          columnFields: ['pay_type'],
+          metricFields: ['amount', 'profit'],
+          showRowSubtotals: false,
+          showRowTotals: true,
+          showColumnTotals: true,
+          showColumnSubtotals: false,
+          maxGeneratedColumns: 3,
+          defaultRowExpandedDepth: 1,
+        }),
+      ERR_COLUMN_LIMIT(4, 3),
+    );
+  });
+
+  it('fails fast for invalid options and reserved generated field names', () => {
+    expectErrorMessage(
+      () =>
+        buildCrosstab(records, {
+          rowFields: ['contract_type'],
+          columnFields: ['pay_type'],
+          metricFields: ['amount'],
+          showRowSubtotals: false,
+          showRowTotals: true,
+          showColumnTotals: true,
+          showColumnSubtotals: false,
+          maxGeneratedColumns: Number.NaN,
+          defaultRowExpandedDepth: 1,
+        }),
+      ERR_COLUMN_LIMIT(1, Number.NaN),
+    );
+
+    expectErrorMessage(
+      () =>
+        buildCrosstab(records, {
+          rowFields: ['contract_type', 'contract_type'],
+          columnFields: ['pay_type'],
+          metricFields: ['amount'],
+          showRowSubtotals: false,
+          showRowTotals: true,
+          showColumnTotals: true,
+          showColumnSubtotals: false,
+          maxGeneratedColumns: 20,
+          defaultRowExpandedDepth: 1,
+        }),
+      ERR_DUPLICATE_FIELD,
+    );
+
+    expectErrorMessage(
+      () =>
+        buildCrosstab(records, {
+          rowFields: ['__crosstab_row_key'],
+          columnFields: ['pay_type'],
+          metricFields: ['amount'],
+          showRowSubtotals: false,
+          showRowTotals: true,
+          showColumnTotals: true,
+          showColumnSubtotals: false,
+          maxGeneratedColumns: 20,
+          defaultRowExpandedDepth: 1,
+        }),
+      ERR_RESERVED_FIELD,
     );
   });
 });
