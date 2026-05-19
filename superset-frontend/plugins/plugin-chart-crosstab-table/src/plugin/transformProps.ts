@@ -29,6 +29,10 @@ import { buildCrosstab } from '../crosstab/engine';
 import type { CrosstabChartProps, CrosstabFormData } from '../types';
 
 function normalizeColumn(value: QueryFormColumn): string {
+  if (value === null || value === undefined) {
+    throw new Error('Unsupported crosstab column field.');
+  }
+
   const label = getColumnLabel(value);
   if (!label) {
     throw new Error('Unsupported crosstab column field.');
@@ -38,6 +42,10 @@ function normalizeColumn(value: QueryFormColumn): string {
 }
 
 function normalizeMetric(value: QueryFormMetric): string {
+  if (value === null || value === undefined) {
+    throw new Error('Unsupported crosstab metric field.');
+  }
+
   const label = getMetricLabel(value);
   if (!label) {
     throw new Error('Unsupported crosstab metric field.');

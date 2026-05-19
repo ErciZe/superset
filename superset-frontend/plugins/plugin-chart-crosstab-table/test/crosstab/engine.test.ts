@@ -177,6 +177,47 @@ describe('buildCrosstab', () => {
     );
   });
 
+  it('builds nested column tree nodes for multiple column dimensions', () => {
+    const result = buildCrosstab(records, {
+      rowFields: ['contract_type'],
+      columnFields: ['year', 'pay_type'],
+      metricFields: ['amount'],
+      showRowSubtotals: false,
+      showRowTotals: true,
+      showColumnTotals: true,
+      showColumnSubtotals: false,
+      maxGeneratedColumns: 20,
+      defaultRowExpandedDepth: 1,
+    });
+
+    expect(result.columnTree).toEqual([
+      expect.objectContaining({
+        id: 'string:4:2026',
+        label: '2026',
+        children: [
+          expect.objectContaining({
+            id: 'string:4:2026|string:4:Cash',
+            label: 'Cash',
+            children: [
+              expect.objectContaining({
+                id:
+                  '__crosstab_col__string:4:2026|string:4:Cash__metric__amount',
+                label: 'amount',
+                field:
+                  '__crosstab_col__string:4:2026|string:4:Cash__metric__amount',
+                metric: 'amount',
+              }),
+            ],
+          }),
+          expect.objectContaining({
+            id: 'string:4:2026|string:6:Credit',
+            label: 'Credit',
+          }),
+        ],
+      }),
+    ]);
+  });
+
   it('fails for missing required fields and non-numeric totals', () => {
     expectErrorMessage(
       () =>
