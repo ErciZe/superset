@@ -60,6 +60,28 @@ function getControlNames() {
   return names;
 }
 
+function getControlNamesForSection(label: string) {
+  const section = controlPanel.controlPanelSections.find(
+    section => section?.label === label,
+  );
+  const names: string[] = [];
+
+  section?.controlSetRows.forEach(row => {
+    row.forEach(control => {
+      if (
+        typeof control === 'object' &&
+        control !== null &&
+        'name' in control &&
+        typeof control.name === 'string'
+      ) {
+        names.push(control.name);
+      }
+    });
+  });
+
+  return names;
+}
+
 function getControlConfig(name: string) {
   const controls = controlPanel.controlPanelSections.flatMap(section =>
     section?.controlSetRows.flatMap(row =>
@@ -99,6 +121,24 @@ describe('crosstab controlPanel', () => {
         'conditionalFormatting',
       ]),
     );
+  });
+
+  it('places dynamic group-by before crosstab totals controls', () => {
+    const crosstabControlNames = getControlNamesForSection('Crosstab');
+    const dynamicGroupByIndex = crosstabControlNames.indexOf('dynamicGroupBy');
+
+    expect(dynamicGroupByIndex).toBeGreaterThanOrEqual(0);
+    [
+      'showRowTotals',
+      'showColumnTotals',
+      'showRowSubtotals',
+      'showColumnSubtotals',
+    ].forEach(controlName => {
+      const controlIndex = crosstabControlNames.indexOf(controlName);
+
+      expect(controlIndex).toBeGreaterThanOrEqual(0);
+      expect(dynamicGroupByIndex).toBeLessThan(controlIndex);
+    });
   });
 
   it('exposes dynamic group-by as a chart-local JSON text area', () => {
