@@ -55,40 +55,6 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        [
-          {
-            name: 'groupbyRows',
-            config: {
-              ...sharedControls.groupby,
-              label: t('Rows'),
-              description: t('Dimensions to use as crosstab rows.'),
-              multi: true,
-            },
-          },
-        ],
-        [
-          {
-            name: 'groupbyColumns',
-            config: {
-              ...sharedControls.groupby,
-              label: t('Columns'),
-              description: t(
-                'Dimensions to use as generated crosstab columns.',
-              ),
-              multi: true,
-            },
-          },
-        ],
-        [
-          {
-            name: 'metrics',
-            config: {
-              ...sharedControls.metrics,
-              label: t('Metrics'),
-              validators: [],
-            },
-          },
-        ],
         ['adhoc_filters'],
         ['row_limit'],
       ],

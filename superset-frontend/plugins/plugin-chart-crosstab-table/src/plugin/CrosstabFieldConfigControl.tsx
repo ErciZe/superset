@@ -27,7 +27,6 @@ import {
   type QueryFormMetric,
 } from '@superset-ui/core';
 import type { ColumnMeta, Metric } from '@superset-ui/chart-controls';
-import { Button } from '@superset-ui/core/components';
 import { DndColumnSelect } from '../../../../src/explore/components/controls/DndColumnSelectControl/DndColumnSelect';
 import { DndMetricSelect } from '../../../../src/explore/components/controls/DndColumnSelectControl';
 import type {
@@ -63,7 +62,7 @@ const FieldOptions = styled.div`
 
 const FieldOption = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: ${({ theme }) => theme.sizeUnit}px;
   align-items: center;
 `;
@@ -410,29 +409,6 @@ export default function CrosstabFieldConfigControl({
     },
     [config, emit],
   );
-  const moveDimension = useCallback(
-    (
-      from: 'rows' | 'columns',
-      to: 'rows' | 'columns',
-      field: QueryFormColumn,
-    ) => {
-      const key = getColumnLabel(field);
-      const movingItem = config[from].find(
-        item => getColumnLabel(item.field) === key,
-      );
-
-      if (!movingItem) {
-        return;
-      }
-
-      emit({
-        ...config,
-        [from]: config[from].filter(item => getColumnLabel(item.field) !== key),
-        [to]: [...config[to], movingItem],
-      });
-    },
-    [config, emit],
-  );
   const renderDimensionOptions = useCallback(
     (area: 'rows' | 'columns') => (
       <FieldOptions>
@@ -463,25 +439,12 @@ export default function CrosstabFieldConfigControl({
                   {t('Subtotal')}
                 </label>
               )}
-              <Button
-                buttonSize="xsmall"
-                htmlType="button"
-                onClick={() =>
-                  moveDimension(
-                    area,
-                    area === 'rows' ? 'columns' : 'rows',
-                    item.field,
-                  )
-                }
-              >
-                {area === 'rows' ? t('To columns') : t('To rows')}
-              </Button>
             </FieldOption>
           );
         })}
       </FieldOptions>
     ),
-    [config, moveDimension, name, toggleSubtotal, updateDimensionLabel],
+    [config, name, toggleSubtotal, updateDimensionLabel],
   );
   const renderMetricOptions = useCallback(
     () => (

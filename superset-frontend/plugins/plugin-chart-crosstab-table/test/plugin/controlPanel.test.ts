@@ -61,13 +61,12 @@ function getControlNames() {
 }
 
 describe('crosstab controlPanel', () => {
-  it('exposes v1 crosstab query, totals, formatting, and display controls', () => {
-    expect(getControlNames()).toEqual(
+  it('exposes one crosstab field entry with totals, formatting, and display controls', () => {
+    const controlNames = getControlNames();
+
+    expect(controlNames).toEqual(
       expect.arrayContaining([
         'crosstabFieldConfig',
-        'groupbyRows',
-        'groupbyColumns',
-        'metrics',
         'showRowTotals',
         'showColumnTotals',
         'showRowSubtotals',
@@ -81,6 +80,27 @@ describe('crosstab controlPanel', () => {
         'conditionalFormatting',
       ]),
     );
+    expect(controlNames).not.toContain('groupbyRows');
+    expect(controlNames).not.toContain('groupbyColumns');
+    expect(controlNames).not.toContain('metrics');
+  });
+
+  it('renders field options without row-column transfer actions', () => {
+    render(
+      createElement(CrosstabFieldConfigControl, {
+        name: 'crosstabFieldConfig',
+        onChange: jest.fn(),
+        value: {
+          rows: [{ field: 'country' }, { field: 'shop' }],
+          columns: [{ field: 'biz_date' }],
+        },
+      }),
+    );
+
+    expect(screen.getAllByLabelText('Field alias')).toHaveLength(3);
+    expect(screen.getByLabelText('Subtotal')).toBeInTheDocument();
+    expect(screen.queryByText('To columns')).not.toBeInTheDocument();
+    expect(screen.queryByText('To rows')).not.toBeInTheDocument();
   });
 
   it('updates only the selected metric semantic', () => {
