@@ -60,8 +60,25 @@ function getControlNames() {
   return names;
 }
 
+function getControlConfig(name: string) {
+  const controls = controlPanel.controlPanelSections.flatMap(section =>
+    section?.controlSetRows.flatMap(row =>
+      row.flatMap(control =>
+        typeof control === 'object' &&
+        control !== null &&
+        'name' in control &&
+        control.name === name
+          ? [control.config]
+          : [],
+      ),
+    ),
+  );
+
+  return controls[0];
+}
+
 describe('crosstab controlPanel', () => {
-  it('exposes one crosstab field entry with totals, formatting, and display controls', () => {
+  it('exposes the crosstab field entry with totals, formatting, and display controls', () => {
     const controlNames = getControlNames();
 
     expect(controlNames).toEqual(
@@ -80,9 +97,18 @@ describe('crosstab controlPanel', () => {
         'conditionalFormatting',
       ]),
     );
-    expect(controlNames).not.toContain('groupbyRows');
-    expect(controlNames).not.toContain('groupbyColumns');
-    expect(controlNames).not.toContain('metrics');
+  });
+
+  it('keeps legacy field controls hidden for saved chart compatibility', () => {
+    expect(getControlConfig('groupbyRows')).toEqual(
+      expect.objectContaining({ hidden: true }),
+    );
+    expect(getControlConfig('groupbyColumns')).toEqual(
+      expect.objectContaining({ hidden: true }),
+    );
+    expect(getControlConfig('metrics')).toEqual(
+      expect.objectContaining({ hidden: true }),
+    );
   });
 
   it('renders field options without row-column transfer actions', () => {
