@@ -37,6 +37,7 @@ import { parseConditionalFormatting } from '../crosstab/formatting';
 import type {
   CrosstabChartProps,
   CrosstabFormData,
+  CrosstabOwnState,
   CrosstabQueryPlanItem,
   CrosstabSummaryKind,
   CrosstabSummaryValues,
@@ -51,7 +52,7 @@ import {
   getServerColumnPageColumnSignature,
   recordsToColumnTuples,
 } from './serverColumnPagination';
-import type { CrosstabOwnState } from './serverColumnPagination';
+import type { CrosstabOwnState as ServerColumnOwnState } from './serverColumnPagination';
 import {
   getCrosstabColumnColumns,
   getCrosstabFieldLabels,
@@ -68,6 +69,7 @@ import {
 } from './metricSemantics';
 import { buildCrosstabQueryPlan } from './summaryQueryPlan';
 import { buildSummaryResultMap } from './summaryResults';
+import { resolveDynamicGroupByDimensions } from './dynamicGroupBy';
 
 type CrosstabQueryData = ChartProps<CrosstabFormData>['queriesData'][number];
 
@@ -151,7 +153,7 @@ function applyRowTotals(
 }
 
 function updateServerColumnOwnState(
-  ownState: CrosstabOwnState,
+  ownState: ServerColumnOwnState,
   setDataMask: CrosstabChartProps['hooks']['setDataMask'] | undefined,
   currentPage: number,
   currentPageSize: number,
@@ -297,21 +299,48 @@ export default function transformProps(
     formData.conditionalFormatting,
   );
   const crosstabFormData = formData as CrosstabFormData;
-  const rowColumns = getCrosstabRowColumns(crosstabFormData);
-  const columnColumns = getCrosstabColumnColumns(crosstabFormData);
+  const persistedRowDimensions = ensureIsArray<QueryFormColumn>(
+    getCrosstabRowColumns(crosstabFormData),
+  );
+  const persistedColumnDimensions = ensureIsArray<QueryFormColumn>(
+    getCrosstabColumnColumns(crosstabFormData),
+  );
   const metrics = getCrosstabMetrics(crosstabFormData);
-  const rowFields =
-    ensureIsArray<QueryFormColumn>(rowColumns).map(normalizeColumn);
-  const columnFields =
-    ensureIsArray<QueryFormColumn>(columnColumns).map(normalizeColumn);
+  const crosstabOwnState = (ownState ?? {}) as CrosstabOwnState;
+  const dynamicGroupBy = resolveDynamicGroupByDimensions({
+    formData: crosstabFormData,
+    ownState: crosstabOwnState,
+    rowDimensions: persistedRowDimensions,
+    columnDimensions: persistedColumnDimensions,
+  });
+  const rowFields = dynamicGroupBy.rowDimensions.map(normalizeColumn);
+  const columnFields = dynamicGroupBy.columnDimensions.map(normalizeColumn);
   const metricFields =
     ensureIsArray<QueryFormMetric>(metrics).map(normalizeMetric);
   const serverColumnPagination = Boolean(formData.serverColumnPagination);
-  const crosstabOwnState = (ownState ?? {}) as CrosstabOwnState;
   const currentPage = getCurrentColumnPage(crosstabOwnState);
   const columnPageSize = getColumnPageSize(
     crosstabOwnState.currentColumnPageSize ?? formData.columnPageSize,
   );
+  const resetDynamicGroupByOwnState =
+    dynamicGroupBy.config !== undefined &&
+    crosstabOwnState.effectiveGroupBySignature !== dynamicGroupBy.signature;
+
+  if (resetDynamicGroupByOwnState) {
+    setDataMask?.({
+      ownState: {
+        selectedDynamicGroupByColumn:
+          crosstabOwnState.selectedDynamicGroupByColumn,
+        effectiveGroupBySignature: dynamicGroupBy.signature,
+        currentColumnPage: 0,
+        currentColumnPageSize: columnPageSize,
+        serverColumnPageTuples: [],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: columnPageSize,
+      },
+    });
+  }
+
   const metricConfigs = getCrosstabMetricConfigs(crosstabFormData);
   const semanticOverrideField =
     getCrosstabSemanticOverrideField(crosstabFormData);
@@ -330,8 +359,9 @@ export default function transformProps(
     showColumnSubtotals: formData.showColumnSubtotals ?? false,
     serverColumnPagination,
     hasServerColumnPageTuples: serverColumnPagination
-      ? (crosstabOwnState.serverColumnPageTuples?.length ?? 0) > 0 ||
-        queriesData.length > 2
+      ? !resetDynamicGroupByOwnState &&
+        ((crosstabOwnState.serverColumnPageTuples?.length ?? 0) > 0 ||
+          queriesData.length > 2)
       : undefined,
   });
   const queriesByPlan = queryDataByPlan(queryPlan, queriesData);
@@ -462,14 +492,14 @@ export default function transformProps(
       : {}),
   };
 
-  if (serverColumnPagination) {
+  if (serverColumnPagination && !resetDynamicGroupByOwnState) {
     const columnTuples = recordsToColumnTuples(
       (domainQuery?.data ?? []) as DataRecord[],
       columnFields,
     );
 
     updateServerColumnOwnState(
-      crosstabOwnState,
+      crosstabOwnState as ServerColumnOwnState,
       setDataMask,
       currentPage,
       columnPageSize,
@@ -510,7 +540,7 @@ export default function transformProps(
       }),
   });
   const rowData =
-    serverColumnPagination && !dataQuery
+    serverColumnPagination && (resetDynamicGroupByOwnState || !dataQuery)
       ? []
       : serverColumnPagination && legacyServerRowTotalQuery?.data
         ? applyRowTotals(
@@ -534,7 +564,15 @@ export default function transformProps(
     serverColumnCurrentPage: currentPage,
     serverColumnPageSize: columnPageSize,
     serverColumnTotalCount: totalCount,
-    isServerColumnLoading: serverColumnPagination && !dataQuery,
+    isServerColumnLoading:
+      serverColumnPagination && (resetDynamicGroupByOwnState || !dataQuery),
     expandedRowPaths: crosstabOwnState.expandedRowPaths,
+    ...(dynamicGroupBy.config
+      ? {
+          dynamicGroupByConfig: dynamicGroupBy.config,
+          selectedDynamicGroupByColumn: dynamicGroupBy.selectedColumn,
+          effectiveGroupBySignature: dynamicGroupBy.signature,
+        }
+      : {}),
   };
 }

@@ -24,6 +24,20 @@ import {
   CROSSTAB_TOTAL_COLUMN_ID,
 } from '../../src/crosstab/engine';
 
+const dynamicColumnGroupBy: Exclude<
+  CrosstabFormData['dynamicGroupBy'],
+  string | undefined
+> = {
+  enabled: true,
+  placement: 'columns',
+  slotIndex: 1,
+  defaultColumn: 'shop_name',
+  options: [
+    { label: '店铺', column: 'shop_name' },
+    { label: '国家', column: 'country' },
+  ],
+};
+
 describe('crosstab transformProps', () => {
   it('converts query data into renderer props', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
@@ -154,6 +168,191 @@ describe('crosstab transformProps', () => {
         ],
       }),
     ]);
+  });
+
+  it('uses the selected dynamic group-by column for generated headers', () => {
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name'],
+        metrics: ['指标值'],
+        dynamicGroupBy: dynamicColumnGroupBy,
+      },
+      ownState: {
+        selectedDynamicGroupByColumn: 'country',
+        effectiveGroupBySignature:
+          'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              metric_name_with_unit: '销售额',
+              biz_date: '2026-05-01',
+              country: 'US',
+              指标值: 10,
+            },
+          ],
+        },
+      ],
+      datasource: {
+        verboseMap: {
+          metric_name_with_unit: '指标项',
+          biz_date: '日期',
+          country: '国家',
+          指标值: '指标值',
+        },
+      },
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(props.dynamicGroupByConfig).toEqual(dynamicColumnGroupBy);
+    expect(props.selectedDynamicGroupByColumn).toBe('country');
+    expect(props.effectiveGroupBySignature).toBe(
+      'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
+    );
+    expect(props.columnTree).toEqual([
+      expect.objectContaining({
+        label: '2026-05-01',
+        children: [
+          expect.objectContaining({
+            label: 'US',
+            field:
+              '__crosstab_col__string:10:2026-05-01|string:2:US__metric__指标值',
+          }),
+        ],
+      }),
+    ]);
+    expect(props.generatedColumnIds).toEqual([
+      '__crosstab_col__string:10:2026-05-01|string:2:US__metric__指标值',
+    ]);
+  });
+
+  it('does not reset dynamic group-by own state when the signature is current', () => {
+    const setDataMask = jest.fn();
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name'],
+        metrics: ['指标值'],
+        dynamicGroupBy: dynamicColumnGroupBy,
+      },
+      ownState: {
+        selectedDynamicGroupByColumn: 'country',
+        effectiveGroupBySignature:
+          'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
+      },
+      hooks: {
+        setDataMask,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              metric_name_with_unit: '销售额',
+              biz_date: '2026-05-01',
+              country: 'US',
+              指标值: 10,
+            },
+          ],
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(setDataMask).not.toHaveBeenCalled();
+    expect(props.rowData).not.toEqual([]);
+    expect(props.effectiveGroupBySignature).toBe(
+      'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
+    );
+  });
+
+  it('clears stale server column pagination own state when the dynamic signature changes', () => {
+    const setDataMask = jest.fn();
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name'],
+        metrics: ['指标值'],
+        serverColumnPagination: true,
+        columnPageSize: 98,
+        dynamicGroupBy: dynamicColumnGroupBy,
+      },
+      ownState: {
+        selectedDynamicGroupByColumn: 'country',
+        effectiveGroupBySignature:
+          'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+        currentColumnPage: 3,
+        currentColumnPageSize: 5,
+        expandedRowPaths: ['stale-row'],
+        serverColumnPageTuples: [['2026-05-01', 'Shop A']],
+        serverColumnPageTuplesPage: 3,
+        serverColumnPageTuplesPageSize: 5,
+      },
+      hooks: {
+        setDataMask,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              biz_date: '2026-05-01',
+              country: 'US',
+            },
+          ],
+        },
+        {
+          data: [{ rowcount: 1 }],
+        },
+        {
+          data: [
+            {
+              metric_name_with_unit: '销售额',
+              biz_date: '2026-05-01',
+              country: 'US',
+              指标值: 10,
+            },
+          ],
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(setDataMask).toHaveBeenCalledWith({
+      ownState: {
+        selectedDynamicGroupByColumn: 'country',
+        effectiveGroupBySignature:
+          'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
+        currentColumnPage: 0,
+        currentColumnPageSize: 5,
+        serverColumnPageTuples: [],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: 5,
+      },
+    });
+    expect(props.rowData).toEqual([]);
+    expect(props.isServerColumnLoading).toBe(true);
+    expect(props.effectiveGroupBySignature).toBe(
+      'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
+    );
   });
 
   it('stores server column page tuples after loading the column domain query', () => {
