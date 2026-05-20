@@ -187,6 +187,22 @@ function updateServerColumnOwnState(
   });
 }
 
+function getPreservedDynamicGroupByOwnState(
+  ownState: CrosstabOwnState,
+): Record<string, unknown> {
+  const preservedOwnState: Record<string, unknown> = { ...ownState };
+
+  delete preservedOwnState.effectiveGroupBySignature;
+  delete preservedOwnState.expandedRowPaths;
+  delete preservedOwnState.serverColumnPageColumnSignature;
+  delete preservedOwnState.serverColumnPageTuples;
+  delete preservedOwnState.serverColumnPageTuplesPage;
+  delete preservedOwnState.serverColumnPageTuplesPageSize;
+  delete preservedOwnState.serverColumnTotalCount;
+
+  return preservedOwnState;
+}
+
 function assertServerColumnRowLimit(
   rowcount: number | undefined,
   rowLimit: unknown,
@@ -329,6 +345,7 @@ export default function transformProps(
   if (resetDynamicGroupByOwnState) {
     setDataMask?.({
       ownState: {
+        ...getPreservedDynamicGroupByOwnState(crosstabOwnState),
         selectedDynamicGroupByColumn: dynamicGroupBy.selectedColumn,
         effectiveGroupBySignature: dynamicGroupBy.signature,
         currentColumnPage: 0,

@@ -301,9 +301,12 @@ describe('crosstab transformProps', () => {
         currentColumnPage: 3,
         currentColumnPageSize: 5,
         expandedRowPaths: ['stale-row'],
+        unrelatedOwnStateField: 'preserved',
+        serverColumnPageColumnSignature: 'biz_date\u001fshop_name',
         serverColumnPageTuples: [['2026-05-01', 'Shop A']],
         serverColumnPageTuplesPage: 3,
         serverColumnPageTuplesPageSize: 5,
+        serverColumnTotalCount: 999,
       },
       hooks: {
         setDataMask,
@@ -338,6 +341,7 @@ describe('crosstab transformProps', () => {
 
     expect(setDataMask).toHaveBeenCalledWith({
       ownState: {
+        unrelatedOwnStateField: 'preserved',
         selectedDynamicGroupByColumn: 'country',
         effectiveGroupBySignature:
           'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
@@ -348,6 +352,10 @@ describe('crosstab transformProps', () => {
         serverColumnPageTuplesPageSize: 5,
       },
     });
+    const resetOwnState = setDataMask.mock.calls[0][0].ownState;
+    expect(resetOwnState).not.toHaveProperty('expandedRowPaths');
+    expect(resetOwnState).not.toHaveProperty('serverColumnPageColumnSignature');
+    expect(resetOwnState).not.toHaveProperty('serverColumnTotalCount');
     expect(props.rowData).toEqual([]);
     expect(props.isServerColumnLoading).toBe(true);
     expect(props.effectiveGroupBySignature).toBe(
