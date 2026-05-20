@@ -329,8 +329,7 @@ export default function transformProps(
   if (resetDynamicGroupByOwnState) {
     setDataMask?.({
       ownState: {
-        selectedDynamicGroupByColumn:
-          crosstabOwnState.selectedDynamicGroupByColumn,
+        selectedDynamicGroupByColumn: dynamicGroupBy.selectedColumn,
         effectiveGroupBySignature: dynamicGroupBy.signature,
         currentColumnPage: 0,
         currentColumnPageSize: columnPageSize,

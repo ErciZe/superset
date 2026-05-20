@@ -355,6 +355,68 @@ describe('crosstab transformProps', () => {
     );
   });
 
+  it('stores the default dynamic group-by column when resetting stale own state', () => {
+    const setDataMask = jest.fn();
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'stale_dimension'],
+        metrics: ['指标值'],
+        serverColumnPagination: true,
+        columnPageSize: 98,
+        dynamicGroupBy: dynamicColumnGroupBy,
+      },
+      ownState: {
+        effectiveGroupBySignature:
+          'rows=metric_name_with_unit|columns=biz_date\u001fstale_dimension',
+        currentColumnPage: 2,
+        currentColumnPageSize: 5,
+        serverColumnPageTuples: [['2026-05-01', 'Stale']],
+        serverColumnPageTuplesPage: 2,
+        serverColumnPageTuplesPageSize: 5,
+      },
+      hooks: {
+        setDataMask,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              biz_date: '2026-05-01',
+              shop_name: 'Shop A',
+            },
+          ],
+        },
+        {
+          data: [{ rowcount: 1 }],
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(setDataMask).toHaveBeenCalledWith({
+      ownState: {
+        selectedDynamicGroupByColumn: 'shop_name',
+        effectiveGroupBySignature:
+          'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+        currentColumnPage: 0,
+        currentColumnPageSize: 5,
+        serverColumnPageTuples: [],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: 5,
+      },
+    });
+    expect(props.rowData).toEqual([]);
+    expect(props.isServerColumnLoading).toBe(true);
+    expect(props.selectedDynamicGroupByColumn).toBe('shop_name');
+  });
+
   it('stores server column page tuples after loading the column domain query', () => {
     const setDataMask = jest.fn();
     const chartProps = new ChartProps<CrosstabFormData>({
