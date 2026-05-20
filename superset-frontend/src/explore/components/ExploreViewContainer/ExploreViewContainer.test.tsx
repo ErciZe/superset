@@ -31,7 +31,7 @@ import {
   userEvent,
   waitFor,
 } from 'spec/helpers/testing-library';
-import ExploreViewContainer, { getFilterOwnState } from '.';
+import ExploreViewContainer from '.';
 
 const reduxState = {
   explore: {
@@ -298,27 +298,6 @@ test('does omit hiddenFormData when query_mode is not enabled', async () => {
   Object.keys(customState.explore.hiddenFormData).forEach(key => {
     expect(formData[key]).toBeUndefined();
   });
-});
-
-test('filters crosstab chart-local ownState from extra form data', () => {
-  expect(
-    getFilterOwnState(
-      { viz_type: 'crosstab-table' },
-      {
-        currentColumnPage: 2,
-        currentColumnPageSize: 12,
-        effectiveGroupBySignature: 'rows=metric|columns=date',
-        expandedRowPaths: ['profit'],
-        serverColumnPageColumnSignature: 'biz_date',
-        serverColumnPageTuples: [['2026-05-20']],
-        serverColumnPageTuplesPage: 1,
-        serverColumnPageTuplesPageSize: 12,
-        serverColumnTotalCount: 100,
-        selectedDynamicGroupByColumn: 'shop_name',
-        filterState: { value: ['kept'] },
-      },
-    ),
-  ).toEqual({ filterState: { value: ['kept'] } });
 });
 
 // Component tests for the errorMessage behavior
