@@ -24,7 +24,7 @@ Candidate production dynamic group-by fields still require dataset verification 
 Command:
 
 ```bash
-cd superset-frontend && npx jest plugins/plugin-chart-crosstab-table/test/plugin/dynamicGroupBy.test.ts plugins/plugin-chart-crosstab-table/test/plugin/buildQuery.test.ts plugins/plugin-chart-crosstab-table/test/plugin/transformProps.test.ts plugins/plugin-chart-crosstab-table/test/plugin/controlPanel.test.ts plugins/plugin-chart-crosstab-table/test/CrosstabTable.test.tsx --runInBand
+cd superset-frontend && BABEL_ENV=test npx jest plugins/plugin-chart-crosstab-table/test/plugin/dynamicGroupBy.test.ts plugins/plugin-chart-crosstab-table/test/plugin/buildQuery.test.ts plugins/plugin-chart-crosstab-table/test/plugin/transformProps.test.ts plugins/plugin-chart-crosstab-table/test/plugin/controlPanel.test.ts plugins/plugin-chart-crosstab-table/test/CrosstabTable.test.tsx --runInBand
 ```
 
 Result: PASS, exit code 0.
@@ -32,9 +32,28 @@ Result: PASS, exit code 0.
 Observed result:
 
 - Test Suites: 5 passed, 5 total
-- Tests: 64 passed, 64 total
+- Tests: 65 passed, 65 total
 - Snapshots: 0 total
-- Time: 7.527 s
+- Time: 3.869 s
+
+### Post-Review OwnState Filter Regression
+
+Command:
+
+```bash
+cd superset-frontend && BABEL_ENV=test npx jest plugins/plugin-chart-crosstab-table/test/plugin/dynamicGroupBy.test.ts src/explore/components/ExploreViewContainer/ownState.test.ts --runInBand
+```
+
+Result: PASS, exit code 0.
+
+Observed result:
+
+- Test Suites: 2 passed, 2 total
+- Tests: 13 passed, 13 total
+- Snapshots: 0 total
+- Time: 2.456 s
+
+Note: `src/explore/components/ExploreViewContainer/ExploreViewContainer.test.tsx` was also probed directly and failed before executing tests because of an existing `node_modules/esm` / `blob` suite-load error. The crosstab ownState filtering coverage was moved to the lightweight `ownState.test.ts` unit test above so this regression remains runnable.
 
 Observed non-blocking environment warnings:
 
@@ -47,7 +66,7 @@ Observed non-blocking environment warnings:
 Command:
 
 ```bash
-cd superset-frontend && npx eslint plugins/plugin-chart-crosstab-table/src/types.ts plugins/plugin-chart-crosstab-table/src/plugin/dynamicGroupBy.ts plugins/plugin-chart-crosstab-table/src/plugin/buildQuery.ts plugins/plugin-chart-crosstab-table/src/plugin/transformProps.ts plugins/plugin-chart-crosstab-table/src/plugin/controlPanel.tsx plugins/plugin-chart-crosstab-table/src/CrosstabTable.tsx plugins/plugin-chart-crosstab-table/test/plugin/dynamicGroupBy.test.ts plugins/plugin-chart-crosstab-table/test/plugin/buildQuery.test.ts plugins/plugin-chart-crosstab-table/test/plugin/transformProps.test.ts plugins/plugin-chart-crosstab-table/test/plugin/controlPanel.test.ts plugins/plugin-chart-crosstab-table/test/CrosstabTable.test.tsx
+cd superset-frontend && npx eslint plugins/plugin-chart-crosstab-table/src/types.ts plugins/plugin-chart-crosstab-table/src/plugin/dynamicGroupBy.ts plugins/plugin-chart-crosstab-table/src/plugin/buildQuery.ts plugins/plugin-chart-crosstab-table/src/plugin/transformProps.ts plugins/plugin-chart-crosstab-table/src/plugin/controlPanel.tsx plugins/plugin-chart-crosstab-table/src/CrosstabTable.tsx plugins/plugin-chart-crosstab-table/test/plugin/dynamicGroupBy.test.ts plugins/plugin-chart-crosstab-table/test/plugin/buildQuery.test.ts plugins/plugin-chart-crosstab-table/test/plugin/transformProps.test.ts plugins/plugin-chart-crosstab-table/test/plugin/controlPanel.test.ts plugins/plugin-chart-crosstab-table/test/CrosstabTable.test.tsx src/explore/components/ExploreViewContainer/index.jsx src/explore/components/ExploreViewContainer/ownState.ts src/explore/components/ExploreViewContainer/ownState.test.ts
 ```
 
 Result: PASS, exit code 0.
@@ -55,6 +74,7 @@ Result: PASS, exit code 0.
 Observed result:
 
 - `✔ Lint done.`
+- `src/explore/components/ExploreViewContainer/index.jsx` still reports 9 existing React hook / prop-types warnings and 0 errors.
 
 Observed non-blocking environment warning:
 
