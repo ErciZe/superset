@@ -67,7 +67,8 @@ function getControlConfig(name: string) {
         typeof control === 'object' &&
         control !== null &&
         'name' in control &&
-        control.name === name
+        control.name === name &&
+        'config' in control
           ? [control.config]
           : [],
       ),
