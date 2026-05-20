@@ -4,7 +4,143 @@ import {
   ERR_SERVER_COLUMN_PAGINATION_SHAPE,
 } from '../../src/plugin/serverColumnPagination';
 
+const dynamicColumnGroupBy = {
+  enabled: true,
+  placement: 'columns',
+  slotIndex: 1,
+  defaultColumn: 'shop_name',
+  options: [
+    { label: '店铺', column: 'shop_name' },
+    { label: '国家', column: 'country' },
+  ],
+} as const;
+
 describe('crosstab buildQuery', () => {
+  it('uses the default dynamic group-by column in query dimensions', () => {
+    const queryContext = buildQuery({
+      datasource: '11__table',
+      viz_type: 'crosstab-table',
+      groupbyRows: ['metric_name_with_unit'],
+      groupbyColumns: ['biz_date', 'stale_dimension'],
+      metrics: ['amount'],
+      dynamicGroupBy: dynamicColumnGroupBy,
+    } as never);
+
+    expect(queryContext.queries).toHaveLength(1);
+    expect(queryContext.queries[0].columns).toEqual([
+      'metric_name_with_unit',
+      'biz_date',
+      'shop_name',
+    ]);
+  });
+
+  it('uses the runtime selected dynamic group-by column in non-server query dimensions', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '11__table',
+        viz_type: 'crosstab-table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name'],
+        metrics: ['amount'],
+        dynamicGroupBy: dynamicColumnGroupBy,
+      } as never,
+      {
+        ownState: {
+          selectedDynamicGroupByColumn: 'country',
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries).toHaveLength(1);
+    expect(queryContext.queries[0].columns).toEqual([
+      'metric_name_with_unit',
+      'biz_date',
+      'country',
+    ]);
+  });
+
+  it('uses the runtime selected dynamic group-by column in server column domain queries', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name'],
+        metrics: ['指标值'],
+        serverColumnPagination: true,
+        columnPageSize: 98,
+        row_limit: 10000,
+        dynamicGroupBy: dynamicColumnGroupBy,
+      } as never,
+      {
+        ownState: {
+          currentColumnPage: 2,
+          currentColumnPageSize: 5,
+          selectedDynamicGroupByColumn: 'country',
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries).toHaveLength(2);
+    expect(queryContext.queries[0]).toEqual(
+      expect.objectContaining({
+        columns: ['biz_date', 'country'],
+        metrics: [],
+        row_limit: 5,
+        row_offset: 10,
+      }),
+    );
+    expect(queryContext.queries[0].orderby).toEqual([
+      ['biz_date', true],
+      ['country', true],
+    ]);
+    expect(queryContext.queries[1]).toEqual(
+      expect.objectContaining({
+        columns: ['biz_date', 'country'],
+        is_rowcount: true,
+        row_limit: 0,
+        row_offset: 0,
+      }),
+    );
+  });
+
+  it('uses the runtime selected dynamic group-by column in non-additive summary queries', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '11__table',
+        viz_type: 'crosstab-table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'category' }, { field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }, { field: 'shop_name' }],
+          metrics: [{ metric: '指标值', semantic: 'ratio' }],
+        },
+        dynamicGroupBy: dynamicColumnGroupBy,
+        showRowTotals: true,
+        showRowSubtotals: true,
+        showColumnTotals: true,
+        showColumnSubtotals: true,
+        row_limit: 10000,
+      } as never,
+      {
+        ownState: {
+          selectedDynamicGroupByColumn: 'country',
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries.map(query => query.columns)).toEqual([
+      ['category', 'metric_name_with_unit', 'biz_date', 'country'],
+      ['category', 'metric_name_with_unit'],
+      ['category', 'biz_date', 'country'],
+      ['category'],
+      ['biz_date', 'country'],
+      ['category', 'metric_name_with_unit', 'biz_date'],
+      ['biz_date'],
+      ['category', 'biz_date'],
+      [],
+    ]);
+  });
+
   it('includes row dimensions, column dimensions, and metrics in one aggregate query', () => {
     const queryContext = buildQuery({
       datasource: '11__table',

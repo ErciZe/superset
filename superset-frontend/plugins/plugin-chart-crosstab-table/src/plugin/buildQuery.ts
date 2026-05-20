@@ -24,6 +24,7 @@ import type {
   QueryObject,
 } from '@superset-ui/core';
 import type { CrosstabFormData, CrosstabQueryPlanItem } from '../types';
+import { resolveDynamicGroupByDimensions } from './dynamicGroupBy';
 import {
   getCrosstabColumnColumns,
   getCrosstabMetricConfigs,
@@ -115,12 +116,18 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
     throw new Error('Crosstab table does not support server pagination in v1.');
   }
 
-  const rowDimensions = ensureIsArray<QueryFormColumn>(
+  const persistedRowDimensions = ensureIsArray<QueryFormColumn>(
     getCrosstabRowColumns(formData),
   );
-  const columnDimensions = ensureIsArray<QueryFormColumn>(
+  const persistedColumnDimensions = ensureIsArray<QueryFormColumn>(
     getCrosstabColumnColumns(formData),
   );
+  const { rowDimensions, columnDimensions } = resolveDynamicGroupByDimensions({
+    formData,
+    ownState: options?.ownState,
+    rowDimensions: persistedRowDimensions,
+    columnDimensions: persistedColumnDimensions,
+  });
   const metrics = ensureIsArray<QueryFormMetric>(getCrosstabMetrics(formData));
   const hasNonAdditiveSummary = hasSqlSummarySemanticConfig(
     getCrosstabMetricConfigs(formData),
