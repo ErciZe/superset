@@ -35,11 +35,27 @@ export type CrosstabConditionalRule = {
   arrow?: 'up' | 'down';
 };
 
+export type DynamicGroupByPlacement = 'rows' | 'columns';
+
+export type CrosstabDynamicGroupByOption = {
+  label: string;
+  column: QueryFormColumn;
+};
+
+export type CrosstabDynamicGroupByConfig = {
+  enabled: boolean;
+  placement: DynamicGroupByPlacement;
+  slotIndex: number;
+  defaultColumn: QueryFormColumn;
+  options: CrosstabDynamicGroupByOption[];
+};
+
 export interface CrosstabFormData extends QueryFormData {
   groupbyRows?: QueryFormColumn[];
   groupbyColumns?: QueryFormColumn[];
   metrics?: QueryFormMetric[];
   crosstabFieldConfig?: CrosstabFieldConfig;
+  dynamicGroupBy?: CrosstabDynamicGroupByConfig | string;
   showRowTotals?: boolean;
   showColumnTotals?: boolean;
   showRowSubtotals?: boolean;
@@ -160,6 +176,9 @@ export type CrosstabFieldConfig = {
 
 export type CrosstabChartProps = ChartProps<CrosstabFormData> &
   CrosstabEngineResult & {
+    dynamicGroupByConfig?: CrosstabDynamicGroupByConfig;
+    selectedDynamicGroupByColumn?: QueryFormColumn;
+    effectiveGroupBySignature?: string;
     serverColumnTotalCount?: number;
     serverColumnCurrentPage?: number;
     serverColumnPageSize?: number;
@@ -169,9 +188,13 @@ export type CrosstabChartProps = ChartProps<CrosstabFormData> &
 
 export type CrosstabOwnState = {
   currentColumnPage?: number;
+  currentColumnPageSize?: number;
+  selectedDynamicGroupByColumn?: QueryFormColumn;
+  effectiveGroupBySignature?: string;
   expandedRowPaths?: string[];
   serverColumnPageColumnSignature?: string;
   serverColumnPageTuples?: DataRecordValue[][];
   serverColumnPageTuplesPage?: number;
+  serverColumnPageTuplesPageSize?: number;
   serverColumnTotalCount?: number;
 };
