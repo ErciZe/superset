@@ -88,11 +88,16 @@ function validateDynamicGroupByConfig(
 
   const { defaultColumn, enabled, options, placement, slotIndex } = value;
 
+  const parsedSlotIndex =
+    typeof slotIndex === 'number' && Number.isInteger(slotIndex)
+      ? slotIndex
+      : undefined;
+
   if (
     typeof enabled !== 'boolean' ||
     !isPlacement(placement) ||
-    !Number.isInteger(slotIndex) ||
-    slotIndex < 0 ||
+    parsedSlotIndex === undefined ||
+    parsedSlotIndex < 0 ||
     !Array.isArray(options)
   ) {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
@@ -111,7 +116,7 @@ function validateDynamicGroupByConfig(
   return {
     enabled,
     placement,
-    slotIndex,
+    slotIndex: parsedSlotIndex,
     defaultColumn,
     options,
   };
