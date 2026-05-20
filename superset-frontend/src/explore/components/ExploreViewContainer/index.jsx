@@ -75,15 +75,17 @@ import ExploreContainer from '../ExploreContainer';
 const CROSSTAB_OWN_STATE_KEYS = [
   'currentColumnPage',
   'currentColumnPageSize',
+  'effectiveGroupBySignature',
   'expandedRowPaths',
   'serverColumnPageColumnSignature',
   'serverColumnPageTuples',
   'serverColumnPageTuplesPage',
   'serverColumnPageTuplesPageSize',
   'serverColumnTotalCount',
+  'selectedDynamicGroupByColumn',
 ];
 
-function getFilterOwnState(formData, ownState) {
+export function getFilterOwnState(formData, ownState) {
   if (formData.viz_type !== 'crosstab-table' || ownState === undefined) {
     return ownState;
   }

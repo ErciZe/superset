@@ -154,6 +154,25 @@ describe('crosstab dynamic group by resolver', () => {
     );
   });
 
+  it('treats blank string config as disabled', () => {
+    expect(getDynamicGroupByConfig(createFormData(''))).toBeUndefined();
+    expect(getDynamicGroupByConfig(createFormData('   '))).toBeUndefined();
+
+    const result = resolveDynamicGroupByDimensions({
+      formData: createFormData(''),
+      rowDimensions: ['metric_name_with_unit'],
+      columnDimensions: ['biz_date', 'shop_name'],
+    });
+
+    expect(result).toEqual({
+      rowDimensions: ['metric_name_with_unit'],
+      columnDimensions: ['biz_date', 'shop_name'],
+      config: undefined,
+      selectedColumn: undefined,
+      signature: 'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+    });
+  });
+
   it('rejects malformed object columns in dynamic group by config', () => {
     expect(() =>
       getDynamicGroupByConfig(

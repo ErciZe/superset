@@ -132,6 +132,10 @@ export function getDynamicGroupByConfig(
   }
 
   if (typeof rawConfig === 'string') {
+    if (rawConfig.trim().length === 0) {
+      return undefined;
+    }
+
     try {
       return validateDynamicGroupByConfig(JSON.parse(rawConfig));
     } catch (error) {
