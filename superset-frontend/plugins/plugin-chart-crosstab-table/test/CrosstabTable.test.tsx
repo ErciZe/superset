@@ -239,18 +239,25 @@ jest.mock('@superset-ui/core/components', () => {
       options,
       value,
     }: MockSelectProps) => (
-      <select
-        aria-label={ariaLabel}
-        data-allow-select-all={allowSelectAll ? 'true' : 'false'}
-        onChange={event => onChange?.(event.target.value)}
-        value={value ?? ''}
-      >
-        {options.map(option => (
-          <option key={String(option.value)} value={String(option.value)}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <>
+        <select
+          aria-label={ariaLabel}
+          data-allow-select-all={allowSelectAll ? 'true' : 'false'}
+          onChange={event => onChange?.(event.target.value)}
+          value={value ?? ''}
+        >
+          {options.map(option => (
+            <option key={String(option.value)} value={String(option.value)}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <button
+          aria-label="Trigger invalid mock select change"
+          onClick={() => onChange?.('__invalid_groupby_column__')}
+          type="button"
+        />
+      </>
     ),
     ThemedAgGridReact: MockAgGridReact,
   };
@@ -310,6 +317,16 @@ describe('CrosstabTable', () => {
       throw new Error('Unable to find dynamic group-by select');
     }
     return select;
+  }
+
+  function getInvalidSelectChangeButton() {
+    const button = container.querySelector(
+      'button[aria-label="Trigger invalid mock select change"]',
+    );
+    if (!(button instanceof HTMLButtonElement)) {
+      throw new Error('Unable to find invalid select change button');
+    }
+    return button;
   }
 
   function getGridContainer() {
@@ -1038,6 +1055,7 @@ describe('CrosstabTable', () => {
       ],
       columnTree: [],
       generatedColumnIds: [],
+      selectedDynamicGroupByColumn: 'missing_dimension',
       dynamicGroupByConfig: {
         enabled: true,
         placement: 'columns',
@@ -1067,6 +1085,36 @@ describe('CrosstabTable', () => {
     ]);
   });
 
+  it('falls back to a valid dynamic group-by option for stale selected values', () => {
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+      },
+      rowData: [],
+      columns: [],
+      columnTree: [],
+      generatedColumnIds: [],
+      selectedDynamicGroupByColumn: 'missing_dimension',
+      dynamicGroupByConfig: {
+        enabled: true,
+        placement: 'columns',
+        slotIndex: 1,
+        defaultColumn: 'country',
+        options: [
+          { label: '店铺', column: 'shop_name' },
+          { label: '国家', column: 'country' },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    expect(getDynamicGroupBySelect()).toHaveValue('country');
+  });
+
   it('resets crosstab column cache when dynamic group-by selection changes', () => {
     const setDataMask = jest.fn();
     const props = {
@@ -1082,8 +1130,15 @@ describe('CrosstabTable', () => {
       },
       ownState: {
         currentColumnPage: 3,
+        currentColumnPageSize: 3,
+        effectiveGroupBySignature: 'rows=metric_name|columns=shop_name',
         expandedRowPaths: ['["A"]'],
+        unrelatedOwnStateField: 'preserved',
+        serverColumnPageColumnSignature: 'shop_name',
         serverColumnPageTuples: [['D1']],
+        serverColumnPageTuplesPage: 3,
+        serverColumnPageTuplesPageSize: 3,
+        serverColumnTotalCount: 100,
       },
       selectedDynamicGroupByColumn: 'shop_name',
       rowData: [],
@@ -1118,6 +1173,7 @@ describe('CrosstabTable', () => {
 
     expect(setDataMask).toHaveBeenCalledWith({
       ownState: {
+        unrelatedOwnStateField: 'preserved',
         selectedDynamicGroupByColumn: 'country',
         currentColumnPage: 0,
         currentColumnPageSize: 5,
@@ -1129,6 +1185,50 @@ describe('CrosstabTable', () => {
     expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
       'expandedRowPaths',
     );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnPageColumnSignature',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnTotalCount',
+    );
+  });
+
+  it('ignores invalid dynamic group-by change values', () => {
+    const setDataMask = jest.fn();
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+      },
+      hooks: {
+        setDataMask,
+      },
+      rowData: [],
+      columns: [],
+      columnTree: [],
+      generatedColumnIds: [],
+      selectedDynamicGroupByColumn: 'shop_name',
+      dynamicGroupByConfig: {
+        enabled: true,
+        placement: 'columns',
+        slotIndex: 1,
+        defaultColumn: 'shop_name',
+        options: [
+          { label: '店铺', column: 'shop_name' },
+          { label: '国家', column: 'country' },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    act(() => {
+      getInvalidSelectChangeButton().click();
+    });
+
+    expect(setDataMask).not.toHaveBeenCalled();
   });
 
   it('does not render dynamic group-by select without an enabled config', () => {

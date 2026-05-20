@@ -48,6 +48,7 @@ import type {
   CrosstabChartProps,
   CrosstabColumnNode,
   CrosstabConditionalRule,
+  CrosstabOwnState,
 } from './types';
 import {
   formatCrosstabValue,
@@ -400,6 +401,24 @@ function getMeasuredGridWidth(
   return undefined;
 }
 
+function getPreservedDynamicGroupByOwnState(
+  ownState: CrosstabChartProps['ownState'],
+) {
+  const preservedOwnState = {
+    ...((ownState ?? {}) as CrosstabOwnState),
+  };
+
+  delete preservedOwnState.effectiveGroupBySignature;
+  delete preservedOwnState.expandedRowPaths;
+  delete preservedOwnState.serverColumnPageColumnSignature;
+  delete preservedOwnState.serverColumnPageTuples;
+  delete preservedOwnState.serverColumnPageTuplesPage;
+  delete preservedOwnState.serverColumnPageTuplesPageSize;
+  delete preservedOwnState.serverColumnTotalCount;
+
+  return preservedOwnState;
+}
+
 export default function CrosstabTable({
   columnTree,
   columns,
@@ -506,6 +525,10 @@ export default function CrosstabTable({
         : [],
     [dynamicGroupByConfig],
   );
+  const dynamicGroupByValueSet = useMemo(
+    () => new Set(dynamicGroupByOptions.map(option => option.value)),
+    [dynamicGroupByOptions],
+  );
   const defaultDynamicGroupByValue = useMemo(() => {
     if (!dynamicGroupByConfig || dynamicGroupByOptions.length === 0) {
       return undefined;
@@ -521,11 +544,21 @@ export default function CrosstabTable({
       ? configuredDefaultValue
       : dynamicGroupByOptions[0].value;
   }, [dynamicGroupByConfig, dynamicGroupByOptions]);
-  const selectedDynamicGroupByValue =
-    selectedDynamicGroupByColumn !== undefined &&
-    selectedDynamicGroupByColumn !== null
-      ? getColumnLabel(selectedDynamicGroupByColumn)
+  const selectedDynamicGroupByValue = useMemo(() => {
+    const selectedValue =
+      selectedDynamicGroupByColumn !== undefined &&
+      selectedDynamicGroupByColumn !== null
+        ? getColumnLabel(selectedDynamicGroupByColumn)
+        : undefined;
+
+    return selectedValue && dynamicGroupByValueSet.has(selectedValue)
+      ? selectedValue
       : defaultDynamicGroupByValue;
+  }, [
+    defaultDynamicGroupByValue,
+    dynamicGroupByValueSet,
+    selectedDynamicGroupByColumn,
+  ]);
   const totalGeneratedColumnCount = serverColumnPagination
     ? (serverColumnTotalCount ?? treeLeafColumnIds.length)
     : treeLeafColumnIds.length;
@@ -620,8 +653,13 @@ export default function CrosstabTable({
   );
   const updateDynamicGroupByColumn = useCallback(
     (nextColumn: string) => {
+      if (!dynamicGroupByValueSet.has(nextColumn)) {
+        return;
+      }
+
       setDataMask?.({
         ownState: {
+          ...getPreservedDynamicGroupByOwnState(ownState),
           selectedDynamicGroupByColumn: nextColumn,
           currentColumnPage: 0,
           currentColumnPageSize: effectiveColumnsPerPage,
@@ -631,7 +669,7 @@ export default function CrosstabTable({
         },
       });
     },
-    [effectiveColumnsPerPage, setDataMask],
+    [dynamicGroupByValueSet, effectiveColumnsPerPage, ownState, setDataMask],
   );
   const toggleRowPath = useCallback(
     (row: DataRecord) => {
