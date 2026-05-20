@@ -102,6 +102,21 @@ const config: ControlPanelConfig = {
       controlSetRows: [
         [
           {
+            name: 'dynamicGroupBy',
+            config: {
+              type: 'TextAreaControl',
+              label: t('Dynamic group by'),
+              default: '',
+              language: 'json',
+              renderTrigger: true,
+              description: t(
+                'JSON config for one chart-local dynamic group-by slot.',
+              ),
+            },
+          },
+        ],
+        [
+          {
             name: 'showRowTotals',
             config: {
               type: 'CheckboxControl',

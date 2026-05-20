@@ -85,6 +85,7 @@ describe('crosstab controlPanel', () => {
     expect(controlNames).toEqual(
       expect.arrayContaining([
         'crosstabFieldConfig',
+        'dynamicGroupBy',
         'showRowTotals',
         'showColumnTotals',
         'showRowSubtotals',
@@ -97,6 +98,19 @@ describe('crosstab controlPanel', () => {
         'numberFormat',
         'conditionalFormatting',
       ]),
+    );
+  });
+
+  it('exposes dynamic group-by as a chart-local JSON text area', () => {
+    expect(getControlConfig('dynamicGroupBy')).toEqual(
+      expect.objectContaining({
+        type: 'TextAreaControl',
+        label: 'Dynamic group by',
+        default: '',
+        language: 'json',
+        renderTrigger: true,
+        description: 'JSON config for one chart-local dynamic group-by slot.',
+      }),
     );
   });
 
