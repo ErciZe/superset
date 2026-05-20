@@ -13,6 +13,9 @@
   "dependencies": {
     "@superset-ui/plugin-chart-ag-grid-table": "file:../plugin-chart-ag-grid-table"
   },
+  "devDependencies": {
+    "@testing-library/jest-dom": "*"
+  },
   "peerDependencies": {
     "antd": "^5.24.6",
     "@superset-ui/chart-controls": "*",

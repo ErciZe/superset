@@ -17,7 +17,9 @@
  * under the License.
  */
 import {
+  ERR_CONDITIONAL_FORMATTING,
   formatCrosstabValue,
+  parseConditionalFormatting,
   resolveConditionalStyle,
 } from '../../src/crosstab/formatting';
 
@@ -84,5 +86,36 @@ describe('crosstab formatting', () => {
         { operator: '>', value: 1, color: 'green' },
       ]),
     ).toEqual({});
+  });
+
+  it('parses declarative JSON conditional formatting rules', () => {
+    expect(
+      parseConditionalFormatting(
+        '[{"metric":"amount","operator":">","value":0,"color":"#137333","backgroundColor":"#e6f4ea","arrow":"up"}]',
+      ),
+    ).toEqual([
+      {
+        metric: 'amount',
+        operator: '>',
+        value: 0,
+        color: '#137333',
+        backgroundColor: '#e6f4ea',
+        arrow: 'up',
+      },
+    ]);
+  });
+
+  it('rejects invalid conditional formatting rules without evaluation', () => {
+    expect(() => parseConditionalFormatting('not json')).toThrow(
+      ERR_CONDITIONAL_FORMATTING,
+    );
+    expect(() =>
+      parseConditionalFormatting([{ operator: '>', value: Number.NaN }]),
+    ).toThrow(ERR_CONDITIONAL_FORMATTING);
+    expect(() =>
+      parseConditionalFormatting([
+        { operator: '>', value: 1, arrow: 'sideways' } as never,
+      ]),
+    ).toThrow(ERR_CONDITIONAL_FORMATTING);
   });
 });

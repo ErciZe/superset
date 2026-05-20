@@ -1,0 +1,4 @@
+interface:
+  display_name: "Superset Production Ops"
+  short_description: "Superset production operations runbook"
+  default_prompt: "Use $superset-production-ops to inspect or operate the Superset production deployment."

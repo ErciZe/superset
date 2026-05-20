@@ -193,7 +193,7 @@ describe('matrixTransform', () => {
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-ag-grid-table-scheme/test/matrix/matrixTransform.test.ts --runInBand
 ```
 
@@ -459,7 +459,7 @@ export function matrixTransform(
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-ag-grid-table-scheme/test/matrix/matrixTransform.test.ts --runInBand
 ```
 
@@ -552,7 +552,7 @@ describe('ag grid table scheme matrix buildQuery', () => {
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-ag-grid-table-scheme/test/matrix/buildQuery.test.ts --runInBand
 ```
 
@@ -633,7 +633,7 @@ import buildQuery from '@superset-ui/plugin-chart-ag-grid-table/src/buildQuery';
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-ag-grid-table-scheme/test/matrix/buildQuery.test.ts --runInBand
 ```
 
@@ -861,7 +861,7 @@ import controlPanel from './controlPanel';
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npx tsc --build plugins/plugin-chart-ag-grid-table-scheme/tsconfig.json
 ```
 
@@ -1022,7 +1022,7 @@ Pass the prop:
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-ag-grid-table-scheme/test/matrix/matrixTransform.test.ts --runInBand
 npx tsc --build plugins/plugin-chart-ag-grid-table-scheme/tsconfig.json
 ```
@@ -1099,7 +1099,7 @@ With:
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npx tsc --build plugins/plugin-chart-ag-grid-table-scheme/tsconfig.json
 ```
 
@@ -1169,7 +1169,7 @@ it('keeps generated matrix columns in column signatures and reconciliation', () 
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-ag-grid-table-scheme/test/columnViewSchemes/state.test.ts --runInBand
 ```
 
@@ -1217,7 +1217,7 @@ git commit -m "test: cover matrix columns in view schemes"
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-ag-grid-table-scheme/test/matrix/matrixTransform.test.ts plugins/plugin-chart-ag-grid-table-scheme/test/matrix/buildQuery.test.ts plugins/plugin-chart-ag-grid-table-scheme/test/columnViewSchemes/state.test.ts --runInBand
 ```
 
@@ -1228,7 +1228,7 @@ Expected: PASS.
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npx tsc --build plugins/plugin-chart-ag-grid-table-scheme/tsconfig.json
 ```
 
@@ -1239,7 +1239,7 @@ Expected: PASS.
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm run eslint -- plugins/plugin-chart-ag-grid-table-scheme/src plugins/plugin-chart-ag-grid-table-scheme/test
 ```
 
@@ -1335,8 +1335,8 @@ Any blocked runtime prerequisite with exact error text
 Run:
 
 ```bash
-git -C /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source status --short --branch
-git -C /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source log --oneline fork/feat/ag-grid-column-view-scheme..HEAD
+git -C /Volumes/extend/ecode-workspace/superset-source status --short --branch
+git -C /Volumes/extend/ecode-workspace/superset-source log --oneline fork/feat/ag-grid-column-view-scheme..HEAD
 ```
 
 Expected: clean worktree and only matrix-mode implementation commits ahead.
@@ -1346,7 +1346,7 @@ Expected: clean worktree and only matrix-mode implementation commits ahead.
 Run:
 
 ```bash
-git -C /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source push fork feat/ag-grid-column-view-scheme
+git -C /Volumes/extend/ecode-workspace/superset-source push fork feat/ag-grid-column-view-scheme
 ```
 
 Expected: push succeeds.

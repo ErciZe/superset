@@ -1,4 +1,8 @@
 import buildQuery from '../../src/plugin/buildQuery';
+import {
+  ERR_SERVER_COLUMN_PAGINATION_COLUMNS,
+  ERR_SERVER_COLUMN_PAGINATION_SHAPE,
+} from '../../src/plugin/serverColumnPagination';
 
 describe('crosstab buildQuery', () => {
   it('includes row dimensions, column dimensions, and metrics in one aggregate query', () => {
@@ -66,8 +70,64 @@ describe('crosstab buildQuery', () => {
     expect(queryContext.queries[0].metrics).toEqual(['amount']);
   });
 
+  it('uses crosstabFieldConfig before legacy query controls', () => {
+    const queryContext = buildQuery({
+      datasource: '11__table',
+      viz_type: 'crosstab-table',
+      groupbyRows: ['legacy_row'],
+      groupbyColumns: ['legacy_column'],
+      metrics: ['legacy_metric'],
+      crosstabFieldConfig: {
+        rows: [{ field: 'metric_name_with_unit' }],
+        columns: [{ field: 'biz_date' }, { field: 'shop_name' }],
+        metrics: [{ metric: '指标值' }],
+      },
+    } as never);
+
+    expect(queryContext.queries[0].columns).toEqual([
+      'metric_name_with_unit',
+      'biz_date',
+      'shop_name',
+    ]);
+    expect(queryContext.queries[0].metrics).toEqual(['指标值']);
+  });
+
+  it('emits SQL summary queries for configured non-additive metric semantics', () => {
+    const queryContext = buildQuery({
+      datasource: '11__table',
+      viz_type: 'crosstab-table',
+      crosstabFieldConfig: {
+        rows: [{ field: 'category' }, { field: 'metric_name_with_unit' }],
+        columns: [{ field: 'biz_date' }, { field: 'shop_name' }],
+        metrics: [{ metric: '指标值', semantic: 'ratio' }],
+      },
+      showRowTotals: true,
+      showRowSubtotals: true,
+      showColumnTotals: true,
+      showColumnSubtotals: true,
+      row_limit: 10000,
+    } as never);
+
+    expect(queryContext.queries.map(query => query.columns)).toEqual([
+      ['category', 'metric_name_with_unit', 'biz_date', 'shop_name'],
+      ['category', 'metric_name_with_unit'],
+      ['category', 'biz_date', 'shop_name'],
+      ['category'],
+      ['biz_date', 'shop_name'],
+      ['category', 'metric_name_with_unit', 'biz_date'],
+      ['biz_date'],
+      ['category', 'biz_date'],
+      [],
+    ]);
+    queryContext.queries.forEach(query => {
+      expect(query.metrics).toEqual(['指标值']);
+      expect(query.is_timeseries).toBe(false);
+      expect(query.post_processing).toEqual([]);
+    });
+  });
+
   it('rejects server pagination', () => {
-    try {
+    expect(() =>
       buildQuery({
         datasource: '11__table',
         viz_type: 'crosstab-table',
@@ -75,12 +135,306 @@ describe('crosstab buildQuery', () => {
         groupbyColumns: ['pay_type'],
         metrics: ['amount'],
         serverPagination: true,
-      } as never);
-      throw new Error('Expected buildQuery to throw');
-    } catch (error) {
-      expect((error as Error).message).toBe(
-        'Crosstab table does not support server pagination in v1.',
+      } as never),
+    ).toThrow('Crosstab table does not support server pagination in v1.');
+  });
+
+  it('builds column domain and rowcount queries before server column page tuples are loaded', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name', 'country'],
+        metrics: ['指标值'],
+        serverColumnPagination: true,
+        columnPageSize: 98,
+        row_limit: 10000,
+      } as never,
+      {
+        ownState: {
+          currentColumnPage: 2,
+          currentColumnPageSize: 5,
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries).toHaveLength(2);
+    expect(queryContext.queries[0]).toEqual(
+      expect.objectContaining({
+        columns: ['biz_date', 'shop_name', 'country'],
+        metrics: [],
+        row_limit: 5,
+        row_offset: 10,
+      }),
+    );
+    expect(queryContext.queries[0].orderby).toEqual([
+      ['biz_date', true],
+      ['shop_name', true],
+      ['country', true],
+    ]);
+    expect(queryContext.queries[1]).toEqual(
+      expect.objectContaining({
+        columns: ['biz_date', 'shop_name', 'country'],
+        is_rowcount: true,
+        row_limit: 0,
+        row_offset: 0,
+      }),
+    );
+  });
+
+  it('builds current page data and row total queries after server column page tuples are loaded', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name', 'country'],
+        metrics: ['指标值'],
+        serverColumnPagination: true,
+        columnPageSize: 98,
+        row_limit: 10000,
+        adhoc_filters: [
+          {
+            clause: 'WHERE',
+            subject: 'org_id',
+            operator: '==',
+            comparator: 1,
+            expressionType: 'SIMPLE',
+          },
+        ],
+      } as never,
+      {
+        ownState: {
+          currentColumnPage: 0,
+          currentColumnPageSize: 5,
+          serverColumnPageTuplesPage: 0,
+          serverColumnPageTuplesPageSize: 5,
+          serverColumnPageTuples: [
+            ['2026-05-01', "Shop A's", 'US'],
+            ['2026-05-01', 'Shop B', null],
+          ],
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries).toHaveLength(4);
+    queryContext.queries.forEach(query => {
+      expect(query.filters).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ col: 'org_id', op: '==', val: 1 }),
+        ]),
       );
-    }
+    });
+    expect(queryContext.queries[2]).toEqual(
+      expect.objectContaining({
+        columns: ['metric_name_with_unit', 'biz_date', 'shop_name', 'country'],
+        metrics: ['指标值'],
+      }),
+    );
+    expect(queryContext.queries[2].extras?.where).toBe(
+      "(biz_date = '2026-05-01' AND shop_name = 'Shop A''s' AND country = 'US') OR " +
+        "(biz_date = '2026-05-01' AND shop_name = 'Shop B' AND country IS NULL)",
+    );
+    expect(queryContext.queries[3]).toEqual(
+      expect.objectContaining({
+        columns: ['metric_name_with_unit'],
+        metrics: ['指标值'],
+        row_limit: 10000,
+        row_offset: 0,
+      }),
+    );
+    expect(queryContext.queries[3].extras?.where ?? '').not.toContain('Shop A');
+  });
+
+  it('uses planned SQL summaries instead of the legacy row total query for non-additive server column pages', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [
+            { field: 'biz_date' },
+            { field: 'shop_name' },
+            { field: 'country' },
+          ],
+          metrics: [{ metric: '指标值', semantic: 'ratio' }],
+        },
+        serverColumnPagination: true,
+        showRowTotals: true,
+        showColumnTotals: true,
+        showRowSubtotals: false,
+        showColumnSubtotals: false,
+        columnPageSize: 98,
+        row_limit: 10000,
+      } as never,
+      {
+        ownState: {
+          currentColumnPage: 0,
+          currentColumnPageSize: 5,
+          serverColumnPageTuplesPage: 0,
+          serverColumnPageTuplesPageSize: 5,
+          serverColumnPageColumnSignature:
+            'biz_date\u001fshop_name\u001fcountry',
+          serverColumnTotalCount: 2,
+          serverColumnPageTuples: [
+            ['2026-05-01', 'Shop A', 'US'],
+            ['2026-05-01', 'Shop B', null],
+          ],
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries).toHaveLength(6);
+    expect(queryContext.queries.map(query => query.columns)).toEqual([
+      ['biz_date', 'shop_name', 'country'],
+      ['biz_date', 'shop_name', 'country'],
+      ['metric_name_with_unit', 'biz_date', 'shop_name', 'country'],
+      ['metric_name_with_unit'],
+      ['biz_date', 'shop_name', 'country'],
+      [],
+    ]);
+    expect(queryContext.queries[4].extras?.where ?? '').toContain('Shop A');
+    expect(queryContext.queries[5].extras?.where ?? '').toBe('');
+  });
+
+  it('reloads column domain when cached server column tuples no longer match selected columns', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name'],
+        metrics: ['指标值'],
+        serverColumnPagination: true,
+        columnPageSize: 98,
+        row_limit: 10000,
+      } as never,
+      {
+        ownState: {
+          currentColumnPage: 0,
+          currentColumnPageSize: 5,
+          serverColumnPageTuplesPage: 0,
+          serverColumnPageTuplesPageSize: 98,
+          serverColumnPageTuples: [['2026-05-01', 'Shop A', 'US']],
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries).toHaveLength(2);
+    expect(queryContext.queries[0]).toEqual(
+      expect.objectContaining({
+        columns: ['biz_date', 'shop_name'],
+        metrics: [],
+        row_limit: 5,
+      }),
+    );
+    expect(queryContext.queries[1]).toEqual(
+      expect.objectContaining({
+        columns: ['biz_date', 'shop_name'],
+        is_rowcount: true,
+      }),
+    );
+  });
+
+  it('reloads column domain when cached server column tuples are for a stale page or page size', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name', 'country'],
+        metrics: ['指标值'],
+        serverColumnPagination: true,
+        columnPageSize: 98,
+        row_limit: 10000,
+      } as never,
+      {
+        ownState: {
+          currentColumnPage: 3,
+          currentColumnPageSize: 8,
+          serverColumnPageTuplesPage: 2,
+          serverColumnPageTuplesPageSize: 5,
+          serverColumnPageTuples: [['2026-05-01', 'Shop A', 'US']],
+          serverColumnPageColumnSignature:
+            'biz_date\u001fshop_name\u001fcountry',
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries).toHaveLength(2);
+    expect(queryContext.queries[0]).toEqual(
+      expect.objectContaining({
+        columns: ['biz_date', 'shop_name', 'country'],
+        metrics: [],
+        row_limit: 8,
+        row_offset: 24,
+      }),
+    );
+    expect(queryContext.queries[1]).toEqual(
+      expect.objectContaining({
+        columns: ['biz_date', 'shop_name', 'country'],
+        is_rowcount: true,
+      }),
+    );
+  });
+
+  it('encodes Superset temporal column values from epoch milliseconds', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name', 'country'],
+        metrics: ['指标值'],
+        serverColumnPagination: true,
+        columnPageSize: 98,
+        row_limit: 10000,
+      } as never,
+      {
+        ownState: {
+          currentColumnPage: 0,
+          serverColumnPageTuplesPage: 0,
+          serverColumnPageTuples: [[1735689600000, 'LX-GG-AE', '阿联酋']],
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries[2].extras?.where).toBe(
+      "(biz_date = '2025-01-01 00:00:00' AND shop_name = 'LX-GG-AE' AND country = '阿联酋')",
+    );
+  });
+
+  it('rejects server column pagination for unsupported dimensions', () => {
+    expect(() =>
+      buildQuery({
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: [
+          {
+            expressionType: 'SQL',
+            sqlExpression: 'lower(country)',
+            label: 'country',
+          },
+        ],
+        metrics: ['指标值'],
+        serverColumnPagination: true,
+      } as never),
+    ).toThrow(ERR_SERVER_COLUMN_PAGINATION_COLUMNS);
+  });
+
+  it('rejects server column pagination outside the production v1 shape', () => {
+    expect(() =>
+      buildQuery({
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        groupbyRows: ['metric_name_with_unit', 'unit'],
+        groupbyColumns: ['biz_date', 'shop_name', 'country'],
+        metrics: ['指标值'],
+        serverColumnPagination: true,
+      } as never),
+    ).toThrow(ERR_SERVER_COLUMN_PAGINATION_SHAPE);
   });
 });

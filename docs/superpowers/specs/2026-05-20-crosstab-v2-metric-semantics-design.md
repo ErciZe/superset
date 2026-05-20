@@ -1,7 +1,7 @@
 # Crosstab v2 Metric Semantics Design
 
 Date: 2026-05-20
-Workspace: `/Users/zewe/code-workspace/superset-source`
+Workspace: `/Volumes/extend/ecode-workspace/superset-source`
 Target plugin: `superset-frontend/plugins/plugin-chart-crosstab-table`
 
 ## Summary

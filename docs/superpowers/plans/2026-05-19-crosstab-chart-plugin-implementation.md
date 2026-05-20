@@ -136,7 +136,7 @@ describe('CrosstabTableChartPlugin', () => {
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-crosstab-table/test/index.test.ts --runInBand
 ```
 
@@ -448,7 +448,7 @@ const agGridTablePlugin = isFeatureEnabled(FeatureFlag.AgGridTableEnabled)
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm install --package-lock-only
 ```
 
@@ -459,7 +459,7 @@ Expected: `package-lock.json` gains entries for `@superset-ui/plugin-chart-cross
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-crosstab-table/test/index.test.ts --runInBand
 ```
 
@@ -554,7 +554,7 @@ describe('crosstab domain', () => {
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-crosstab-table/test/crosstab/keys.test.ts plugins/plugin-chart-crosstab-table/test/crosstab/domain.test.ts --runInBand
 ```
 
@@ -667,7 +667,7 @@ export function buildColumnTuples(
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-crosstab-table/test/crosstab/keys.test.ts plugins/plugin-chart-crosstab-table/test/crosstab/domain.test.ts --runInBand
 ```
 
@@ -794,7 +794,7 @@ describe('buildCrosstab', () => {
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-crosstab-table/test/crosstab/engine.test.ts --runInBand
 ```
 
@@ -950,7 +950,7 @@ export function buildCrosstab(
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-crosstab-table/test/crosstab/engine.test.ts --runInBand
 ```
 
@@ -1031,7 +1031,7 @@ describe('crosstab buildQuery', () => {
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-crosstab-table/test/plugin/buildQuery.test.ts --runInBand
 ```
 
@@ -1132,7 +1132,7 @@ Modify `superset-frontend/plugins/plugin-chart-crosstab-table/src/plugin/control
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-crosstab-table/test/plugin/buildQuery.test.ts --runInBand
 ```
 
@@ -1203,7 +1203,7 @@ describe('crosstab transformProps', () => {
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-crosstab-table/test/plugin/transformProps.test.ts --runInBand
 ```
 
@@ -1279,7 +1279,7 @@ export default function transformProps(
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-crosstab-table/test/plugin/transformProps.test.ts --runInBand
 ```
 
@@ -1371,7 +1371,7 @@ describe('CrosstabTable', () => {
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-crosstab-table/test/crosstab/formatting.test.ts plugins/plugin-chart-crosstab-table/test/CrosstabTable.test.tsx --runInBand
 ```
 
@@ -1476,7 +1476,7 @@ export default function CrosstabTable(props: CrosstabChartProps) {
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-crosstab-table/test/crosstab/formatting.test.ts plugins/plugin-chart-crosstab-table/test/CrosstabTable.test.tsx --runInBand
 ```
 
@@ -1499,7 +1499,7 @@ git commit -m "feat: render crosstab table"
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- plugins/plugin-chart-crosstab-table/test --runInBand
 ```
 
@@ -1510,7 +1510,7 @@ Expected: PASS.
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm run type
 ```
 
@@ -1521,7 +1521,7 @@ Expected: PASS, or fail only on pre-existing unrelated baseline errors. If it fa
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm run build
 ```
 
@@ -1532,7 +1532,7 @@ Expected: PASS. Vite or webpack chunk-size warnings are acceptable if the build 
 Run:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 npm test -- src/explore/components/controls/VizTypeControl/VizTypeControl.test.tsx --runInBand
 ```
 
@@ -1572,7 +1572,7 @@ Expected: HTTP response is returned. If this repo uses a different local port in
 Use the in-app browser or Playwright against the active Superset URL:
 
 ```bash
-cd /Users/zewe/Documents/Codex/2026-05-13/ubuntu-docker-apache-superset/superset-source/superset-frontend
+cd /Volumes/extend/ecode-workspace/superset-source/superset-frontend
 PLAYWRIGHT_BASE_URL=http://127.0.0.1:9000 npx playwright test --grep "crosstab"
 ```
 

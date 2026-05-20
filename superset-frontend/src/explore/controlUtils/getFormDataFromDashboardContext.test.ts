@@ -213,3 +213,44 @@ test('merges dashboard context form data with explore form data', () => {
   );
   expect(fullFormData).toEqual(getExpectedResultFormData());
 });
+
+test('merges dashboard filters for crosstab server column pagination explore context', () => {
+  const exploreFormData = getExploreFormData({
+    viz_type: 'crosstab-table',
+    serverColumnPagination: true,
+    color_scheme: 'supersetColors',
+    time_range: '2025-01-01 : 2025-01-20',
+  });
+  const fullFormData = getFormDataWithDashboardContext(
+    exploreFormData,
+    getDashboardFormData(),
+  );
+
+  expect(fullFormData).toEqual(
+    getExpectedResultFormData({
+      viz_type: 'crosstab-table',
+      serverColumnPagination: true,
+      own_color_scheme: 'supersetColors',
+    }),
+  );
+  expect(fullFormData.adhoc_filters).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        comparator: 'Last month',
+        isExtra: true,
+      }),
+    ]),
+  );
+  expect(fullFormData.extra_form_data).toEqual(
+    expect.objectContaining({
+      time_range: 'Last month',
+      filters: expect.arrayContaining([
+        expect.objectContaining({
+          col: 'name',
+          op: 'IN',
+          val: ['Aaron'],
+        }),
+      ]),
+    }),
+  );
+});

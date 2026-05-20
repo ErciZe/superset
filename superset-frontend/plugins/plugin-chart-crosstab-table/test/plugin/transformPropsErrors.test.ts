@@ -17,38 +17,49 @@
  * under the License.
  */
 import { ChartProps, supersetTheme } from '@superset-ui/core';
+import { ERR_CONDITIONAL_FORMATTING } from '../../src/crosstab/formatting';
 import transformProps from '../../src/plugin/transformProps';
 import type { CrosstabFormData } from '../../src/types';
 
-function expectErrorMessage(callback: () => unknown, message: string) {
-  try {
-    callback();
-    throw new Error('Expected callback to throw');
-  } catch (error) {
-    expect((error as Error).message).toBe(message);
-  }
-}
-
 describe('crosstab transformProps errors', () => {
   it('fails fast for malformed metric entries', () => {
-    expectErrorMessage(
-      () =>
-        transformProps(
-          new ChartProps<CrosstabFormData>({
-            width: 800,
-            height: 400,
-            formData: {
-              datasource: '1__table',
-              viz_type: 'crosstab_table',
-              groupbyRows: ['contract_type'],
-              groupbyColumns: ['pay_type'],
-              metrics: [null],
-            } as never,
-            queriesData: [{ data: [] }],
-            theme: supersetTheme,
-          }),
-        ),
-      'Unsupported crosstab metric field.',
-    );
+    expect(() =>
+      transformProps(
+        new ChartProps<CrosstabFormData>({
+          width: 800,
+          height: 400,
+          formData: {
+            datasource: '1__table',
+            viz_type: 'crosstab_table',
+            groupbyRows: ['contract_type'],
+            groupbyColumns: ['pay_type'],
+            metrics: [null],
+          } as never,
+          queriesData: [{ data: [] }],
+          theme: supersetTheme,
+        }),
+      ),
+    ).toThrow('Unsupported crosstab metric field.');
+  });
+
+  it('fails fast for invalid conditional formatting JSON', () => {
+    expect(() =>
+      transformProps(
+        new ChartProps<CrosstabFormData>({
+          width: 800,
+          height: 400,
+          formData: {
+            datasource: '1__table',
+            viz_type: 'crosstab_table',
+            groupbyRows: ['contract_type'],
+            groupbyColumns: ['pay_type'],
+            metrics: ['amount'],
+            conditionalFormatting: '[{"operator":"contains","value":1}]',
+          },
+          queriesData: [{ data: [] }],
+          theme: supersetTheme,
+        }),
+      ),
+    ).toThrow(ERR_CONDITIONAL_FORMATTING);
   });
 });

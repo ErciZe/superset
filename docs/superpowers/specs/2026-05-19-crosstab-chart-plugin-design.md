@@ -77,6 +77,16 @@ The chart plugin should be registered as a separate visualization type so the us
 
 The v1 control set should stay narrow. Avoid adding controls that only exist to mimic FineBI UI rather than support the crosstab data model.
 
+## Current Production V1 Target
+
+The first production validation chart is intentionally fixed instead of parameter-driven:
+
+- Rows: `metric_name_with_unit` rendered as the fixed left-side `指标项` column.
+- Columns: `biz_date > shop_name > country` rendered as a fixed three-level header.
+- Metrics: `指标值`.
+- Column totals, row totals, and row subtotals are enabled; column subtotals remain disabled.
+- The rendered grid must never show more than 100 visible AG Grid columns at once. Fixed row columns and total columns count toward this limit, so generated value columns are paged in the renderer while the engine keeps the complete generated column domain.
+
 ## Data Flow
 
 1. Superset dashboard or Explore supplies chart form data and filters.
@@ -183,6 +193,7 @@ Avoid fallback rendering that hides configuration errors.
 
 V2 is explicitly out of v1 implementation, but the v1 design should leave room for these extensions:
 
+- FineBI-style dynamic grouping through user parameters plus dataset SQL or calculated fields, for example `维度-1`, `维度-2`, and `维度-3`, with the crosstab plugin consuming those resolved fields instead of evaluating business switch logic in the browser.
 - FineBI-style metric-name custom grouping, such as grouping metrics under `Service Score` or `Quality Score`.
 - External domain queries for dates, shops, countries, or other dimensions so the table can display values absent from the current result set.
 - Column hierarchy expand/collapse.

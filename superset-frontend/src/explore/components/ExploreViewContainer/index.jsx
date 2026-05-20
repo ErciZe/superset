@@ -72,6 +72,25 @@ import DataSourcePanel from '../DatasourcePanel';
 import ConnectedExploreChartHeader from '../ExploreChartHeader';
 import ExploreContainer from '../ExploreContainer';
 
+const CROSSTAB_OWN_STATE_KEYS = [
+  'currentColumnPage',
+  'currentColumnPageSize',
+  'expandedRowPaths',
+  'serverColumnPageColumnSignature',
+  'serverColumnPageTuples',
+  'serverColumnPageTuplesPage',
+  'serverColumnPageTuplesPageSize',
+  'serverColumnTotalCount',
+];
+
+function getFilterOwnState(formData, ownState) {
+  if (formData.viz_type !== 'crosstab-table' || ownState === undefined) {
+    return ownState;
+  }
+
+  return omit(ownState, CROSSTAB_OWN_STATE_KEYS);
+}
+
 const propTypes = {
   ...ExploreChartPanel.propTypes,
   actions: PropTypes.object.isRequired,
@@ -797,10 +816,14 @@ function mapStateToProps(state) {
   const form_data = isDeckGLChart ? getDeckGLFormData() : controlsBasedFormData;
 
   const slice_id = form_data.slice_id ?? slice?.slice_id ?? 0; // 0 - unsaved chart
+  const filterOwnState = getFilterOwnState(
+    form_data,
+    dataMask[slice_id]?.ownState,
+  );
   form_data.extra_form_data = mergeExtraFormData(
     { ...form_data.extra_form_data },
     {
-      ...dataMask[slice_id]?.ownState,
+      ...filterOwnState,
     },
   );
   const chart = charts[slice_id];

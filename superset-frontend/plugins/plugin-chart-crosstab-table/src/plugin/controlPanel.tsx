@@ -22,6 +22,7 @@ import {
   sharedControls,
 } from '@superset-ui/chart-controls';
 import { t, validateInteger } from '@superset-ui/core';
+import CrosstabFieldConfigControl from './CrosstabFieldConfigControl';
 
 const config: ControlPanelConfig = {
   controlPanelSections: [
@@ -29,6 +30,31 @@ const config: ControlPanelConfig = {
       label: t('Query'),
       expanded: true,
       controlSetRows: [
+        [
+          {
+            name: 'crosstabFieldConfig',
+            config: {
+              type: CrosstabFieldConfigControl,
+              label: t('Fields'),
+              description: t('Configure crosstab rows, columns, and metrics.'),
+              renderTrigger: true,
+              default: {
+                rows: [],
+                columns: [],
+                metrics: [],
+              },
+              mapStateToProps: ({ datasource, form_data }) => ({
+                columns: datasource?.columns ?? [],
+                datasource,
+                formData: form_data,
+                savedMetrics:
+                  datasource && 'metrics' in datasource
+                    ? datasource.metrics
+                    : [],
+              }),
+            },
+          },
+        ],
         [
           {
             name: 'groupbyRows',
@@ -46,7 +72,9 @@ const config: ControlPanelConfig = {
             config: {
               ...sharedControls.groupby,
               label: t('Columns'),
-              description: t('Dimensions to use as generated crosstab columns.'),
+              description: t(
+                'Dimensions to use as generated crosstab columns.',
+              ),
               multi: true,
             },
           },
@@ -127,6 +155,44 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'serverColumnPagination',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Server column pagination'),
+              renderTrigger: true,
+              default: false,
+              description: t(
+                'Query one page of generated crosstab columns at a time.',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'generatedColumnWidth',
+            config: {
+              type: 'TextControl',
+              label: t('Generated column width'),
+              renderTrigger: true,
+              default: 120,
+              validators: [validateInteger],
+            },
+          },
+        ],
+        [
+          {
+            name: 'columnPageSize',
+            config: {
+              type: 'TextControl',
+              label: t('Column page size'),
+              renderTrigger: true,
+              default: 98,
+              validators: [validateInteger],
+            },
+          },
+        ],
+        [
+          {
             name: 'defaultRowExpandedDepth',
             config: {
               type: 'TextControl',
@@ -134,6 +200,30 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               default: 1,
               validators: [validateInteger],
+            },
+          },
+        ],
+        [
+          {
+            name: 'numberFormat',
+            config: {
+              ...sharedControls.y_axis_format,
+              label: t('Number format'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'conditionalFormatting',
+            config: {
+              type: 'TextAreaControl',
+              label: t('Conditional formatting'),
+              default: '',
+              language: 'json',
+              renderTrigger: true,
+              description: t(
+                'JSON rules for crosstab numeric cell formatting.',
+              ),
             },
           },
         ],
