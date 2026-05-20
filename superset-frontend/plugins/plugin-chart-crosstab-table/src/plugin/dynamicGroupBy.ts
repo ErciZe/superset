@@ -197,29 +197,37 @@ export function resolveDynamicGroupByDimensions({
   }
 
   const selectedColumnLabel = getColumnLabel(selectedColumn);
+  const selectedOption = config.options.find(
+    option => getColumnLabel(option.column) === selectedColumnLabel,
+  );
 
-  if (
-    !config.options.some(
-      option => getColumnLabel(option.column) === selectedColumnLabel,
-    )
-  ) {
+  if (!selectedOption) {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SELECTED_COLUMN);
   }
 
+  const effectiveSelectedColumn = selectedOption.column;
   const effectiveRowDimensions =
     config.placement === 'rows'
-      ? replaceDimension(rowDimensions, config.slotIndex, selectedColumn)
+      ? replaceDimension(
+          rowDimensions,
+          config.slotIndex,
+          effectiveSelectedColumn,
+        )
       : rowDimensions;
   const effectiveColumnDimensions =
     config.placement === 'columns'
-      ? replaceDimension(columnDimensions, config.slotIndex, selectedColumn)
+      ? replaceDimension(
+          columnDimensions,
+          config.slotIndex,
+          effectiveSelectedColumn,
+        )
       : columnDimensions;
 
   return {
     rowDimensions: effectiveRowDimensions,
     columnDimensions: effectiveColumnDimensions,
     config,
-    selectedColumn,
+    selectedColumn: effectiveSelectedColumn,
     signature: createGroupBySignature(
       effectiveRowDimensions,
       effectiveColumnDimensions,

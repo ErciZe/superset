@@ -122,6 +122,28 @@ describe('crosstab dynamic group by resolver', () => {
     );
   });
 
+  it('canonicalizes runtime label matches to the whitelisted object column', () => {
+    const result = resolveDynamicGroupByDimensions({
+      formData: createFormData({
+        ...baseConfig,
+        defaultColumn: 'shop_name',
+        options: [
+          { label: '店铺', column: 'shop_name' },
+          { label: 'Order month', column: adhocSqlColumn },
+        ],
+      }),
+      ownState: { selectedDynamicGroupByColumn: 'Order month' },
+      rowDimensions: ['metric_name_with_unit'],
+      columnDimensions: ['biz_date', 'shop_name'],
+    });
+
+    expect(result.columnDimensions).toEqual(['biz_date', adhocSqlColumn]);
+    expect(result.selectedColumn).toBe(adhocSqlColumn);
+    expect(result.signature).toBe(
+      'rows=metric_name_with_unit|columns=biz_date\u001fOrder month',
+    );
+  });
+
   it('parses JSON string config and rejects invalid JSON', () => {
     expect(
       getDynamicGroupByConfig(createFormData(JSON.stringify(baseConfig))),
