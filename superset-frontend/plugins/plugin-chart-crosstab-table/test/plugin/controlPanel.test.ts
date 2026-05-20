@@ -112,7 +112,7 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('renders field options without row-column transfer actions', () => {
+  it('renders field options without alias or row-column transfer actions', () => {
     render(
       createElement(CrosstabFieldConfigControl, {
         name: 'crosstabFieldConfig',
@@ -124,7 +124,8 @@ describe('crosstab controlPanel', () => {
       }),
     );
 
-    expect(screen.getAllByLabelText('Field alias')).toHaveLength(3);
+    expect(screen.queryByLabelText('Field alias')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Metric alias')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Subtotal')).toBeInTheDocument();
     expect(screen.queryByText('To columns')).not.toBeInTheDocument();
     expect(screen.queryByText('To rows')).not.toBeInTheDocument();

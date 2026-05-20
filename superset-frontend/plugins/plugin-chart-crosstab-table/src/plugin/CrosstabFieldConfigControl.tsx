@@ -67,8 +67,10 @@ const FieldOption = styled.div`
   align-items: center;
 `;
 
-const AliasInput = styled.input`
-  width: 100%;
+const FieldLabel = styled.span`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 const SemanticSelect = styled.select`
@@ -312,40 +314,6 @@ export default function CrosstabFieldConfigControl({
     },
     [config, emit],
   );
-  const updateDimensionLabel = useCallback(
-    (
-      area: 'rows' | 'columns',
-      field: QueryFormColumn,
-      label: string | undefined,
-    ) => {
-      const key = getColumnLabel(field);
-
-      emit({
-        ...config,
-        [area]: config[area].map(item =>
-          getColumnLabel(item.field) === key
-            ? { ...item, label: label || undefined }
-            : item,
-        ),
-      });
-    },
-    [config, emit],
-  );
-  const updateMetricLabel = useCallback(
-    (metric: QueryFormMetric, label: string | undefined) => {
-      const key = getMetricLabel(metric);
-
-      emit({
-        ...config,
-        metrics: config.metrics.map(item =>
-          getMetricLabel(item.metric) === key
-            ? { ...item, label: label || undefined }
-            : item,
-        ),
-      });
-    },
-    [config, emit],
-  );
   const updateMetricSemantic = useCallback(
     (metric: QueryFormMetric, semantic: MetricSemantic) => {
       const key = getMetricLabel(metric);
@@ -410,25 +378,17 @@ export default function CrosstabFieldConfigControl({
     [config, emit],
   );
   const renderDimensionOptions = useCallback(
-    (area: 'rows' | 'columns') => (
-      <FieldOptions>
-        {config[area].map((item, index) => {
-          const fieldLabel = getColumnLabel(item.field);
-          const canShowSubtotal =
-            area === 'rows' && index < config.rows.length - 1;
-          const subtotalId = `${name}-${area}-${index}-subtotal`;
+    (area: 'rows' | 'columns') => {
+      const options = config[area].flatMap((item, index) => {
+        const fieldLabel = getColumnLabel(item.field);
+        const canShowSubtotal =
+          area === 'rows' && index < config.rows.length - 1;
+        const subtotalId = `${name}-${area}-${index}-subtotal`;
 
-          return (
-            <FieldOption key={fieldLabel}>
-              <AliasInput
-                aria-label={t('Field alias')}
-                value={item.label ?? ''}
-                placeholder={fieldLabel}
-                onChange={event =>
-                  updateDimensionLabel(area, item.field, event.target.value)
-                }
-              />
-              {canShowSubtotal && (
+        return canShowSubtotal
+          ? [
+              <FieldOption key={fieldLabel}>
+                <FieldLabel title={fieldLabel}>{fieldLabel}</FieldLabel>
                 <label htmlFor={subtotalId}>
                   <input
                     checked={item.showSubtotal !== false}
@@ -438,13 +398,14 @@ export default function CrosstabFieldConfigControl({
                   />{' '}
                   {t('Subtotal')}
                 </label>
-              )}
-            </FieldOption>
-          );
-        })}
-      </FieldOptions>
-    ),
-    [config, name, toggleSubtotal, updateDimensionLabel],
+              </FieldOption>,
+            ]
+          : [];
+      });
+
+      return options.length > 0 ? <FieldOptions>{options}</FieldOptions> : null;
+    },
+    [config, name, toggleSubtotal],
   );
   const renderMetricOptions = useCallback(
     () => (
@@ -454,14 +415,7 @@ export default function CrosstabFieldConfigControl({
 
           return (
             <FieldOption key={metricLabel}>
-              <AliasInput
-                aria-label={t('Metric alias')}
-                value={item.label ?? ''}
-                placeholder={metricLabel}
-                onChange={event =>
-                  updateMetricLabel(item.metric, event.target.value)
-                }
-              />
+              <FieldLabel title={metricLabel}>{metricLabel}</FieldLabel>
               <SemanticSelect
                 aria-label={t('Metric semantic')}
                 value={item.semantic ?? 'unknown'}
@@ -482,7 +436,7 @@ export default function CrosstabFieldConfigControl({
         })}
       </FieldOptions>
     ),
-    [config.metrics, updateMetricLabel, updateMetricSemantic],
+    [config.metrics, updateMetricSemantic],
   );
   const overrideFieldOptions = useMemo(
     () =>
