@@ -56,8 +56,25 @@ function isPlacement(value: unknown): value is DynamicGroupByPlacement {
   return value === 'rows' || value === 'columns';
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function isValidAdhocSqlColumn(value: unknown): value is QueryFormColumn {
+  return (
+    isObject(value) &&
+    value.expressionType === 'SQL' &&
+    isNonEmptyString(value.sqlExpression) &&
+    (value.label === undefined || typeof value.label === 'string')
+  );
+}
+
+function isValidQueryFormColumn(value: unknown): value is QueryFormColumn {
+  return isNonEmptyString(value) || isValidAdhocSqlColumn(value);
+}
+
 function assertColumn(value: unknown): asserts value is QueryFormColumn {
-  if (!getColumnLabel(value as QueryFormColumn)) {
+  if (!isValidQueryFormColumn(value)) {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   }
 }
@@ -174,6 +191,11 @@ export function resolveDynamicGroupByDimensions({
 
   const selectedColumn =
     ownState?.selectedDynamicGroupByColumn ?? config.defaultColumn;
+
+  if (!isValidQueryFormColumn(selectedColumn)) {
+    throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SELECTED_COLUMN);
+  }
+
   const selectedColumnLabel = getColumnLabel(selectedColumn);
 
   if (

@@ -16,11 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import type { QueryFormColumn } from '@superset-ui/core';
 import type {
   CrosstabDynamicGroupByConfig,
   CrosstabFormData,
 } from '../../src/types';
 import {
+  ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_SELECTED_COLUMN,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT,
@@ -37,6 +39,12 @@ const baseConfig: CrosstabDynamicGroupByConfig = {
     { label: '店铺', column: 'shop_name' },
     { label: '国家', column: 'country' },
   ],
+};
+
+const adhocSqlColumn: QueryFormColumn = {
+  expressionType: 'SQL',
+  label: 'Order month',
+  sqlExpression: "DATE_TRUNC('month', order_date)",
 };
 
 function createFormData(
@@ -96,6 +104,24 @@ describe('crosstab dynamic group by resolver', () => {
     );
   });
 
+  it('matches valid object columns and uses their labels in the signature', () => {
+    const result = resolveDynamicGroupByDimensions({
+      formData: createFormData({
+        ...baseConfig,
+        defaultColumn: adhocSqlColumn,
+        options: [{ label: 'Order month', column: adhocSqlColumn }],
+      }),
+      rowDimensions: ['metric_name_with_unit'],
+      columnDimensions: ['biz_date', 'shop_name'],
+    });
+
+    expect(result.columnDimensions).toEqual(['biz_date', adhocSqlColumn]);
+    expect(result.selectedColumn).toBe(adhocSqlColumn);
+    expect(result.signature).toBe(
+      'rows=metric_name_with_unit|columns=biz_date\u001fOrder month',
+    );
+  });
+
   it('parses JSON string config and rejects invalid JSON', () => {
     expect(
       getDynamicGroupByConfig(createFormData(JSON.stringify(baseConfig))),
@@ -104,6 +130,19 @@ describe('crosstab dynamic group by resolver', () => {
     expect(() => getDynamicGroupByConfig(createFormData('{'))).toThrow(
       'Invalid crosstab dynamic group by JSON config.',
     );
+  });
+
+  it('rejects malformed object columns in dynamic group by config', () => {
+    expect(() =>
+      getDynamicGroupByConfig(
+        createFormData(
+          JSON.stringify({
+            ...baseConfig,
+            defaultColumn: { label: 'Malformed column' },
+          }),
+        ),
+      ),
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   });
 
   it('throws when enabled config has empty options', () => {
