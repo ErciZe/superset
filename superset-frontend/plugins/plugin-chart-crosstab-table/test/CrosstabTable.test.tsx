@@ -65,6 +65,17 @@ jest.mock('@superset-ui/core/components', () => {
     style?: CSSProperties;
     treeData?: boolean;
   };
+  type MockSelectOption = {
+    label?: string | number;
+    value: string | number;
+  };
+  type MockSelectProps = {
+    allowSelectAll?: boolean;
+    ariaLabel?: string;
+    onChange?: (value: string) => void;
+    options: MockSelectOption[];
+    value?: string | number | null;
+  };
   const flattenColumnDefs = (
     columnDefs: TestColumnDef[],
   ): { groups: string[]; leaves: ColDef[] } =>
@@ -208,7 +219,8 @@ jest.mock('@superset-ui/core/components', () => {
       buttonSize?: string;
       htmlType?: ComponentProps<'button'>['type'];
     }) => {
-      const { buttonSize, ...buttonProps } = props;
+      const buttonProps = { ...props };
+      delete buttonProps.buttonSize;
 
       return (
         <button
@@ -220,6 +232,26 @@ jest.mock('@superset-ui/core/components', () => {
         </button>
       );
     },
+    Select: ({
+      allowSelectAll,
+      ariaLabel,
+      onChange,
+      options,
+      value,
+    }: MockSelectProps) => (
+      <select
+        aria-label={ariaLabel}
+        data-allow-select-all={allowSelectAll ? 'true' : 'false'}
+        onChange={event => onChange?.(event.target.value)}
+        value={value ?? ''}
+      >
+        {options.map(option => (
+          <option key={String(option.value)} value={String(option.value)}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    ),
     ThemedAgGridReact: MockAgGridReact,
   };
 });
@@ -268,6 +300,16 @@ describe('CrosstabTable', () => {
       throw new Error('Unable to find export button');
     }
     return button;
+  }
+
+  function getDynamicGroupBySelect() {
+    const select = container.querySelector(
+      'select[aria-label="Select crosstab group by dimension"]',
+    );
+    if (!(select instanceof HTMLSelectElement)) {
+      throw new Error('Unable to find dynamic group-by select');
+    }
+    return select;
   }
 
   function getGridContainer() {
@@ -976,6 +1018,158 @@ describe('CrosstabTable', () => {
           .clientWidth;
       }
     }
+  });
+
+  it('renders dynamic group-by select with configured label, options, and value', () => {
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+      },
+      rowData: [],
+      columns: [
+        {
+          key: 'metric_name',
+          label: '指标项',
+          dataType: GenericDataType.String,
+        },
+      ],
+      columnTree: [],
+      generatedColumnIds: [],
+      dynamicGroupByConfig: {
+        enabled: true,
+        placement: 'columns',
+        slotIndex: 1,
+        defaultColumn: 'country',
+        options: [
+          { label: '店铺', column: 'shop_name' },
+          { label: '国家', column: 'country' },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    expect(getByText('分组维度')).toBeInTheDocument();
+
+    const select = getDynamicGroupBySelect();
+    expect(select).toHaveValue('country');
+    expect(
+      Array.from(select.options).map(option => ({
+        label: option.textContent,
+        value: option.value,
+      })),
+    ).toEqual([
+      { label: '店铺', value: 'shop_name' },
+      { label: '国家', value: 'country' },
+    ]);
+  });
+
+  it('resets crosstab column cache when dynamic group-by selection changes', () => {
+    const setDataMask = jest.fn();
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+        generatedColumnWidth: 120,
+      },
+      hooks: {
+        setDataMask,
+      },
+      ownState: {
+        currentColumnPage: 3,
+        expandedRowPaths: ['["A"]'],
+        serverColumnPageTuples: [['D1']],
+      },
+      selectedDynamicGroupByColumn: 'shop_name',
+      rowData: [],
+      columns: [
+        {
+          key: 'metric_name',
+          label: '指标项',
+          dataType: GenericDataType.String,
+        },
+      ],
+      columnTree: [],
+      generatedColumnIds: [],
+      dynamicGroupByConfig: {
+        enabled: true,
+        placement: 'columns',
+        slotIndex: 1,
+        defaultColumn: 'shop_name',
+        options: [
+          { label: '店铺', column: 'shop_name' },
+          { label: '国家', column: 'country' },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    const select = getDynamicGroupBySelect();
+    act(() => {
+      select.value = 'country';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(setDataMask).toHaveBeenCalledWith({
+      ownState: {
+        selectedDynamicGroupByColumn: 'country',
+        currentColumnPage: 0,
+        currentColumnPageSize: 5,
+        serverColumnPageTuples: [],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: 5,
+      },
+    });
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'expandedRowPaths',
+    );
+  });
+
+  it('does not render dynamic group-by select without an enabled config', () => {
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+      },
+      rowData: [],
+      columns: [],
+      columnTree: [],
+      generatedColumnIds: [],
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    expect(
+      container.querySelector(
+        'select[aria-label="Select crosstab group by dimension"]',
+      ),
+    ).not.toBeInTheDocument();
+
+    ReactDOM.unmountComponentAtNode(container);
+    renderChart({
+      ...props,
+      dynamicGroupByConfig: {
+        enabled: false,
+        placement: 'columns',
+        slotIndex: 1,
+        defaultColumn: 'shop_name',
+        options: [{ label: '店铺', column: 'shop_name' }],
+      },
+    } as unknown as CrosstabChartProps);
+
+    expect(
+      container.querySelector(
+        'select[aria-label="Select crosstab group by dimension"]',
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it('exports rendered CSV through the grid API', () => {
