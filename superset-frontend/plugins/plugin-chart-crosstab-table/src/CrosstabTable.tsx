@@ -89,6 +89,17 @@ type DynamicGroupBySelector = {
   valueSet: Set<string>;
 };
 
+type DynamicMetricSelector = {
+  label: string;
+  options: {
+    label: string;
+    value: string;
+  }[];
+  slotId: string;
+  value: string;
+  valueSet: Set<string>;
+};
+
 function getMetricFromColumnId(columnId: string) {
   return columnId.split('__metric__')[1] ?? columnId.split('__subtotal__')[1];
 }
@@ -435,10 +446,30 @@ function getPreservedDynamicGroupByOwnState(
   return preservedOwnState;
 }
 
+function getPreservedDynamicMetricOwnState(
+  ownState: CrosstabChartProps['ownState'],
+) {
+  const preservedOwnState = {
+    ...((ownState ?? {}) as CrosstabOwnState),
+  };
+
+  delete preservedOwnState.currentColumnPage;
+  delete preservedOwnState.effectiveMetricSignature;
+  delete preservedOwnState.selectedDynamicMetric;
+  delete preservedOwnState.serverColumnPageColumnSignature;
+  delete preservedOwnState.serverColumnPageTuples;
+  delete preservedOwnState.serverColumnPageTuplesPage;
+  delete preservedOwnState.serverColumnPageTuplesPageSize;
+  delete preservedOwnState.serverColumnTotalCount;
+
+  return preservedOwnState;
+}
+
 export default function CrosstabTable({
   columnTree,
   columns,
   dynamicGroupByConfig,
+  dynamicMetricConfig,
   formData,
   height,
   hooks: { setDataMask } = {},
@@ -447,6 +478,7 @@ export default function CrosstabTable({
   rowData,
   expandedRowPaths,
   selectedDynamicGroupBy,
+  selectedDynamicMetric,
   serverColumnCurrentPage,
   serverColumnTotalCount,
   width,
@@ -564,6 +596,36 @@ export default function CrosstabTable({
         };
       });
   }, [dynamicGroupByConfig, selectedDynamicGroupBy]);
+  const dynamicMetricSelectors = useMemo<DynamicMetricSelector[]>(() => {
+    if (!dynamicMetricConfig?.enabled) {
+      return [];
+    }
+
+    return [...dynamicMetricConfig.slots]
+      .sort(
+        (leftSlot, rightSlot) => leftSlot.slotIndex - rightSlot.slotIndex,
+      )
+      .map(slot => {
+        const options = slot.options.map(option => ({
+          label: option.label,
+          value: option.id,
+        }));
+        const valueSet = new Set(options.map(option => option.value));
+        const selectedOptionId = selectedDynamicMetric?.[slot.id];
+        const value =
+          selectedOptionId && valueSet.has(selectedOptionId)
+            ? selectedOptionId
+            : slot.defaultOptionId;
+
+        return {
+          label: slot.label ?? '指标',
+          options,
+          slotId: slot.id,
+          value,
+          valueSet,
+        };
+      });
+  }, [dynamicMetricConfig, selectedDynamicMetric]);
   const totalGeneratedColumnCount = serverColumnPagination
     ? (serverColumnTotalCount ?? treeLeafColumnIds.length)
     : treeLeafColumnIds.length;
@@ -686,6 +748,36 @@ export default function CrosstabTable({
       effectiveColumnsPerPage,
       ownState,
       selectedDynamicGroupBy,
+      setDataMask,
+    ],
+  );
+  const updateDynamicMetricOption = useCallback(
+    (slotId: string, nextOptionId: string) => {
+      const selector = dynamicMetricSelectors.find(
+        candidate => candidate.slotId === slotId,
+      );
+
+      if (!selector?.valueSet.has(nextOptionId)) {
+        return;
+      }
+
+      setDataMask?.({
+        ownState: {
+          ...getPreservedDynamicMetricOwnState(ownState),
+          selectedDynamicMetric: {
+            ...(selectedDynamicMetric ?? {}),
+            [slotId]: nextOptionId,
+          },
+          currentColumnPage: 0,
+          currentColumnPageSize: effectiveColumnsPerPage,
+        },
+      });
+    },
+    [
+      dynamicMetricSelectors,
+      effectiveColumnsPerPage,
+      ownState,
+      selectedDynamicMetric,
       setDataMask,
     ],
   );
@@ -853,6 +945,28 @@ export default function CrosstabTable({
       />
     </div>
   ));
+  const dynamicMetricSelects = dynamicMetricSelectors.map(selector => (
+    <div
+      key={selector.slotId}
+      data-test={`crosstab-dynamic-metric-control--${selector.slotId}`}
+      style={{
+        alignItems: 'center',
+        display: 'inline-flex',
+        gap: theme.sizeUnit,
+      }}
+    >
+      <span>{selector.label}</span>
+      <Select
+        ariaLabel={`Select crosstab metric ${selector.label}`}
+        allowSelectAll={false}
+        onChange={(nextOptionId: string) =>
+          updateDynamicMetricOption(selector.slotId, nextOptionId)
+        }
+        options={selector.options}
+        value={selector.value}
+      />
+    </div>
+  ));
 
   return (
     <div
@@ -886,6 +1000,7 @@ export default function CrosstabTable({
           CSV
         </Button>
         {dynamicGroupBySelects}
+        {dynamicMetricSelects}
       </div>
       <div
         data-test="crosstab-grid-container"

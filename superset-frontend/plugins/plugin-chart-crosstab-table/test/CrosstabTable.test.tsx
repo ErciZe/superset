@@ -319,6 +319,16 @@ describe('CrosstabTable', () => {
     return select;
   }
 
+  function getDynamicMetricSelect(slotId: string) {
+    const select = container.querySelector(
+      `[data-test="crosstab-dynamic-metric-control--${slotId}"] select`,
+    );
+    if (!(select instanceof HTMLSelectElement)) {
+      throw new Error('Unable to find dynamic metric select');
+    }
+    return select;
+  }
+
   function getInvalidSelectChangeButton() {
     const button = container.querySelector(
       'button[aria-label="Trigger invalid mock select change"]',
@@ -1414,6 +1424,406 @@ describe('CrosstabTable', () => {
     expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
       'serverColumnTotalCount',
     );
+  });
+
+  it('renders one dynamic metric selector per configured slot', () => {
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+      },
+      rowData: [],
+      columns: [],
+      columnTree: [],
+      generatedColumnIds: [],
+      dynamicMetricConfig: {
+        enabled: true,
+        slots: [
+          {
+            id: 'primary',
+            label: '主指标',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'sales',
+            options: [
+              { id: 'sales', label: '销售额', metrics: [{ metric: 'sales' }] },
+              { id: 'profit', label: '利润', metrics: [{ metric: 'profit' }] },
+            ],
+          },
+          {
+            id: 'secondary',
+            label: '辅指标',
+            slotIndex: 2,
+            spliceCount: 1,
+            defaultOptionId: 'margin',
+            options: [
+              { id: 'margin', label: '毛利', metrics: [{ metric: 'margin' }] },
+              {
+                id: 'profit_rate',
+                label: '利润率',
+                metrics: [{ metric: 'profit_rate' }],
+              },
+            ],
+          },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    expect(getByText('主指标')).toBeInTheDocument();
+    expect(getByText('辅指标')).toBeInTheDocument();
+    expect(getDynamicMetricSelect('primary')).toHaveValue('sales');
+    expect(getDynamicMetricSelect('secondary')).toHaveValue('margin');
+  });
+
+  it('uses selected dynamic metric values with per-slot default fallback', () => {
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+      },
+      rowData: [],
+      columns: [],
+      columnTree: [],
+      generatedColumnIds: [],
+      selectedDynamicMetric: {
+        primary: 'profit',
+        secondary: 'stale_option',
+      },
+      dynamicMetricConfig: {
+        enabled: true,
+        slots: [
+          {
+            id: 'primary',
+            label: '主指标',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'sales',
+            options: [
+              { id: 'sales', label: '销售额', metrics: [{ metric: 'sales' }] },
+              { id: 'profit', label: '利润', metrics: [{ metric: 'profit' }] },
+            ],
+          },
+          {
+            id: 'secondary',
+            label: '辅指标',
+            slotIndex: 2,
+            spliceCount: 1,
+            defaultOptionId: 'margin',
+            options: [
+              { id: 'margin', label: '毛利', metrics: [{ metric: 'margin' }] },
+              {
+                id: 'profit_rate',
+                label: '利润率',
+                metrics: [{ metric: 'profit_rate' }],
+              },
+            ],
+          },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    expect(getDynamicMetricSelect('primary')).toHaveValue('profit');
+    expect(getDynamicMetricSelect('secondary')).toHaveValue('margin');
+  });
+
+  it('updates one dynamic metric slot while preserving other selected metric entries', () => {
+    const setDataMask = jest.fn();
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+        generatedColumnWidth: 120,
+      },
+      hooks: {
+        setDataMask,
+      },
+      ownState: {
+        unrelatedOwnStateField: 'preserved',
+        selectedDynamicGroupBy: { level2: 'shop' },
+      },
+      selectedDynamicMetric: {
+        primary: 'sales',
+        secondary: 'margin',
+      },
+      rowData: [],
+      columns: [
+        {
+          key: 'metric_name',
+          label: '指标项',
+          dataType: GenericDataType.String,
+        },
+      ],
+      columnTree: [],
+      generatedColumnIds: [],
+      dynamicMetricConfig: {
+        enabled: true,
+        slots: [
+          {
+            id: 'primary',
+            label: '主指标',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'sales',
+            options: [
+              { id: 'sales', label: '销售额', metrics: [{ metric: 'sales' }] },
+              { id: 'profit', label: '利润', metrics: [{ metric: 'profit' }] },
+            ],
+          },
+          {
+            id: 'secondary',
+            label: '辅指标',
+            slotIndex: 2,
+            spliceCount: 1,
+            defaultOptionId: 'margin',
+            options: [
+              { id: 'margin', label: '毛利', metrics: [{ metric: 'margin' }] },
+              {
+                id: 'profit_rate',
+                label: '利润率',
+                metrics: [{ metric: 'profit_rate' }],
+              },
+            ],
+          },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    const select = getDynamicMetricSelect('secondary');
+    act(() => {
+      select.value = 'profit_rate';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(setDataMask).toHaveBeenCalledWith({
+      ownState: {
+        unrelatedOwnStateField: 'preserved',
+        selectedDynamicGroupBy: { level2: 'shop' },
+        selectedDynamicMetric: {
+          primary: 'sales',
+          secondary: 'profit_rate',
+        },
+        currentColumnPage: 0,
+        currentColumnPageSize: 5,
+      },
+    });
+  });
+
+  it('preserves expanded row paths when a dynamic metric changes', () => {
+    const setDataMask = jest.fn();
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+        generatedColumnWidth: 120,
+      },
+      hooks: {
+        setDataMask,
+      },
+      ownState: {
+        expandedRowPaths: ['["A"]'],
+      },
+      selectedDynamicMetric: {
+        primary: 'sales',
+      },
+      rowData: [],
+      columns: [
+        {
+          key: 'metric_name',
+          label: '指标项',
+          dataType: GenericDataType.String,
+        },
+      ],
+      columnTree: [],
+      generatedColumnIds: [],
+      dynamicMetricConfig: {
+        enabled: true,
+        slots: [
+          {
+            id: 'primary',
+            label: '主指标',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'sales',
+            options: [
+              { id: 'sales', label: '销售额', metrics: [{ metric: 'sales' }] },
+              { id: 'profit', label: '利润', metrics: [{ metric: 'profit' }] },
+            ],
+          },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    const select = getDynamicMetricSelect('primary');
+    act(() => {
+      select.value = 'profit';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(setDataMask.mock.calls[0][0].ownState).toMatchObject({
+      expandedRowPaths: ['["A"]'],
+      selectedDynamicMetric: { primary: 'profit' },
+    });
+  });
+
+  it('removes stale server-column cache keys when a dynamic metric changes', () => {
+    const setDataMask = jest.fn();
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+        generatedColumnWidth: 120,
+      },
+      hooks: {
+        setDataMask,
+      },
+      ownState: {
+        currentColumnPage: 3,
+        currentColumnPageSize: 3,
+        effectiveMetricSignature: 'sales',
+        expandedRowPaths: ['["A"]'],
+        unrelatedOwnStateField: 'preserved',
+        selectedDynamicGroupBy: { level2: 'shop' },
+        selectedDynamicMetric: { primary: 'sales' },
+        serverColumnPageColumnSignature: 'shop_name',
+        serverColumnPageTuples: [['D1']],
+        serverColumnPageTuplesPage: 3,
+        serverColumnPageTuplesPageSize: 3,
+        serverColumnTotalCount: 100,
+      },
+      selectedDynamicMetric: {
+        primary: 'sales',
+      },
+      rowData: [],
+      columns: [
+        {
+          key: 'metric_name',
+          label: '指标项',
+          dataType: GenericDataType.String,
+        },
+      ],
+      columnTree: [],
+      generatedColumnIds: [],
+      dynamicMetricConfig: {
+        enabled: true,
+        slots: [
+          {
+            id: 'primary',
+            label: '主指标',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'sales',
+            options: [
+              { id: 'sales', label: '销售额', metrics: [{ metric: 'sales' }] },
+              { id: 'profit', label: '利润', metrics: [{ metric: 'profit' }] },
+            ],
+          },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    const select = getDynamicMetricSelect('primary');
+    act(() => {
+      select.value = 'profit';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(setDataMask).toHaveBeenCalledWith({
+      ownState: {
+        currentColumnPage: 0,
+        currentColumnPageSize: 5,
+        expandedRowPaths: ['["A"]'],
+        selectedDynamicGroupBy: { level2: 'shop' },
+        selectedDynamicMetric: { primary: 'profit' },
+        unrelatedOwnStateField: 'preserved',
+      },
+    });
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'effectiveMetricSignature',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnPageColumnSignature',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnPageTuples',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnPageTuplesPage',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnPageTuplesPageSize',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnTotalCount',
+    );
+  });
+
+  it('ignores invalid dynamic metric selected values and option changes', () => {
+    const setDataMask = jest.fn();
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+      },
+      hooks: {
+        setDataMask,
+      },
+      selectedDynamicMetric: {
+        primary: 'stale_metric',
+      },
+      rowData: [],
+      columns: [],
+      columnTree: [],
+      generatedColumnIds: [],
+      dynamicMetricConfig: {
+        enabled: true,
+        slots: [
+          {
+            id: 'primary',
+            label: '主指标',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'sales',
+            options: [
+              { id: 'sales', label: '销售额', metrics: [{ metric: 'sales' }] },
+              { id: 'profit', label: '利润', metrics: [{ metric: 'profit' }] },
+            ],
+          },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    expect(getDynamicMetricSelect('primary')).toHaveValue('sales');
+    expect(setDataMask).not.toHaveBeenCalled();
+
+    act(() => {
+      getInvalidSelectChangeButton().click();
+    });
+
+    expect(setDataMask).not.toHaveBeenCalled();
   });
 
   it('does not render dynamic group-by select without an enabled config', () => {
