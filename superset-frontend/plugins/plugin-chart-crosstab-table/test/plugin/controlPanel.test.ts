@@ -17,6 +17,7 @@
  * under the License.
  */
 import { createElement } from 'react';
+import { sharedControlComponents } from '@superset-ui/chart-controls';
 import {
   fireEvent,
   render,
@@ -102,6 +103,20 @@ function getControlConfig(name: string) {
   );
 
   return controls[0];
+}
+
+function catchWindowErrors(callback: () => void) {
+  const errors: Error[] = [];
+  const handler = (event: ErrorEvent) => {
+    errors.push(event.error);
+    event.preventDefault();
+  };
+
+  window.addEventListener('error', handler);
+  callback();
+  window.removeEventListener('error', handler);
+
+  return errors;
 }
 
 describe('crosstab controlPanel', () => {
@@ -229,6 +244,17 @@ describe('crosstab controlPanel', () => {
     expect(CrosstabCalculatedFieldsControl).toBeDefined();
   });
 
+  it('registers string control types in the shared Explore control registry', () => {
+    expect(
+      (sharedControlComponents as Record<string, unknown>)
+        .CrosstabParametersControl,
+    ).toBe(CrosstabParametersControl);
+    expect(
+      (sharedControlComponents as Record<string, unknown>)
+        .CrosstabCalculatedFieldsControl,
+    ).toBe(CrosstabCalculatedFieldsControl);
+  });
+
   it('renders the crosstab parameters control default number parameter', () => {
     render(
       createElement(CrosstabParametersControl, {
@@ -240,6 +266,33 @@ describe('crosstab controlPanel', () => {
 
     expect(screen.getByText('Number parameter')).toBeInTheDocument();
     expect(screen.getByDisplayValue('adjustmentRate')).toBeInTheDocument();
+  });
+
+  it('rejects invalid crosstab parameter numeric input', () => {
+    const onChange = jest.fn();
+
+    render(
+      createElement(CrosstabParametersControl, {
+        name: 'parameters',
+        onChange,
+        value: [],
+      }),
+    );
+
+    const errors = catchWindowErrors(() =>
+      fireEvent.change(screen.getByLabelText('Parameter default'), {
+        target: { value: '' },
+      }),
+    );
+
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Crosstab parameter numeric fields require finite numbers.',
+        }),
+      ]),
+    );
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('saves calculated fields from selected crosstab metrics', () => {
@@ -301,6 +354,51 @@ describe('crosstab controlPanel', () => {
         ]),
       }),
     );
+  });
+
+  it('rejects saving calculated fields without crosstab field config updates', () => {
+    const onChange = jest.fn();
+    const salesMetric = {
+      expressionType: 'SQL',
+      label: 'sales',
+      sqlExpression: 'SUM(sales_amount)',
+    };
+    const profitMetric = {
+      expressionType: 'SQL',
+      label: 'profit',
+      sqlExpression: 'SUM(gross_profit)',
+    };
+
+    render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        formData: {
+          crosstabFieldConfig: {
+            metrics: [
+              { metric: salesMetric, label: '销售额', semantic: 'additive' },
+              { metric: profitMetric, label: '毛利', semantic: 'additive' },
+            ],
+          },
+        },
+        name: 'calculatedFields',
+        onChange,
+        value: [],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('New calculated field'));
+
+    const errors = catchWindowErrors(() =>
+      fireEvent.click(screen.getByText('Save')),
+    );
+
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Calculated fields require crosstab field config updates.',
+        }),
+      ]),
+    );
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('resolves calculated field metrics after selected chart metrics load', () => {

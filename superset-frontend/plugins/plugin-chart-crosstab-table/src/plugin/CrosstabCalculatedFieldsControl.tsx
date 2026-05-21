@@ -251,6 +251,14 @@ export default function CrosstabCalculatedFieldsControl({
   );
 
   const saveField = useCallback(() => {
+    const setControlValue = actions?.setControlValue;
+
+    if (!setControlValue) {
+      throw new Error(
+        t('Calculated fields require crosstab field config updates.'),
+      );
+    }
+
     if (!selectedLeftMetric || !selectedRightMetric) {
       throw new Error(t('Calculated fields require two saved metrics.'));
     }
@@ -285,7 +293,7 @@ export default function CrosstabCalculatedFieldsControl({
     };
 
     onChange(nextValue);
-    actions?.setControlValue?.('crosstabFieldConfig', nextFieldConfig);
+    setControlValue('crosstabFieldConfig', nextFieldConfig);
     setIsOpen(false);
   }, [
     actions,

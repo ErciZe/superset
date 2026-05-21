@@ -89,9 +89,23 @@ export default function CrosstabParametersControl({
 
   const updateNumericField = useCallback(
     (field: NumericParameterField, nextValue: string) => {
+      if (nextValue.trim().length === 0) {
+        throw new Error(
+          t('Crosstab parameter numeric fields require finite numbers.'),
+        );
+      }
+
+      const numericValue = Number(nextValue);
+
+      if (!Number.isFinite(numericValue)) {
+        throw new Error(
+          t('Crosstab parameter numeric fields require finite numbers.'),
+        );
+      }
+
       updateParameter({
         ...parameter,
-        [field]: Number(nextValue),
+        [field]: numericValue,
       });
     },
     [parameter, updateParameter],
