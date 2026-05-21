@@ -52,6 +52,18 @@ const adhocSqlColumn: QueryFormColumn = {
   sqlExpression: "DATE_TRUNC('month', order_date)",
 };
 
+const sameLabelAdhocSqlColumn: QueryFormColumn = {
+  expressionType: 'SQL',
+  label: 'Shared Label',
+  sqlExpression: 'SUM(revenue)',
+};
+
+const sameLabelDifferentAdhocSqlColumn: QueryFormColumn = {
+  expressionType: 'SQL',
+  label: 'Shared Label',
+  sqlExpression: 'SUM(profit)',
+};
+
 const multiSlotConfig: CrosstabFormData['dynamicGroupBy'] = {
   enabled: true,
   slots: [
@@ -596,6 +608,64 @@ describe('crosstab dynamic group by resolver', () => {
     });
   });
 
+  it('applies selected row and column slots across placements', () => {
+    const result = resolveDynamicGroupByDimensions({
+      formData: createFormData({
+        enabled: true,
+        slots: [
+          {
+            id: 'row_level',
+            label: '行维度',
+            placement: 'rows',
+            slotIndex: 0,
+            spliceCount: 1,
+            defaultOptionId: 'metric',
+            options: [
+              {
+                id: 'metric',
+                label: '指标',
+                columns: ['metric_name_with_unit'],
+              },
+              {
+                id: 'metric_family',
+                label: '指标族',
+                columns: ['metric_family'],
+              },
+            ],
+          },
+          {
+            id: 'column_level',
+            label: '列维度',
+            placement: 'columns',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'shop',
+            options: [
+              { id: 'shop', label: '店铺', columns: ['shop_name'] },
+              { id: 'country', label: '国家', columns: ['country'] },
+            ],
+          },
+        ],
+      }),
+      ownState: {
+        selectedDynamicGroupBy: {
+          row_level: 'metric_family',
+          column_level: 'country',
+        },
+      },
+      rowDimensions: ['metric_name_with_unit'],
+      columnDimensions: ['biz_date', 'shop_name'],
+    });
+
+    expect(result.rowDimensions).toEqual(['metric_family']);
+    expect(result.columnDimensions).toEqual(['biz_date', 'country']);
+    expect(result.selectedDynamicGroupBy).toEqual({
+      row_level: 'metric_family',
+      column_level: 'country',
+    });
+    expect(result.selectedColumn).toBe('metric_family');
+  });
+
   it('maps legacy selectedDynamicGroupByColumn to the legacy slot option', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData(baseConfig),
@@ -660,7 +730,7 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT_OVERLAP);
   });
 
-  it('throws when effective dimensions contain duplicate physical columns', () => {
+  it('throws when the same physical string column is duplicated after resolution', () => {
     expect(() =>
       resolveDynamicGroupByDimensions({
         formData: createFormData({
@@ -680,6 +750,38 @@ describe('crosstab dynamic group by resolver', () => {
         columnDimensions: ['biz_date', 'shop_name'],
       }),
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_DUPLICATE_COLUMN);
+  });
+
+  it('allows same-label adhoc SQL columns with different expressions', () => {
+    const result = resolveDynamicGroupByDimensions({
+      formData: createFormData({
+        enabled: true,
+        slots: [
+          {
+            id: 'append_sql',
+            placement: 'columns',
+            slotIndex: 2,
+            spliceCount: 1,
+            defaultOptionId: 'profit',
+            options: [
+              {
+                id: 'profit',
+                label: 'Profit',
+                columns: [sameLabelDifferentAdhocSqlColumn],
+              },
+            ],
+          },
+        ],
+      }),
+      rowDimensions: ['metric_name_with_unit'],
+      columnDimensions: ['biz_date', sameLabelAdhocSqlColumn],
+    });
+
+    expect(result.columnDimensions).toEqual([
+      'biz_date',
+      sameLabelAdhocSqlColumn,
+      sameLabelDifferentAdhocSqlColumn,
+    ]);
   });
 
   it('throws when total effective dimensions exceed MAX_DIMENSIONS', () => {

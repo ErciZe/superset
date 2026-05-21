@@ -433,17 +433,29 @@ function validateSlotRanges(
   });
 }
 
+function getColumnIdentity(dimension: QueryFormColumn): string {
+  if (isNonEmptyString(dimension)) {
+    return `column:${dimension}`;
+  }
+
+  if (isValidAdhocSqlColumn(dimension)) {
+    return `sql:${dimension.sqlExpression}`;
+  }
+
+  throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+}
+
 function assertNoDuplicateColumns(dimensions: QueryFormColumn[]): void {
   const seenColumns = new Set<string>();
 
   dimensions.forEach(dimension => {
-    const columnLabel = getColumnLabel(dimension);
+    const columnIdentity = getColumnIdentity(dimension);
 
-    if (seenColumns.has(columnLabel)) {
+    if (seenColumns.has(columnIdentity)) {
       throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_DUPLICATE_COLUMN);
     }
 
-    seenColumns.add(columnLabel);
+    seenColumns.add(columnIdentity);
   });
 }
 
