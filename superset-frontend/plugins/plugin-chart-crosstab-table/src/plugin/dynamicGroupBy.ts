@@ -341,6 +341,13 @@ export function normalizeDynamicGroupByConfig(
   }
 
   if (!('slots' in value)) {
+    if (value.enabled === false) {
+      return {
+        enabled: false,
+        slots: [],
+      };
+    }
+
     return normalizeLegacyConfig(value);
   }
 

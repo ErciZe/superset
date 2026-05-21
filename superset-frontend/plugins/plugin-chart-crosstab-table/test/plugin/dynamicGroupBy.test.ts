@@ -155,6 +155,25 @@ describe('crosstab dynamic group by resolver', () => {
     });
   });
 
+  it('returns persisted dimensions when disabled saved config omits slots', () => {
+    const result = resolveDynamicGroupByDimensions({
+      formData: createFormData({
+        enabled: false,
+      } as CrosstabFormData['dynamicGroupBy']),
+      rowDimensions: ['metric_name_with_unit'],
+      columnDimensions: ['biz_date', 'shop_name'],
+    });
+
+    expect(result).toEqual({
+      rowDimensions: ['metric_name_with_unit'],
+      columnDimensions: ['biz_date', 'shop_name'],
+      config: undefined,
+      selectedColumn: undefined,
+      selectedDynamicGroupBy: undefined,
+      signature: 'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+    });
+  });
+
   it('uses the default column when ownState has no selected column', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData(baseConfig),

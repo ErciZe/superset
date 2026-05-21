@@ -105,6 +105,21 @@ describe('dynamic metric resolver', () => {
     expect(result.signature).toBe(getMetricConfigSignature(persistedMetrics));
   });
 
+  it('returns persisted metrics when disabled saved config omits slots', () => {
+    const result = resolve(
+      createFormData({
+        dynamicMetric: {
+          enabled: false,
+        } as CrosstabDynamicMetricConfig,
+      }),
+    );
+
+    expect(result.metricConfigs).toBe(persistedMetrics);
+    expect(result.config).toBeUndefined();
+    expect(result.selectedDynamicMetric).toBeUndefined();
+    expect(result.signature).toBe(getMetricConfigSignature(persistedMetrics));
+  });
+
   it('uses default option selection', () => {
     const result = resolve(
       createFormData({

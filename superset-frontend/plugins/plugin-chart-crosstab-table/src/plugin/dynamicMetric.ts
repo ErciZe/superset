@@ -265,6 +265,13 @@ function normalizeDynamicMetricConfig(
     throw new Error(ERR_CROSSTAB_DYNAMIC_METRIC_CONFIG);
   }
 
+  if (!('slots' in value) && value.enabled === false) {
+    return {
+      enabled: false,
+      slots: [],
+    };
+  }
+
   if (typeof value.enabled !== 'boolean' || !Array.isArray(value.slots)) {
     throw new Error(ERR_CROSSTAB_DYNAMIC_METRIC_CONFIG);
   }

@@ -94,6 +94,24 @@ type CrosstabDynamicMetricControlProps = {
   value?: CrosstabDynamicMetricConfig;
 };
 
+type PartialDynamicMetricOption = Partial<
+  Omit<CrosstabDynamicMetricOption, 'metrics'>
+> & {
+  metrics?: MetricFieldConfig[];
+};
+
+type PartialDynamicMetricSlot = Partial<
+  Omit<CrosstabDynamicMetricSlot, 'options'>
+> & {
+  options?: PartialDynamicMetricOption[];
+};
+
+type PartialDynamicMetricConfig = Partial<
+  Omit<CrosstabDynamicMetricConfig, 'slots'>
+> & {
+  slots?: PartialDynamicMetricSlot[];
+};
+
 const metricSemantics: MetricSemantic[] = [
   'unknown',
   'additive',
@@ -183,8 +201,42 @@ function createSlot(index: number): CrosstabDynamicMetricSlot {
   };
 }
 
-function getConfig(value?: CrosstabDynamicMetricConfig) {
-  return value ?? defaultConfig;
+function normalizeOptionForRender(
+  option: PartialDynamicMetricOption,
+  index: number,
+): CrosstabDynamicMetricOption {
+  const fallback = createOption(index);
+
+  return {
+    ...fallback,
+    ...option,
+    metrics: ensureIsArray(option.metrics),
+  };
+}
+
+function normalizeSlotForRender(
+  slot: PartialDynamicMetricSlot,
+  index: number,
+): CrosstabDynamicMetricSlot {
+  const fallback = createSlot(index);
+  const options = ensureIsArray(slot.options).map(normalizeOptionForRender);
+
+  return {
+    ...fallback,
+    ...slot,
+    options,
+    defaultOptionId:
+      slot.defaultOptionId ?? options[0]?.id ?? fallback.defaultOptionId,
+  };
+}
+
+function getConfig(value?: PartialDynamicMetricConfig) {
+  return {
+    ...defaultConfig,
+    ...value,
+    enabled: value?.enabled === true,
+    slots: ensureIsArray(value?.slots).map(normalizeSlotForRender),
+  };
 }
 
 function numberValue(value: string) {

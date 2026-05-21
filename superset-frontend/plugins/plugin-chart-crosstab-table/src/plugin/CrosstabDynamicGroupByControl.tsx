@@ -90,6 +90,24 @@ type CrosstabDynamicGroupByControlProps = {
   value?: CrosstabDynamicGroupByConfig;
 };
 
+type PartialDynamicGroupByOption = Partial<
+  Omit<CrosstabDynamicGroupByOption, 'columns'>
+> & {
+  columns?: QueryFormColumn[];
+};
+
+type PartialDynamicGroupBySlot = Partial<
+  Omit<CrosstabDynamicGroupBySlot, 'options'>
+> & {
+  options?: PartialDynamicGroupByOption[];
+};
+
+type PartialDynamicGroupByConfig = Partial<
+  Omit<CrosstabDynamicGroupByConfig, 'slots'>
+> & {
+  slots?: PartialDynamicGroupBySlot[];
+};
+
 const defaultConfig: CrosstabDynamicGroupByConfig = {
   enabled: false,
   slots: [],
@@ -141,8 +159,42 @@ function createSlot(index: number): CrosstabDynamicGroupBySlot {
   };
 }
 
-function getConfig(value?: CrosstabDynamicGroupByConfig) {
-  return value ?? defaultConfig;
+function normalizeOptionForRender(
+  option: PartialDynamicGroupByOption,
+  index: number,
+): CrosstabDynamicGroupByOption {
+  const fallback = createOption(index);
+
+  return {
+    ...fallback,
+    ...option,
+    columns: ensureIsArray<QueryFormColumn>(option.columns),
+  };
+}
+
+function normalizeSlotForRender(
+  slot: PartialDynamicGroupBySlot,
+  index: number,
+): CrosstabDynamicGroupBySlot {
+  const fallback = createSlot(index);
+  const options = ensureIsArray(slot.options).map(normalizeOptionForRender);
+
+  return {
+    ...fallback,
+    ...slot,
+    options,
+    defaultOptionId:
+      slot.defaultOptionId ?? options[0]?.id ?? fallback.defaultOptionId,
+  };
+}
+
+function getConfig(value?: PartialDynamicGroupByConfig) {
+  return {
+    ...defaultConfig,
+    ...value,
+    enabled: value?.enabled === true,
+    slots: ensureIsArray(value?.slots).map(normalizeSlotForRender),
+  };
 }
 
 function numberValue(value: string) {

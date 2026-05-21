@@ -193,6 +193,32 @@ describe('crosstab controlPanel', () => {
     expect(CrosstabDynamicMetricControl).toBeDefined();
   });
 
+  it('renders dynamic metric control when saved value omits slots', () => {
+    render(
+      createElement(CrosstabDynamicMetricControl, {
+        name: 'dynamicMetric',
+        onChange: jest.fn(),
+        value: { enabled: false } as never,
+      }),
+    );
+
+    expect(screen.getByText('Enable dynamic metrics')).toBeInTheDocument();
+    expect(screen.getByText('Add slot')).toBeInTheDocument();
+  });
+
+  it('renders dynamic group-by control when saved value omits slots', () => {
+    render(
+      createElement(CrosstabDynamicGroupByControl, {
+        name: 'dynamicGroupBy',
+        onChange: jest.fn(),
+        value: { enabled: false } as never,
+      }),
+    );
+
+    expect(screen.getByText('Enable dynamic group by')).toBeInTheDocument();
+    expect(screen.getByText('Add slot')).toBeInTheDocument();
+  });
+
   it('keeps legacy field controls hidden for saved chart compatibility', () => {
     expect(getControlConfig('groupbyRows')).toEqual(
       expect.objectContaining({ hidden: true }),
