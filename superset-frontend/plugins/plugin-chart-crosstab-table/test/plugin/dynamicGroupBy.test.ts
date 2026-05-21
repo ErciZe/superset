@@ -485,7 +485,7 @@ describe('crosstab dynamic group by resolver', () => {
           ],
         }),
       ),
-    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT);
   });
 
   it('rejects duplicate option ids within one canonical slot', () => {
@@ -515,7 +515,7 @@ describe('crosstab dynamic group by resolver', () => {
           ],
         }),
       ),
-    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS);
   });
 
   it('rejects enabled canonical config with no slots', () => {

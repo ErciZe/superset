@@ -26,6 +26,19 @@ import type {
   CrosstabOwnState,
   DynamicGroupByPlacement,
 } from '../types';
+import {
+  applyDynamicSlotSplices,
+  ERR_DYNAMIC_SLOT_DUPLICATE_OPTION,
+  ERR_DYNAMIC_SLOT_DUPLICATE_SLOT,
+  ERR_DYNAMIC_SLOT_INVALID_OPTION,
+  ERR_DYNAMIC_SLOT_OVERLAP,
+  ERR_DYNAMIC_SLOT_SPLICE_COUNT,
+  getDynamicSlotSpliceCount,
+  resolveDynamicSlotOptions,
+  validateDynamicSlots,
+  type DynamicSlot,
+  type SelectedDynamicSlotOption,
+} from './dynamicSlots';
 
 export const ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS =
   'ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS';
@@ -70,6 +83,16 @@ type ApplySlotsToDimensionsResult = {
   dimensions: QueryFormColumn[];
   selectedDynamicGroupBy: Record<string, string>;
 };
+
+type DynamicGroupBySlotPayload = readonly QueryFormColumn[];
+
+type DynamicGroupByDynamicSlot = DynamicSlot<DynamicGroupBySlotPayload> &
+  Pick<CrosstabDynamicGroupBySlot, 'placement'>;
+
+type SelectedDynamicGroupBySlotOption = SelectedDynamicSlotOption<
+  DynamicGroupBySlotPayload,
+  DynamicGroupByDynamicSlot
+>;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -199,10 +222,7 @@ function normalizeLegacyConfig(
   };
 }
 
-function validateOption(
-  value: unknown,
-  spliceCount: number,
-): CrosstabDynamicGroupByOption {
+function validateOption(value: unknown): CrosstabDynamicGroupByOption {
   if (!isObject(value)) {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   }
@@ -215,23 +235,7 @@ function validateOption(
 
   assertColumnArray(columns);
 
-  if (columns.length > 0 && columns.length !== spliceCount) {
-    throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SPLICE_COUNT);
-  }
-
   return { id, label, columns };
-}
-
-function assertUniqueOptionIds(options: CrosstabDynamicGroupByOption[]): void {
-  const seenOptionIds = new Set<string>();
-
-  options.forEach(option => {
-    if (seenOptionIds.has(option.id)) {
-      throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
-    }
-
-    seenOptionIds.add(option.id);
-  });
 }
 
 function validateSlot(value: unknown): CrosstabDynamicGroupBySlot {
@@ -262,11 +266,7 @@ function validateSlot(value: unknown): CrosstabDynamicGroupBySlot {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_MAX_DIMENSIONS);
   }
 
-  const normalizedOptions = options.map(option =>
-    validateOption(option, spliceCount),
-  );
-
-  assertUniqueOptionIds(normalizedOptions);
+  const normalizedOptions = options.map(validateOption);
 
   if (!normalizedOptions.some(option => option.id === defaultOptionId)) {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION);
@@ -283,16 +283,54 @@ function validateSlot(value: unknown): CrosstabDynamicGroupBySlot {
   };
 }
 
-function assertUniqueSlotIds(slots: CrosstabDynamicGroupBySlot[]): void {
-  const seenSlotIds = new Set<string>();
+function getDynamicGroupBySlotError(error: Error): Error {
+  switch (error.message) {
+    case ERR_DYNAMIC_SLOT_DUPLICATE_OPTION:
+      return new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS);
+    case ERR_DYNAMIC_SLOT_DUPLICATE_SLOT:
+      return new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT);
+    case ERR_DYNAMIC_SLOT_INVALID_OPTION:
+      return new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION);
+    case ERR_DYNAMIC_SLOT_OVERLAP:
+      return new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT_OVERLAP);
+    case ERR_DYNAMIC_SLOT_SPLICE_COUNT:
+      return new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SPLICE_COUNT);
+    default:
+      return error;
+  }
+}
 
-  slots.forEach(slot => {
-    if (seenSlotIds.has(slot.id)) {
-      throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+function getDynamicGroupByDynamicSlot(
+  slot: CrosstabDynamicGroupBySlot,
+): DynamicGroupByDynamicSlot {
+  return {
+    id: slot.id,
+    placement: slot.placement,
+    slotIndex: slot.slotIndex,
+    spliceCount: slot.spliceCount,
+    defaultOptionId: slot.defaultOptionId,
+    options: slot.options.map(option => ({
+      id: option.id,
+      payload: option.columns,
+    })),
+  };
+}
+
+function validateDynamicGroupBySlots(
+  slots: CrosstabDynamicGroupBySlot[],
+): void {
+  try {
+    validateDynamicSlots(slots.map(getDynamicGroupByDynamicSlot), {
+      allowEmptyPayload: true,
+      getPlacement: slot => slot.placement,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      throw getDynamicGroupBySlotError(error);
     }
 
-    seenSlotIds.add(slot.id);
-  });
+    throw error;
+  }
 }
 
 export function normalizeDynamicGroupByConfig(
@@ -316,7 +354,7 @@ export function normalizeDynamicGroupByConfig(
 
   const slots = value.slots.map(validateSlot);
 
-  assertUniqueSlotIds(slots);
+  validateDynamicGroupBySlots(slots);
 
   return {
     enabled: value.enabled,
@@ -372,10 +410,6 @@ function getDimensionsForPlacement(
   return placement === 'rows' ? rowDimensions : columnDimensions;
 }
 
-function getSlotSpliceCount(slot: CrosstabDynamicGroupBySlot): number {
-  return slot.spliceCount ?? 1;
-}
-
 function resolveLegacySelectedOptionId(
   slot: CrosstabDynamicGroupBySlot,
   selectedColumn: QueryFormColumn,
@@ -416,15 +450,13 @@ function resolveSelectedOptionId(
   return slot.defaultOptionId;
 }
 
-function validateSlotRanges(
+function validateSlotBounds(
   slots: CrosstabDynamicGroupBySlot[],
   dimensions: QueryFormColumn[],
 ): void {
-  const occupied = new Set<number>();
-
   slots.forEach(slot => {
     const { slotIndex } = slot;
-    const spliceCount = getSlotSpliceCount(slot);
+    const spliceCount = getDynamicSlotSpliceCount(slot);
 
     if (
       (slot.id === LEGACY_SLOT_ID && slotIndex >= dimensions.length) ||
@@ -433,16 +465,6 @@ function validateSlotRanges(
         slotIndex + spliceCount > dimensions.length)
     ) {
       throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT);
-    }
-
-    for (let offset = 0; offset < spliceCount; offset += 1) {
-      const dimensionIndex = slotIndex + offset;
-
-      if (occupied.has(dimensionIndex)) {
-        throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT_OVERLAP);
-      }
-
-      occupied.add(dimensionIndex);
     }
   });
 }
@@ -485,38 +507,46 @@ function assertMaxDimensions(
 function applySlotsToDimensions(
   dimensions: QueryFormColumn[],
   slots: CrosstabDynamicGroupBySlot[],
-  ownState: CrosstabOwnState | undefined,
+  selectedOptions: SelectedDynamicGroupBySlotOption[],
 ): ApplySlotsToDimensionsResult {
-  validateSlotRanges(slots, dimensions);
+  validateSlotBounds(slots, dimensions);
 
   const selectedDynamicGroupBy: Record<string, string> = {};
-  const effectiveDimensions = [...dimensions];
-  const descendingSlots = [...slots].sort(
-    (leftSlot, rightSlot) => rightSlot.slotIndex - leftSlot.slotIndex,
-  );
 
-  descendingSlots.forEach(slot => {
-    const selectedOptionId = resolveSelectedOptionId(slot, ownState);
-    const selectedOption = slot.options.find(
-      option => option.id === selectedOptionId,
-    );
-
-    if (!selectedOption) {
-      throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION);
-    }
-
-    selectedDynamicGroupBy[slot.id] = selectedOption.id;
-    effectiveDimensions.splice(
-      slot.slotIndex,
-      slot.slotIndex === dimensions.length ? 0 : getSlotSpliceCount(slot),
-      ...selectedOption.columns,
-    );
+  selectedOptions.forEach(({ option, slot }) => {
+    selectedDynamicGroupBy[slot.id] = option.id;
   });
 
   return {
-    dimensions: effectiveDimensions,
+    dimensions: applyDynamicSlotSplices(dimensions, selectedOptions),
     selectedDynamicGroupBy,
   };
+}
+
+function resolveSelectedDynamicGroupByOptions(
+  slots: CrosstabDynamicGroupBySlot[],
+  ownState: CrosstabOwnState | undefined,
+): SelectedDynamicGroupBySlotOption[] {
+  const selectedOptionIdsBySlot = slots.reduce<Record<string, string>>(
+    (selectedOptionIds, slot) => ({
+      ...selectedOptionIds,
+      [slot.id]: resolveSelectedOptionId(slot, ownState),
+    }),
+    {},
+  );
+
+  try {
+    return resolveDynamicSlotOptions(
+      slots.map(getDynamicGroupByDynamicSlot),
+      selectedOptionIdsBySlot,
+    );
+  } catch (error) {
+    if (error instanceof Error) {
+      throw getDynamicGroupBySlotError(error);
+    }
+
+    throw error;
+  }
 }
 
 function getSelectedColumn(
@@ -562,15 +592,25 @@ export function resolveDynamicGroupByDimensions({
 
   const rowSlots = config.slots.filter(slot => slot.placement === 'rows');
   const columnSlots = config.slots.filter(slot => slot.placement === 'columns');
+  const selectedOptions = resolveSelectedDynamicGroupByOptions(
+    config.slots,
+    ownState,
+  );
+  const selectedRowOptions = selectedOptions.filter(
+    ({ slot }) => slot.placement === 'rows',
+  );
+  const selectedColumnOptions = selectedOptions.filter(
+    ({ slot }) => slot.placement === 'columns',
+  );
   const rowResult = applySlotsToDimensions(
     getDimensionsForPlacement('rows', rowDimensions, columnDimensions),
     rowSlots,
-    ownState,
+    selectedRowOptions,
   );
   const columnResult = applySlotsToDimensions(
     getDimensionsForPlacement('columns', rowDimensions, columnDimensions),
     columnSlots,
-    ownState,
+    selectedColumnOptions,
   );
   const selectedDynamicGroupBy = {
     ...rowResult.selectedDynamicGroupBy,
