@@ -47,6 +47,8 @@ import {
 } from './serverColumnPagination';
 import type { CrosstabOwnState as ServerColumnOwnState } from './serverColumnPagination';
 import { buildCrosstabQueryPlan } from './summaryQueryPlan';
+import { expandCalculatedFieldMetricConfigs } from './calcFields';
+import { resolveCrosstabParameters } from './parameters';
 
 const unique = <T>(values: T[]): T[] => [...new Set(values)];
 
@@ -139,9 +141,19 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
     : ensureIsArray<QueryFormMetric>(formData.metrics).map(metric => ({
         metric,
       }));
-  const dynamicMetricResult = resolveDynamicMetricConfigs({
+  const resolvedParameters = resolveCrosstabParameters(
+    formData,
+    options?.ownState as DynamicOwnState | undefined,
+  );
+  const calculatedMetricResult = expandCalculatedFieldMetricConfigs({
+    dialect: 'doris',
     formData,
     metricConfigs: baseMetricConfigs,
+    parameterValues: resolvedParameters.values,
+  });
+  const dynamicMetricResult = resolveDynamicMetricConfigs({
+    formData,
+    metricConfigs: calculatedMetricResult.metricConfigs,
     ownState: options?.ownState as DynamicOwnState | undefined,
   });
   const effectiveMetricConfigs = dynamicMetricResult.metricConfigs;

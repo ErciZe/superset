@@ -111,6 +111,81 @@ const dynamicMetricPair = {
 } as const;
 
 describe('crosstab buildQuery', () => {
+  it('includes calculated SQL metrics using runtime parameter values', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        groupbyRows: ['category'],
+        groupbyColumns: ['biz_date'],
+        crosstabFieldConfig: {
+          rows: [{ field: 'category' }],
+          columns: [{ field: 'biz_date' }],
+          metrics: [
+            {
+              metric: {
+                expressionType: 'SQL',
+                label: 'sales',
+                sqlExpression: 'SUM(sales_amount)',
+              },
+              label: '销售额',
+              semantic: 'additive',
+            },
+            {
+              metric: {
+                expressionType: 'SQL',
+                label: 'profit',
+                sqlExpression: 'SUM(gross_profit)',
+              },
+              label: '毛利',
+              semantic: 'additive',
+            },
+          ],
+        },
+        parameters: [
+          {
+            kind: 'number',
+            name: 'adjustmentRate',
+            default: 1,
+            min: 0,
+            max: 2,
+            step: 0.01,
+          },
+        ],
+        calculatedFields: [
+          {
+            id: 'adjusted_margin',
+            label: '含参毛利率',
+            template: 'parameterized_ratio',
+            inputs: {
+              leftMetric: 'profit',
+              rightMetric: 'sales',
+              parameterName: 'adjustmentRate',
+            },
+            semantic: 'ratio',
+            formatString: '.2%',
+          },
+        ],
+      },
+      {
+        ownState: {
+          numericParameters: { adjustmentRate: 1.25 },
+        },
+      },
+    );
+
+    expect(queryContext.queries[0].metrics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          expressionType: 'SQL',
+          label: '含参毛利率',
+          sqlExpression:
+            '((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 1.25)',
+        }),
+      ]),
+    );
+  });
+
   it('uses the default dynamic group-by column in query dimensions', () => {
     const queryContext = buildQuery({
       datasource: '11__table',

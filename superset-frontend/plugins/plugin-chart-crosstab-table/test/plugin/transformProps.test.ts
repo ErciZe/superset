@@ -16,7 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { ChartProps, supersetTheme } from '@superset-ui/core';
+import {
+  ChartProps,
+  supersetTheme,
+  type ChartPropsConfig,
+} from '@superset-ui/core';
 import type {
   CrosstabDynamicGroupByConfig,
   CrosstabDynamicMetricConfig,
@@ -131,7 +135,90 @@ const dynamicMetric: CrosstabDynamicMetricConfig = {
   ],
 };
 
+function createProps(
+  props: ChartPropsConfig & { formData?: CrosstabFormData },
+) {
+  return new ChartProps<CrosstabFormData>({
+    width: 800,
+    height: 400,
+    theme: supersetTheme,
+    ...props,
+  });
+}
+
 describe('crosstab transformProps', () => {
+  it('includes numeric parameter values in effective metric signature', () => {
+    const baseProps = createProps({
+      formData: {
+        groupbyRows: ['category'],
+        groupbyColumns: ['biz_date'],
+        crosstabFieldConfig: {
+          rows: [{ field: 'category' }],
+          columns: [{ field: 'biz_date' }],
+          metrics: [
+            {
+              metric: {
+                expressionType: 'SQL',
+                label: 'sales',
+                sqlExpression: 'SUM(sales_amount)',
+              },
+              semantic: 'additive',
+            },
+            {
+              metric: {
+                expressionType: 'SQL',
+                label: 'profit',
+                sqlExpression: 'SUM(gross_profit)',
+              },
+              semantic: 'additive',
+            },
+          ],
+        },
+        parameters: [
+          {
+            kind: 'number',
+            name: 'adjustmentRate',
+            default: 1,
+            min: 0,
+            max: 2,
+            step: 0.01,
+          },
+        ],
+        calculatedFields: [
+          {
+            id: 'adjusted_margin',
+            label: '含参毛利率',
+            template: 'parameterized_ratio',
+            inputs: {
+              leftMetric: 'profit',
+              rightMetric: 'sales',
+              parameterName: 'adjustmentRate',
+            },
+            semantic: 'ratio',
+          },
+        ],
+      },
+      queriesData: [
+        {
+          data: [],
+          colnames: [],
+          coltypes: [],
+        },
+      ],
+    });
+
+    const signatureA = transformProps({
+      ...baseProps,
+      ownState: { numericParameters: { adjustmentRate: 1 } },
+    }).effectiveMetricSignature;
+    const signatureB = transformProps({
+      ...baseProps,
+      ownState: { numericParameters: { adjustmentRate: 1.25 } },
+    }).effectiveMetricSignature;
+
+    expect(signatureA).not.toBe(signatureB);
+  });
+
   it('converts query data into renderer props', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
