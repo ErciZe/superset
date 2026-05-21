@@ -525,17 +525,17 @@ describe('crosstab dynamic group by resolver', () => {
   });
 
   it('rejects non-array canonical slots even with legacy fields present', () => {
+    const invalidCanonicalDynamicGroupBy = {
+      enabled: true,
+      slots: 'bad',
+      placement: 'columns',
+      slotIndex: 1,
+      defaultColumn: 'shop_name',
+      options: [{ label: '店铺', column: 'shop_name' }],
+    } as unknown as CrosstabFormData['dynamicGroupBy'];
+
     expect(() =>
-      getDynamicGroupByConfig(
-        createFormData({
-          enabled: true,
-          slots: 'bad',
-          placement: 'columns',
-          slotIndex: 1,
-          defaultColumn: 'shop_name',
-          options: [{ label: '店铺', column: 'shop_name' }],
-        }),
-      ),
+      getDynamicGroupByConfig(createFormData(invalidCanonicalDynamicGroupBy)),
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   });
 
