@@ -139,6 +139,46 @@ test('rejects real string metric labels that duplicate calculated fields', () =>
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
 
+test('rejects duplicate calculated field ids with different labels', () => {
+  expect(() =>
+    expandCalculatedFieldMetricConfigs({
+      dialect: 'doris',
+      formData: {
+        ...formData,
+        calculatedFields: [
+          calculatedField,
+          {
+            ...calculatedField,
+            label: '另一个含参毛利率',
+          },
+        ],
+      },
+      metricConfigs,
+      parameterValues: { adjustmentRate: 1.25 },
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
+test('keeps stale calculated field placeholders in duplicate label detection', () => {
+  expect(() =>
+    expandCalculatedFieldMetricConfigs({
+      dialect: 'doris',
+      formData,
+      metricConfigs: [
+        ...metricConfigs,
+        {
+          metric: '含参毛利率',
+          label: '含参毛利率',
+          semantic: 'ratio',
+          formatString: '.2%',
+          calculatedFieldId: 'stale_adjusted_margin',
+        },
+      ],
+      parameterValues: { adjustmentRate: 1.25 },
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
 test('creates stable signatures including parameter value', () => {
   const signature = getCalculatedFieldsSignature([calculatedField], {
     adjustmentRate: 1.25,
@@ -146,6 +186,38 @@ test('creates stable signatures including parameter value', () => {
 
   expect(signature).toContain('adjusted_margin');
   expect(signature).toContain('adjustmentRate=1.25');
+});
+
+test('creates deterministic signatures for reordered field and parameter keys', () => {
+  const reorderedCalculatedField = {
+    semantic: 'ratio',
+    inputs: {
+      parameterName: 'adjustmentRate',
+      rightMetric: 'sales',
+      leftMetric: 'profit',
+    },
+    template: 'parameterized_ratio',
+    formatString: '.2%',
+    label: '含参毛利率',
+    id: 'adjusted_margin',
+  } as CrosstabCalculatedField;
+
+  const signature = getCalculatedFieldsSignature(
+    [calculatedField],
+    {
+      secondaryRate: 0.8,
+      adjustmentRate: 1.25,
+    },
+  );
+  const reorderedSignature = getCalculatedFieldsSignature(
+    [reorderedCalculatedField],
+    {
+      adjustmentRate: 1.25,
+      secondaryRate: 0.8,
+    },
+  );
+
+  expect(reorderedSignature).toBe(signature);
 });
 
 test('rejects duplicate calculated field labels', () => {

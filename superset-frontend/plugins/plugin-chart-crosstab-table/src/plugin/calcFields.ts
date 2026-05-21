@@ -168,11 +168,12 @@ function isCalculatedFieldPlaceholder(
   );
 }
 
-function assertNoDuplicateLabels(
+function assertNoDuplicateFields(
   metricConfigs: MetricFieldConfig[],
   calculatedFields: CrosstabCalculatedField[],
 ): void {
   const labels = new Set<string>();
+  const ids = new Set<string>();
   const calculatedIds = new Set(calculatedFields.map(field => field.id));
 
   metricConfigs.forEach(config => {
@@ -188,10 +189,11 @@ function assertNoDuplicateLabels(
       throw new Error(ERR_CROSSTAB_CALC_FIELD);
     }
 
-    if (labels.has(field.label)) {
+    if (ids.has(field.id) || labels.has(field.label)) {
       throw new Error(ERR_CROSSTAB_CALC_FIELD);
     }
 
+    ids.add(field.id);
     labels.add(field.label);
   });
 }
@@ -269,7 +271,7 @@ export function expandCalculatedFieldMetricConfigs({
   );
   const metricSql = getMetricSqlMap(baseMetricConfigs);
 
-  assertNoDuplicateLabels(baseMetricConfigs, calculatedFields);
+  assertNoDuplicateFields(baseMetricConfigs, calculatedFields);
 
   return {
     metricConfigs: [
