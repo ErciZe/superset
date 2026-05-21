@@ -71,6 +71,26 @@ export type CrosstabDynamicGroupByConfig = {
   slots: CrosstabDynamicGroupBySlot[];
 };
 
+export type CrosstabDynamicMetricOption = {
+  id: string;
+  label: string;
+  metrics: MetricFieldConfig[];
+};
+
+export type CrosstabDynamicMetricSlot = {
+  id: string;
+  label?: string;
+  slotIndex: number;
+  spliceCount?: number;
+  defaultOptionId: string;
+  options: CrosstabDynamicMetricOption[];
+};
+
+export type CrosstabDynamicMetricConfig = {
+  enabled: boolean;
+  slots: CrosstabDynamicMetricSlot[];
+};
+
 export type CrosstabDynamicGroupByInput =
   | CrosstabDynamicGroupByConfig
   | LegacyCrosstabDynamicGroupByConfig;
@@ -81,6 +101,7 @@ export interface CrosstabFormData extends QueryFormData {
   metrics?: QueryFormMetric[];
   crosstabFieldConfig?: CrosstabFieldConfig;
   dynamicGroupBy?: CrosstabDynamicGroupByInput | string;
+  dynamicMetric?: CrosstabDynamicMetricConfig | string;
   showRowTotals?: boolean;
   showColumnTotals?: boolean;
   showRowSubtotals?: boolean;
@@ -202,9 +223,12 @@ export type CrosstabFieldConfig = {
 export type CrosstabChartProps = ChartProps<CrosstabFormData> &
   CrosstabEngineResult & {
     dynamicGroupByConfig?: CrosstabDynamicGroupByConfig;
+    dynamicMetricConfig?: CrosstabDynamicMetricConfig;
     selectedDynamicGroupBy?: Record<string, string>;
+    selectedDynamicMetric?: Record<string, string>;
     selectedDynamicGroupByColumn?: QueryFormColumn;
     effectiveGroupBySignature?: string;
+    effectiveMetricSignature?: string;
     serverColumnTotalCount?: number;
     serverColumnCurrentPage?: number;
     serverColumnPageSize?: number;
@@ -216,8 +240,10 @@ export type CrosstabOwnState = {
   currentColumnPage?: number;
   currentColumnPageSize?: number;
   selectedDynamicGroupBy?: Record<string, string>;
+  selectedDynamicMetric?: Record<string, string>;
   selectedDynamicGroupByColumn?: QueryFormColumn;
   effectiveGroupBySignature?: string;
+  effectiveMetricSignature?: string;
   expandedRowPaths?: string[];
   serverColumnPageColumnSignature?: string;
   serverColumnPageTuples?: DataRecordValue[][];
