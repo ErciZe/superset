@@ -309,9 +309,9 @@ describe('CrosstabTable', () => {
     return button;
   }
 
-  function getDynamicGroupBySelect() {
+  function getDynamicGroupBySelect(slotId: string) {
     const select = container.querySelector(
-      'select[aria-label="Select crosstab group by dimension"]',
+      `[data-test="crosstab-dynamic-groupby-control--${slotId}"] select`,
     );
     if (!(select instanceof HTMLSelectElement)) {
       throw new Error('Unable to find dynamic group-by select');
@@ -1058,12 +1058,19 @@ describe('CrosstabTable', () => {
       selectedDynamicGroupByColumn: 'missing_dimension',
       dynamicGroupByConfig: {
         enabled: true,
-        placement: 'columns',
-        slotIndex: 1,
-        defaultColumn: 'country',
-        options: [
-          { label: '店铺', column: 'shop_name' },
-          { label: '国家', column: 'country' },
+        slots: [
+          {
+            id: '__legacy__',
+            label: '分组维度',
+            placement: 'columns',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'country',
+            options: [
+              { id: 'shop_name', label: '店铺', columns: ['shop_name'] },
+              { id: 'country', label: '国家', columns: ['country'] },
+            ],
+          },
         ],
       },
     } as unknown as CrosstabChartProps;
@@ -1072,7 +1079,7 @@ describe('CrosstabTable', () => {
 
     expect(getByText('分组维度')).toBeInTheDocument();
 
-    const select = getDynamicGroupBySelect();
+    const select = getDynamicGroupBySelect('__legacy__');
     expect(select).toHaveValue('country');
     expect(
       Array.from(select.options).map(option => ({
@@ -1100,19 +1107,26 @@ describe('CrosstabTable', () => {
       selectedDynamicGroupByColumn: 'missing_dimension',
       dynamicGroupByConfig: {
         enabled: true,
-        placement: 'columns',
-        slotIndex: 1,
-        defaultColumn: 'country',
-        options: [
-          { label: '店铺', column: 'shop_name' },
-          { label: '国家', column: 'country' },
+        slots: [
+          {
+            id: '__legacy__',
+            label: '分组维度',
+            placement: 'columns',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'country',
+            options: [
+              { id: 'shop_name', label: '店铺', columns: ['shop_name'] },
+              { id: 'country', label: '国家', columns: ['country'] },
+            ],
+          },
         ],
       },
     } as unknown as CrosstabChartProps;
 
     renderChart(props);
 
-    expect(getDynamicGroupBySelect()).toHaveValue('country');
+    expect(getDynamicGroupBySelect('__legacy__')).toHaveValue('country');
   });
 
   it('resets crosstab column cache when dynamic group-by selection changes', () => {
@@ -1153,19 +1167,26 @@ describe('CrosstabTable', () => {
       generatedColumnIds: [],
       dynamicGroupByConfig: {
         enabled: true,
-        placement: 'columns',
-        slotIndex: 1,
-        defaultColumn: 'shop_name',
-        options: [
-          { label: '店铺', column: 'shop_name' },
-          { label: '国家', column: 'country' },
+        slots: [
+          {
+            id: '__legacy__',
+            label: '分组维度',
+            placement: 'columns',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'shop_name',
+            options: [
+              { id: 'shop_name', label: '店铺', columns: ['shop_name'] },
+              { id: 'country', label: '国家', columns: ['country'] },
+            ],
+          },
         ],
       },
     } as unknown as CrosstabChartProps;
 
     renderChart(props);
 
-    const select = getDynamicGroupBySelect();
+    const select = getDynamicGroupBySelect('__legacy__');
     act(() => {
       select.value = 'country';
       select.dispatchEvent(new Event('change', { bubbles: true }));
@@ -1174,7 +1195,7 @@ describe('CrosstabTable', () => {
     expect(setDataMask).toHaveBeenCalledWith({
       ownState: {
         unrelatedOwnStateField: 'preserved',
-        selectedDynamicGroupByColumn: 'country',
+        selectedDynamicGroupBy: { __legacy__: 'country' },
         currentColumnPage: 0,
         currentColumnPageSize: 5,
         serverColumnPageTuples: [],
@@ -1184,6 +1205,9 @@ describe('CrosstabTable', () => {
     });
     expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
       'expandedRowPaths',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'selectedDynamicGroupByColumn',
     );
     expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
       'serverColumnPageColumnSignature',
@@ -1212,12 +1236,19 @@ describe('CrosstabTable', () => {
       selectedDynamicGroupByColumn: 'shop_name',
       dynamicGroupByConfig: {
         enabled: true,
-        placement: 'columns',
-        slotIndex: 1,
-        defaultColumn: 'shop_name',
-        options: [
-          { label: '店铺', column: 'shop_name' },
-          { label: '国家', column: 'country' },
+        slots: [
+          {
+            id: '__legacy__',
+            label: '分组维度',
+            placement: 'columns',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'shop_name',
+            options: [
+              { id: 'shop_name', label: '店铺', columns: ['shop_name'] },
+              { id: 'country', label: '国家', columns: ['country'] },
+            ],
+          },
         ],
       },
     } as unknown as CrosstabChartProps;
@@ -1229,6 +1260,160 @@ describe('CrosstabTable', () => {
     });
 
     expect(setDataMask).not.toHaveBeenCalled();
+  });
+
+  it('renders one dynamic group-by selector per normalized slot', () => {
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+      },
+      rowData: [],
+      columns: [],
+      columnTree: [],
+      generatedColumnIds: [],
+      selectedDynamicGroupBy: { level2: 'country', level3: 'msku' },
+      dynamicGroupByConfig: {
+        enabled: true,
+        slots: [
+          {
+            id: 'level2',
+            label: '二级维度',
+            placement: 'columns',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'shop',
+            options: [
+              { id: 'shop', label: '店铺', columns: ['shop_name'] },
+              { id: 'country', label: '国家', columns: ['country'] },
+            ],
+          },
+          {
+            id: 'level3',
+            label: '三级维度',
+            placement: 'columns',
+            slotIndex: 2,
+            spliceCount: 1,
+            defaultOptionId: 'none',
+            options: [
+              { id: 'none', label: '(无)', columns: [] },
+              { id: 'msku', label: 'MSKU', columns: ['msku'] },
+            ],
+          },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    expect(getByText('二级维度')).toBeInTheDocument();
+    expect(getByText('三级维度')).toBeInTheDocument();
+    expect(getDynamicGroupBySelect('level2')).toHaveValue('country');
+    expect(getDynamicGroupBySelect('level3')).toHaveValue('msku');
+  });
+
+  it('updates one slot while preserving other selected slots', () => {
+    const setDataMask = jest.fn();
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+        generatedColumnWidth: 120,
+      },
+      hooks: {
+        setDataMask,
+      },
+      ownState: {
+        currentColumnPage: 3,
+        currentColumnPageSize: 3,
+        effectiveGroupBySignature: 'rows=metric_name|columns=shop_name',
+        expandedRowPaths: ['["A"]'],
+        unrelatedOwnStateField: 'preserved',
+        selectedDynamicGroupBy: { level2: 'shop', level3: 'none' },
+        selectedDynamicGroupByColumn: 'shop_name',
+        serverColumnPageColumnSignature: 'shop_name',
+        serverColumnPageTuples: [['D1']],
+        serverColumnPageTuplesPage: 3,
+        serverColumnPageTuplesPageSize: 3,
+        serverColumnTotalCount: 100,
+      },
+      selectedDynamicGroupBy: { level2: 'shop', level3: 'none' },
+      rowData: [],
+      columns: [
+        {
+          key: 'metric_name',
+          label: '指标项',
+          dataType: GenericDataType.String,
+        },
+      ],
+      columnTree: [],
+      generatedColumnIds: [],
+      dynamicGroupByConfig: {
+        enabled: true,
+        slots: [
+          {
+            id: 'level2',
+            label: '二级维度',
+            placement: 'columns',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'shop',
+            options: [
+              { id: 'shop', label: '店铺', columns: ['shop_name'] },
+              { id: 'country', label: '国家', columns: ['country'] },
+            ],
+          },
+          {
+            id: 'level3',
+            label: '三级维度',
+            placement: 'columns',
+            slotIndex: 2,
+            spliceCount: 1,
+            defaultOptionId: 'none',
+            options: [
+              { id: 'none', label: '(无)', columns: [] },
+              { id: 'msku', label: 'MSKU', columns: ['msku'] },
+            ],
+          },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    const select = getDynamicGroupBySelect('level3');
+    act(() => {
+      select.value = 'msku';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(setDataMask).toHaveBeenCalledWith({
+      ownState: {
+        unrelatedOwnStateField: 'preserved',
+        selectedDynamicGroupBy: { level2: 'shop', level3: 'msku' },
+        currentColumnPage: 0,
+        currentColumnPageSize: 5,
+        serverColumnPageTuples: [],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: 5,
+      },
+    });
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'expandedRowPaths',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'selectedDynamicGroupByColumn',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnPageColumnSignature',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnTotalCount',
+    );
   });
 
   it('does not render dynamic group-by select without an enabled config', () => {

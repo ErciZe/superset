@@ -30,7 +30,6 @@ import {
   ThemedAgGridReact,
 } from '@superset-ui/core/components';
 import {
-  getColumnLabel,
   useTheme,
   type DataRecord,
   type DataRecordValue,
@@ -69,10 +68,25 @@ ModuleRegistry.registerModules([AllCommunityModule, ClientSideRowModelModule]);
 
 const FIRST_ROW_COLUMN_WIDTH = 180;
 const EXTRA_ROW_COLUMN_WIDTH = 120;
+const DYNAMIC_GROUP_BY_PLACEMENT_ORDER = {
+  rows: 0,
+  columns: 1,
+};
 
 type MeasuredGridWidth = {
   includesRowColumns: boolean;
   width: number;
+};
+
+type DynamicGroupBySelector = {
+  label: string;
+  options: {
+    label: string;
+    value: string;
+  }[];
+  slotId: string;
+  value: string;
+  valueSet: Set<string>;
 };
 
 function getMetricFromColumnId(columnId: string) {
@@ -408,6 +422,8 @@ function getPreservedDynamicGroupByOwnState(
     ...((ownState ?? {}) as CrosstabOwnState),
   };
 
+  delete preservedOwnState.selectedDynamicGroupBy;
+  delete preservedOwnState.selectedDynamicGroupByColumn;
   delete preservedOwnState.effectiveGroupBySignature;
   delete preservedOwnState.expandedRowPaths;
   delete preservedOwnState.serverColumnPageColumnSignature;
@@ -430,7 +446,7 @@ export default function CrosstabTable({
   ownState,
   rowData,
   expandedRowPaths,
-  selectedDynamicGroupByColumn,
+  selectedDynamicGroupBy,
   serverColumnCurrentPage,
   serverColumnTotalCount,
   width,
@@ -515,50 +531,39 @@ export default function CrosstabTable({
     ? (serverColumnCurrentPage ?? 0)
     : columnPage;
   const effectiveColumnsPerPage = generatedColumnsPerPage;
-  const dynamicGroupByOptions = useMemo(
-    () =>
-      dynamicGroupByConfig?.enabled
-        ? dynamicGroupByConfig.options.map(option => ({
-            label: option.label,
-            value: getColumnLabel(option.column),
-          }))
-        : [],
-    [dynamicGroupByConfig],
-  );
-  const dynamicGroupByValueSet = useMemo(
-    () => new Set(dynamicGroupByOptions.map(option => option.value)),
-    [dynamicGroupByOptions],
-  );
-  const defaultDynamicGroupByValue = useMemo(() => {
-    if (!dynamicGroupByConfig || dynamicGroupByOptions.length === 0) {
-      return undefined;
+  const dynamicGroupBySelectors = useMemo<DynamicGroupBySelector[]>(() => {
+    if (!dynamicGroupByConfig?.enabled) {
+      return [];
     }
 
-    const configuredDefaultValue = getColumnLabel(
-      dynamicGroupByConfig.defaultColumn,
-    );
+    return [...dynamicGroupByConfig.slots]
+      .sort(
+        (leftSlot, rightSlot) =>
+          DYNAMIC_GROUP_BY_PLACEMENT_ORDER[leftSlot.placement] -
+            DYNAMIC_GROUP_BY_PLACEMENT_ORDER[rightSlot.placement] ||
+          leftSlot.slotIndex - rightSlot.slotIndex,
+      )
+      .map(slot => {
+        const options = slot.options.map(option => ({
+          label: option.label,
+          value: option.id,
+        }));
+        const valueSet = new Set(options.map(option => option.value));
+        const selectedOptionId = selectedDynamicGroupBy?.[slot.id];
+        const value =
+          selectedOptionId && valueSet.has(selectedOptionId)
+            ? selectedOptionId
+            : slot.defaultOptionId;
 
-    return dynamicGroupByOptions.some(
-      option => option.value === configuredDefaultValue,
-    )
-      ? configuredDefaultValue
-      : dynamicGroupByOptions[0].value;
-  }, [dynamicGroupByConfig, dynamicGroupByOptions]);
-  const selectedDynamicGroupByValue = useMemo(() => {
-    const selectedValue =
-      selectedDynamicGroupByColumn !== undefined &&
-      selectedDynamicGroupByColumn !== null
-        ? getColumnLabel(selectedDynamicGroupByColumn)
-        : undefined;
-
-    return selectedValue && dynamicGroupByValueSet.has(selectedValue)
-      ? selectedValue
-      : defaultDynamicGroupByValue;
-  }, [
-    defaultDynamicGroupByValue,
-    dynamicGroupByValueSet,
-    selectedDynamicGroupByColumn,
-  ]);
+        return {
+          label: slot.label ?? '分组维度',
+          options,
+          slotId: slot.id,
+          value,
+          valueSet,
+        };
+      });
+  }, [dynamicGroupByConfig, selectedDynamicGroupBy]);
   const totalGeneratedColumnCount = serverColumnPagination
     ? (serverColumnTotalCount ?? treeLeafColumnIds.length)
     : treeLeafColumnIds.length;
@@ -651,16 +656,23 @@ export default function CrosstabTable({
     },
     [effectiveColumnsPerPage, ownState, setDataMask],
   );
-  const updateDynamicGroupByColumn = useCallback(
-    (nextColumn: string) => {
-      if (!dynamicGroupByValueSet.has(nextColumn)) {
+  const updateDynamicGroupByOption = useCallback(
+    (slotId: string, nextOptionId: string) => {
+      const selector = dynamicGroupBySelectors.find(
+        candidate => candidate.slotId === slotId,
+      );
+
+      if (!selector?.valueSet.has(nextOptionId)) {
         return;
       }
 
       setDataMask?.({
         ownState: {
           ...getPreservedDynamicGroupByOwnState(ownState),
-          selectedDynamicGroupByColumn: nextColumn,
+          selectedDynamicGroupBy: {
+            ...(selectedDynamicGroupBy ?? {}),
+            [slotId]: nextOptionId,
+          },
           currentColumnPage: 0,
           currentColumnPageSize: effectiveColumnsPerPage,
           serverColumnPageTuples: [],
@@ -669,7 +681,13 @@ export default function CrosstabTable({
         },
       });
     },
-    [dynamicGroupByValueSet, effectiveColumnsPerPage, ownState, setDataMask],
+    [
+      dynamicGroupBySelectors,
+      effectiveColumnsPerPage,
+      ownState,
+      selectedDynamicGroupBy,
+      setDataMask,
+    ],
   );
   const toggleRowPath = useCallback(
     (row: DataRecord) => {
@@ -813,28 +831,28 @@ export default function CrosstabTable({
         </Button>
       </div>
     ) : null;
-  const dynamicGroupBySelect =
-    dynamicGroupByConfig?.enabled && dynamicGroupByOptions.length > 0 ? (
-      <div
-        data-test="crosstab-dynamic-groupby-control"
-        style={{
-          alignItems: 'center',
-          display: 'inline-flex',
-          gap: theme.sizeUnit,
-        }}
-      >
-        <span>分组维度</span>
-        <Select
-          ariaLabel="Select crosstab group by dimension"
-          allowSelectAll={false}
-          onChange={(nextColumn: string) =>
-            updateDynamicGroupByColumn(nextColumn)
-          }
-          options={dynamicGroupByOptions}
-          value={selectedDynamicGroupByValue}
-        />
-      </div>
-    ) : null;
+  const dynamicGroupBySelects = dynamicGroupBySelectors.map(selector => (
+    <div
+      key={selector.slotId}
+      data-test={`crosstab-dynamic-groupby-control--${selector.slotId}`}
+      style={{
+        alignItems: 'center',
+        display: 'inline-flex',
+        gap: theme.sizeUnit,
+      }}
+    >
+      <span>{selector.label}</span>
+      <Select
+        ariaLabel={`Select crosstab group by dimension ${selector.label}`}
+        allowSelectAll={false}
+        onChange={(nextOptionId: string) =>
+          updateDynamicGroupByOption(selector.slotId, nextOptionId)
+        }
+        options={selector.options}
+        value={selector.value}
+      />
+    </div>
+  ));
 
   return (
     <div
@@ -867,7 +885,7 @@ export default function CrosstabTable({
         >
           CSV
         </Button>
-        {dynamicGroupBySelect}
+        {dynamicGroupBySelects}
       </div>
       <div
         data-test="crosstab-grid-container"
