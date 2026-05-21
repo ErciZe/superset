@@ -18,19 +18,20 @@
  */
 import type { QueryFormColumn } from '@superset-ui/core';
 import type {
-  CrosstabDynamicGroupByConfig,
+  CrosstabDynamicGroupByInput,
   CrosstabFormData,
 } from '../../src/types';
 import {
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_SELECTED_COLUMN,
+  ERR_CROSSTAB_DYNAMIC_GROUP_BY_SPLICE_COUNT,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT,
   getDynamicGroupByConfig,
   resolveDynamicGroupByDimensions,
 } from '../../src/plugin/dynamicGroupBy';
 
-const baseConfig: CrosstabDynamicGroupByConfig = {
+const baseConfig: CrosstabDynamicGroupByInput = {
   enabled: true,
   placement: 'columns',
   slotIndex: 1,
@@ -147,7 +148,23 @@ describe('crosstab dynamic group by resolver', () => {
   it('parses JSON string config and rejects invalid JSON', () => {
     expect(
       getDynamicGroupByConfig(createFormData(JSON.stringify(baseConfig))),
-    ).toEqual(baseConfig);
+    ).toEqual({
+      enabled: true,
+      slots: [
+        {
+          id: '__legacy__',
+          label: '分组维度',
+          placement: 'columns',
+          slotIndex: 1,
+          spliceCount: 1,
+          defaultOptionId: 'shop_name',
+          options: [
+            { id: 'shop_name', label: '店铺', columns: ['shop_name'] },
+            { id: 'country', label: '国家', columns: ['country'] },
+          ],
+        },
+      ],
+    });
 
     expect(() => getDynamicGroupByConfig(createFormData('{'))).toThrow(
       'Invalid crosstab dynamic group by JSON config.',
@@ -215,5 +232,91 @@ describe('crosstab dynamic group by resolver', () => {
         columnDimensions: ['biz_date', 'shop_name'],
       }),
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT);
+  });
+
+  it('normalizes the legacy single-slot shape to one canonical slot', () => {
+    expect(getDynamicGroupByConfig(createFormData(baseConfig))).toEqual({
+      enabled: true,
+      slots: [
+        {
+          id: '__legacy__',
+          label: '分组维度',
+          placement: 'columns',
+          slotIndex: 1,
+          spliceCount: 1,
+          defaultOptionId: 'shop_name',
+          options: [
+            { id: 'shop_name', label: '店铺', columns: ['shop_name'] },
+            { id: 'country', label: '国家', columns: ['country'] },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('accepts the canonical slot-array shape without rewriting stable ids', () => {
+    expect(
+      getDynamicGroupByConfig(
+        createFormData({
+          enabled: true,
+          slots: [
+            {
+              id: 'level2',
+              label: '二级维度',
+              placement: 'columns',
+              slotIndex: 1,
+              spliceCount: 1,
+              defaultOptionId: 'shop',
+              options: [
+                { id: 'shop', label: '店铺', columns: ['shop_name'] },
+                { id: 'country', label: '国家', columns: ['country'] },
+              ],
+            },
+          ],
+        }),
+      ),
+    ).toEqual({
+      enabled: true,
+      slots: [
+        {
+          id: 'level2',
+          label: '二级维度',
+          placement: 'columns',
+          slotIndex: 1,
+          spliceCount: 1,
+          defaultOptionId: 'shop',
+          options: [
+            { id: 'shop', label: '店铺', columns: ['shop_name'] },
+            { id: 'country', label: '国家', columns: ['country'] },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('rejects enabled canonical config with no slots', () => {
+    expect(() =>
+      getDynamicGroupByConfig(createFormData({ enabled: true, slots: [] })),
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+  });
+
+  it('rejects option columns that do not match spliceCount', () => {
+    expect(() =>
+      getDynamicGroupByConfig(
+        createFormData({
+          enabled: true,
+          slots: [
+            {
+              id: 'level2_pair',
+              placement: 'columns',
+              slotIndex: 1,
+              spliceCount: 2,
+              defaultOptionId: 'bad',
+              options: [{ id: 'bad', label: 'Bad', columns: ['shop_name'] }],
+            },
+          ],
+        }),
+      ),
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SPLICE_COUNT);
   });
 });
