@@ -89,6 +89,36 @@ test('expands calculated fields into SQL metric configs', () => {
   });
 });
 
+test('replaces calculated field metric placeholders with generated SQL metrics', () => {
+  const result = expandCalculatedFieldMetricConfigs({
+    dialect: 'doris',
+    formData,
+    metricConfigs: [
+      ...metricConfigs,
+      {
+        metric: '含参毛利率',
+        label: '含参毛利率',
+        semantic: 'ratio',
+        formatString: '.2%',
+      },
+    ],
+    parameterValues: { adjustmentRate: 1.25 },
+  });
+
+  expect(result.metricConfigs).toHaveLength(3);
+  expect(result.metricConfigs[2]).toEqual({
+    metric: {
+      expressionType: 'SQL',
+      label: '含参毛利率',
+      sqlExpression:
+        '((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 1.25)',
+    },
+    label: '含参毛利率',
+    semantic: 'ratio',
+    formatString: '.2%',
+  });
+});
+
 test('creates stable signatures including parameter value', () => {
   const signature = getCalculatedFieldsSignature([calculatedField], {
     adjustmentRate: 1.25,

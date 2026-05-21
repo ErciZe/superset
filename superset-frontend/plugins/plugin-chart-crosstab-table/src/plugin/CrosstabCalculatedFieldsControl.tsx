@@ -18,6 +18,7 @@
  */
 import { useCallback, useMemo, useState } from 'react';
 import {
+  ensureIsArray,
   getMetricLabel,
   styled,
   t,
@@ -88,6 +89,33 @@ const templates: {
   { label: '含参比率', value: 'parameterized_ratio' },
 ];
 
+const templateValues: ReadonlySet<string> = new Set(
+  templates.map(template => template.value),
+);
+
+function isCalculatedFieldTemplate(
+  value: unknown,
+): value is CrosstabCalculatedFieldTemplate {
+  return typeof value === 'string' && templateValues.has(value);
+}
+
+function metricOptionFromMetric(
+  metric: QueryFormMetric,
+  label?: string,
+): MetricOption | undefined {
+  const metricLabel = getMetricLabel(metric);
+
+  if (!metricLabel) {
+    return undefined;
+  }
+
+  return {
+    label: label ?? metricLabel,
+    value: metricLabel,
+    metric,
+  };
+}
+
 function metricOptionFromConfig(
   metricConfig: SavedMetric,
 ): MetricOption | undefined {
@@ -106,6 +134,33 @@ function metricOptionFromConfig(
     value: metricLabel,
     metric: queryMetric,
   };
+}
+
+function getMetricOptions(
+  formData: CrosstabFormData | undefined,
+  savedMetrics: SavedMetric[],
+): MetricOption[] {
+  const fieldMetrics = formData?.crosstabFieldConfig?.metrics ?? [];
+
+  if (fieldMetrics.length > 0) {
+    return fieldMetrics
+      .map(metricConfig =>
+        metricOptionFromMetric(metricConfig.metric, metricConfig.label),
+      )
+      .filter((option): option is MetricOption => option !== undefined);
+  }
+
+  const legacyMetrics = ensureIsArray<QueryFormMetric>(formData?.metrics);
+
+  if (legacyMetrics.length > 0) {
+    return legacyMetrics
+      .map(metric => metricOptionFromMetric(metric))
+      .filter((option): option is MetricOption => option !== undefined);
+  }
+
+  return savedMetrics
+    .map(metricOptionFromConfig)
+    .filter((option): option is MetricOption => option !== undefined);
 }
 
 function getSemantic(
@@ -149,11 +204,8 @@ export default function CrosstabCalculatedFieldsControl({
 }: CrosstabCalculatedFieldsControlProps) {
   const [isOpen, setIsOpen] = useState(false);
   const metricOptions = useMemo(
-    () =>
-      savedMetrics
-        .map(metricOptionFromConfig)
-        .filter((option): option is MetricOption => option !== undefined),
-    [savedMetrics],
+    () => getMetricOptions(formData, savedMetrics),
+    [formData, savedMetrics],
   );
   const [fieldLabel, setFieldLabel] = useState('含参毛利率');
   const [template, setTemplate] = useState<CrosstabCalculatedFieldTemplate>(
@@ -256,19 +308,23 @@ export default function CrosstabCalculatedFieldsControl({
             {t('Template')}
             <Select
               ariaLabel={t('Calculated field template')}
+              allowSelectAll={false}
               options={templates}
               value={template}
-              onChange={nextTemplate =>
-                setTemplate(
-                  String(nextTemplate) as CrosstabCalculatedFieldTemplate,
-                )
-              }
+              onChange={nextTemplate => {
+                if (!isCalculatedFieldTemplate(nextTemplate)) {
+                  throw new Error(t('Unsupported calculated field template.'));
+                }
+
+                setTemplate(nextTemplate);
+              }}
             />
           </Field>
           <Field>
             {t('Metric A')}
             <Select
               ariaLabel={t('Metric A')}
+              allowSelectAll={false}
               options={metricOptions}
               value={resolvedLeftMetric}
               onChange={nextMetric => setLeftMetric(String(nextMetric))}
@@ -278,6 +334,7 @@ export default function CrosstabCalculatedFieldsControl({
             {t('Metric B')}
             <Select
               ariaLabel={t('Metric B')}
+              allowSelectAll={false}
               options={metricOptions}
               value={resolvedRightMetric}
               onChange={nextMetric => setRightMetric(String(nextMetric))}

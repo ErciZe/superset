@@ -153,13 +153,32 @@ function getMetricSqlMap(
   }, {});
 }
 
+function isCalculatedFieldPlaceholder(
+  config: MetricFieldConfig,
+  calculatedLabels: Set<string>,
+): boolean {
+  const label = config.label ?? getMetricLabel(config.metric);
+
+  return (
+    calculatedLabels.has(label) &&
+    typeof config.metric === 'string' &&
+    config.metric === label &&
+    getSqlMetricExpression(config.metric) === undefined
+  );
+}
+
 function assertNoDuplicateLabels(
   metricConfigs: MetricFieldConfig[],
   calculatedFields: CrosstabCalculatedField[],
 ): void {
   const labels = new Set<string>();
+  const calculatedLabels = new Set(calculatedFields.map(field => field.label));
 
   metricConfigs.forEach(config => {
+    if (isCalculatedFieldPlaceholder(config, calculatedLabels)) {
+      return;
+    }
+
     labels.add(config.label ?? getMetricLabel(config.metric));
   });
 
@@ -174,6 +193,17 @@ function assertNoDuplicateLabels(
 
     labels.add(field.label);
   });
+}
+
+function stripCalculatedFieldPlaceholders(
+  metricConfigs: MetricFieldConfig[],
+  calculatedFields: CrosstabCalculatedField[],
+): MetricFieldConfig[] {
+  const calculatedLabels = new Set(calculatedFields.map(field => field.label));
+
+  return metricConfigs.filter(
+    config => !isCalculatedFieldPlaceholder(config, calculatedLabels),
+  );
 }
 
 function calculatedMetric(
@@ -232,13 +262,17 @@ export function expandCalculatedFieldMetricConfigs({
     return { metricConfigs };
   }
 
-  const metricSql = getMetricSqlMap(metricConfigs);
+  const baseMetricConfigs = stripCalculatedFieldPlaceholders(
+    metricConfigs,
+    calculatedFields,
+  );
+  const metricSql = getMetricSqlMap(baseMetricConfigs);
 
-  assertNoDuplicateLabels(metricConfigs, calculatedFields);
+  assertNoDuplicateLabels(baseMetricConfigs, calculatedFields);
 
   return {
     metricConfigs: [
-      ...metricConfigs,
+      ...baseMetricConfigs,
       ...calculatedFields.map(field => ({
         metric: calculatedMetric(
           field,

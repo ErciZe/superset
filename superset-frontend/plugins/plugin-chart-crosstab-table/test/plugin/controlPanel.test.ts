@@ -242,6 +242,66 @@ describe('crosstab controlPanel', () => {
     expect(screen.getByDisplayValue('adjustmentRate')).toBeInTheDocument();
   });
 
+  it('saves calculated fields from selected crosstab metrics', () => {
+    const onChange = jest.fn();
+    const setControlValue = jest.fn();
+    const salesMetric = {
+      expressionType: 'SQL',
+      label: 'sales',
+      sqlExpression: 'SUM(sales_amount)',
+    };
+    const profitMetric = {
+      expressionType: 'SQL',
+      label: 'profit',
+      sqlExpression: 'SUM(gross_profit)',
+    };
+
+    render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        actions: { setControlValue },
+        formData: {
+          crosstabFieldConfig: {
+            metrics: [
+              { metric: salesMetric, label: '销售额', semantic: 'additive' },
+              { metric: profitMetric, label: '毛利', semantic: 'additive' },
+            ],
+          },
+        },
+        name: 'calculatedFields',
+        onChange,
+        savedMetrics: [{ metric_name: 'unselected_metric' }],
+        value: [],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('New calculated field'));
+    fireEvent.click(screen.getByText('Save'));
+
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        label: '含参毛利率',
+        inputs: expect.objectContaining({
+          leftMetric: salesMetric,
+          rightMetric: profitMetric,
+          parameterName: 'adjustmentRate',
+        }),
+      }),
+    ]);
+    expect(setControlValue).toHaveBeenCalledWith(
+      'crosstabFieldConfig',
+      expect.objectContaining({
+        metrics: expect.arrayContaining([
+          expect.objectContaining({
+            metric: '含参毛利率',
+            label: '含参毛利率',
+            semantic: 'ratio',
+            formatString: '.2%',
+          }),
+        ]),
+      }),
+    );
+  });
+
   it('renders dynamic metric control when saved value omits slots', () => {
     render(
       createElement(CrosstabDynamicMetricControl, {
