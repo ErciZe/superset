@@ -81,7 +81,7 @@ export function buildCrosstabQueryPlan(
     return plan;
   }
 
-  if (args.showRowTotals) {
+  if (args.showColumnTotals) {
     plan.push(summaryQuery('row_total'));
   }
 
@@ -97,7 +97,7 @@ export function buildCrosstabQueryPlan(
     });
   }
 
-  if (args.showColumnTotals) {
+  if (args.showRowTotals) {
     plan.push(summaryQuery('column_total'));
   }
 
@@ -121,7 +121,7 @@ export function buildCrosstabQueryPlan(
     });
   }
 
-  if (args.showRowTotals || args.showColumnTotals) {
+  if (args.showRowTotals && args.showColumnTotals) {
     plan.push(summaryQuery('grand_total'));
   }
 

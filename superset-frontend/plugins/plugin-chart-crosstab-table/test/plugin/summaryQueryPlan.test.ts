@@ -78,6 +78,27 @@ describe('crosstab summary query plan', () => {
     ]);
   });
 
+  it('keeps row-total summaries for total columns when grand-total rows are disabled', () => {
+    const plan = buildCrosstabQueryPlan({
+      rowFields: ['metric_name_with_unit'],
+      columnFields: ['biz_date', 'shop_name'],
+      hasNonAdditiveSummary: true,
+      showRowTotals: false,
+      showRowSubtotals: true,
+      showColumnTotals: true,
+      showColumnSubtotals: false,
+      serverColumnPagination: true,
+      hasServerColumnPageTuples: true,
+    });
+
+    expect(plan.map(item => item.queryId)).toEqual([
+      'server_column_domain',
+      'server_column_count',
+      'leaf',
+      'summary:row_total',
+    ]);
+  });
+
   it('adds row-column subtotal summary queries when both subtotal axes are enabled', () => {
     const plan = buildCrosstabQueryPlan({
       rowFields: ['category', 'metric_name_with_unit'],
