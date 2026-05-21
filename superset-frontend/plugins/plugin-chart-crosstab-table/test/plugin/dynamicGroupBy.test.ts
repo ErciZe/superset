@@ -23,6 +23,7 @@ import type {
 } from '../../src/types';
 import {
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG,
+  ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_SELECTED_COLUMN,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_SPLICE_COUNT,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT,
@@ -210,7 +211,7 @@ describe('crosstab dynamic group by resolver', () => {
         rowDimensions: ['metric_name_with_unit'],
         columnDimensions: ['biz_date', 'shop_name'],
       }),
-    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION);
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS);
   });
 
   it('throws when selected column is outside the whitelist', () => {
@@ -305,10 +306,131 @@ describe('crosstab dynamic group by resolver', () => {
     });
   });
 
+  it('accepts repeated physical columns across canonical slot options', () => {
+    expect(
+      getDynamicGroupByConfig(
+        createFormData({
+          enabled: true,
+          slots: [
+            {
+              id: 'level2',
+              label: '二级维度',
+              placement: 'columns',
+              slotIndex: 1,
+              spliceCount: 1,
+              defaultOptionId: 'shop_by_level2',
+              options: [
+                {
+                  id: 'shop_by_level2',
+                  label: '店铺',
+                  columns: ['shop_name'],
+                },
+              ],
+            },
+            {
+              id: 'level3',
+              label: '三级维度',
+              placement: 'columns',
+              slotIndex: 2,
+              spliceCount: 1,
+              defaultOptionId: 'shop_by_level3',
+              options: [
+                {
+                  id: 'shop_by_level3',
+                  label: '店铺',
+                  columns: ['shop_name'],
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    ).toEqual({
+      enabled: true,
+      slots: [
+        {
+          id: 'level2',
+          label: '二级维度',
+          placement: 'columns',
+          slotIndex: 1,
+          spliceCount: 1,
+          defaultOptionId: 'shop_by_level2',
+          options: [
+            {
+              id: 'shop_by_level2',
+              label: '店铺',
+              columns: ['shop_name'],
+            },
+          ],
+        },
+        {
+          id: 'level3',
+          label: '三级维度',
+          placement: 'columns',
+          slotIndex: 2,
+          spliceCount: 1,
+          defaultOptionId: 'shop_by_level3',
+          options: [
+            {
+              id: 'shop_by_level3',
+              label: '店铺',
+              columns: ['shop_name'],
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('rejects duplicate canonical slot ids', () => {
+    expect(() =>
+      getDynamicGroupByConfig(
+        createFormData({
+          enabled: true,
+          slots: [
+            {
+              id: 'level',
+              placement: 'columns',
+              slotIndex: 1,
+              defaultOptionId: 'shop',
+              options: [{ id: 'shop', label: '店铺', columns: ['shop_name'] }],
+            },
+            {
+              id: 'level',
+              placement: 'columns',
+              slotIndex: 2,
+              defaultOptionId: 'country',
+              options: [{ id: 'country', label: '国家', columns: ['country'] }],
+            },
+          ],
+        }),
+      ),
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+  });
+
   it('rejects enabled canonical config with no slots', () => {
     expect(() =>
       getDynamicGroupByConfig(createFormData({ enabled: true, slots: [] })),
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+  });
+
+  it('rejects canonical slots with empty options', () => {
+    expect(() =>
+      getDynamicGroupByConfig(
+        createFormData({
+          enabled: true,
+          slots: [
+            {
+              id: 'level2',
+              placement: 'columns',
+              slotIndex: 1,
+              defaultOptionId: 'shop',
+              options: [],
+            },
+          ],
+        }),
+      ),
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS);
   });
 
   it('rejects option columns that do not match spliceCount', () => {

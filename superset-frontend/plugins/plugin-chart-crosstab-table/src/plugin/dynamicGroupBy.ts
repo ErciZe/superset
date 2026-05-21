@@ -154,6 +154,10 @@ function normalizeLegacyConfig(
 
   assertColumn(defaultColumn);
 
+  if (options.length === 0) {
+    throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS);
+  }
+
   const normalizedOptions = options.map(option => {
     if (!isObject(option) || typeof option.label !== 'string') {
       throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
@@ -199,9 +203,7 @@ function validateOption(
 
   const { columns, id, label } = value;
 
-  assertSlotId(id);
-
-  if (typeof label !== 'string') {
+  if (!isNonEmptyString(id) || typeof label !== 'string') {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   }
 
@@ -234,6 +236,10 @@ function validateSlot(value: unknown): CrosstabDynamicGroupBySlot {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   }
 
+  if (options.length === 0) {
+    throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS);
+  }
+
   if (parsedSlotIndex + spliceCount > MAX_DIMENSIONS) {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_MAX_DIMENSIONS);
   }
@@ -257,21 +263,15 @@ function validateSlot(value: unknown): CrosstabDynamicGroupBySlot {
   };
 }
 
-function assertUniqueOptionColumns(slots: CrosstabDynamicGroupBySlot[]): void {
-  const seenColumns = new Set<string>();
+function assertUniqueSlotIds(slots: CrosstabDynamicGroupBySlot[]): void {
+  const seenSlotIds = new Set<string>();
 
   slots.forEach(slot => {
-    slot.options.forEach(option => {
-      option.columns.forEach(column => {
-        const label = getColumnLabel(column);
+    if (seenSlotIds.has(slot.id)) {
+      throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+    }
 
-        if (seenColumns.has(label)) {
-          throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_DUPLICATE_COLUMN);
-        }
-
-        seenColumns.add(label);
-      });
-    });
+    seenSlotIds.add(slot.id);
   });
 }
 
@@ -322,7 +322,7 @@ export function normalizeDynamicGroupByConfig(
 
   const slots = value.slots.map(validateSlot);
 
-  assertUniqueOptionColumns(slots);
+  assertUniqueSlotIds(slots);
   assertNonOverlappingSlots(slots);
 
   return {
