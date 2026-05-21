@@ -50,6 +50,26 @@ test('emits Doris safe division for ratio', () => {
   );
 });
 
+test.each([
+  ['blank id', { id: ' ' }],
+  ['blank label', { label: ' ' }],
+  ['blank id and label', { id: ' ', label: ' ' }],
+])('rejects calculated fields with %s', (_label, fieldPatch) => {
+  expect(() =>
+    emitCalculatedFieldSql(
+      {
+        ...ratioField,
+        ...fieldPatch,
+      },
+      {
+        dialect: 'doris',
+        metricSql,
+        parameterValues: {},
+      },
+    ),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
 test('rejects quoted string literals in metric SQL', () => {
   expect(() =>
     emitCalculatedFieldSql(ratioField, {
@@ -140,6 +160,46 @@ test('rejects parameterized ratio without parameter name', () => {
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
 
+test('rejects parameterized ratio when parameter value is missing', () => {
+  expect(() =>
+    emitCalculatedFieldSql(
+      {
+        ...ratioField,
+        template: 'parameterized_ratio',
+        inputs: {
+          ...ratioField.inputs,
+          parameterName: 'adjustmentRate',
+        },
+      },
+      {
+        dialect: 'doris',
+        metricSql,
+        parameterValues: {},
+      },
+    ),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
+test('rejects parameterized ratio when parameter value is non-finite', () => {
+  expect(() =>
+    emitCalculatedFieldSql(
+      {
+        ...ratioField,
+        template: 'parameterized_ratio',
+        inputs: {
+          ...ratioField.inputs,
+          parameterName: 'adjustmentRate',
+        },
+      },
+      {
+        dialect: 'doris',
+        metricSql,
+        parameterValues: { adjustmentRate: Number.NaN },
+      },
+    ),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
 test('rejects unsafe SQL metric expressions', () => {
   expect(() =>
     emitCalculatedFieldSql(ratioField, {
@@ -147,6 +207,30 @@ test('rejects unsafe SQL metric expressions', () => {
       metricSql: {
         ...metricSql,
         profit: 'SUM(profit); DROP TABLE chart',
+      },
+      parameterValues: {},
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_METRIC);
+});
+
+test.each([
+  ['line comment', '--', 'SUM(profit) -- comment'],
+  ['block comment start', '/*', 'SUM(/* profit)'],
+  ['block comment end', '*/', 'SUM(profit */)'],
+  ['template start', '{{', 'SUM({{ profit)'],
+  ['template end', '}}', 'SUM(profit }})'],
+  ['template expression', '${', 'SUM(profit ${ adjustmentRate)'],
+])('rejects unsafe SQL metric expressions containing %s token %s', (
+  _label,
+  _token,
+  profitSql,
+) => {
+  expect(() =>
+    emitCalculatedFieldSql(ratioField, {
+      dialect: 'doris',
+      metricSql: {
+        ...metricSql,
+        profit: profitSql,
       },
       parameterValues: {},
     }),
