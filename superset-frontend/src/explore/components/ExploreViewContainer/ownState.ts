@@ -24,6 +24,7 @@ const CROSSTAB_OWN_STATE_KEYS = [
   'effectiveMetricSignature',
   'effectiveGroupBySignature',
   'expandedRowPaths',
+  'numericParameters',
   'serverColumnPageColumnSignature',
   'serverColumnPageTuples',
   'serverColumnPageTuplesPage',

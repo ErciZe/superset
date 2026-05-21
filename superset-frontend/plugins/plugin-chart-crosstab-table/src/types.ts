@@ -91,6 +91,35 @@ export type CrosstabDynamicMetricConfig = {
   slots: CrosstabDynamicMetricSlot[];
 };
 
+export type CrosstabNumberParameter = {
+  kind: 'number';
+  name: string;
+  label?: string;
+  default: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+};
+
+export type CrosstabCalculatedFieldTemplate =
+  | 'ratio'
+  | 'difference'
+  | 'parameterized_ratio';
+
+export type CrosstabCalculatedField = {
+  id: string;
+  label: string;
+  template: CrosstabCalculatedFieldTemplate;
+  inputs: {
+    leftMetric: QueryFormMetric;
+    rightMetric: QueryFormMetric;
+    parameterName?: string;
+  };
+  semantic: MetricSemantic;
+  formatString?: string;
+};
+
 export type CrosstabDynamicGroupByInput =
   | CrosstabDynamicGroupByConfig
   | LegacyCrosstabDynamicGroupByConfig;
@@ -102,6 +131,8 @@ export interface CrosstabFormData extends QueryFormData {
   crosstabFieldConfig?: CrosstabFieldConfig;
   dynamicGroupBy?: CrosstabDynamicGroupByInput | string;
   dynamicMetric?: CrosstabDynamicMetricConfig | string;
+  parameters?: CrosstabNumberParameter[] | string;
+  calculatedFields?: CrosstabCalculatedField[] | string;
   showRowTotals?: boolean;
   showColumnTotals?: boolean;
   showRowSubtotals?: boolean;
@@ -210,6 +241,7 @@ export type MetricFieldConfig = {
   metric: QueryFormMetric;
   label?: string;
   semantic?: MetricSemantic;
+  formatString?: string;
 };
 
 export type CrosstabFieldConfig = {
@@ -234,6 +266,7 @@ export type CrosstabChartProps = ChartProps<CrosstabFormData> &
     serverColumnPageSize?: number;
     isServerColumnLoading?: boolean;
     expandedRowPaths?: string[];
+    numericParameters?: Record<string, number>;
   };
 
 export type CrosstabOwnState = {
@@ -242,6 +275,7 @@ export type CrosstabOwnState = {
   selectedDynamicGroupBy?: Record<string, string>;
   selectedDynamicMetric?: Record<string, string>;
   selectedDynamicGroupByColumn?: QueryFormColumn;
+  numericParameters?: Record<string, number>;
   effectiveGroupBySignature?: string;
   effectiveMetricSignature?: string;
   expandedRowPaths?: string[];
