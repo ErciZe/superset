@@ -88,6 +88,18 @@ test('rejects more than one number parameter in v4 core', () => {
   ).toThrow(ERR_CROSSTAB_PARAMETER_CONFIG);
 });
 
+test('rejects malformed JSON parameter config with config error', () => {
+  expect(() =>
+    resolveCrosstabParameters(
+      {
+        ...formData,
+        parameters: '[{"kind":"number"',
+      },
+      undefined,
+    ),
+  ).toThrow(ERR_CROSSTAB_PARAMETER_CONFIG);
+});
+
 test('creates stable signatures from resolved parameter values', () => {
   const resolved = resolveCrosstabParameters(formData, {
     numericParameters: { adjustmentRate: 1.25 },

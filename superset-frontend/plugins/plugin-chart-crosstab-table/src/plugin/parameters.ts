@@ -65,7 +65,13 @@ function parseParameterInput(value: CrosstabFormData['parameters']): unknown[] {
   }
 
   if (typeof value === 'string') {
-    const parsed: unknown = JSON.parse(value);
+    let parsed: unknown;
+
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      throw new Error(ERR_CROSSTAB_PARAMETER_CONFIG);
+    }
 
     if (!Array.isArray(parsed)) {
       throw new Error(ERR_CROSSTAB_PARAMETER_CONFIG);
