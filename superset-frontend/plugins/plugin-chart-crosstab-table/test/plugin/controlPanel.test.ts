@@ -23,9 +23,11 @@ import {
   screen,
 } from '../../../../spec/helpers/testing-library';
 import controlPanel from '../../src/plugin/controlPanel';
+import CrosstabCalculatedFieldsControl from '../../src/plugin/CrosstabCalculatedFieldsControl';
 import CrosstabDynamicGroupByControl from '../../src/plugin/CrosstabDynamicGroupByControl';
 import CrosstabDynamicMetricControl from '../../src/plugin/CrosstabDynamicMetricControl';
 import CrosstabFieldConfigControl from '../../src/plugin/CrosstabFieldConfigControl';
+import CrosstabParametersControl from '../../src/plugin/CrosstabParametersControl';
 
 jest.mock(
   '../../../../src/explore/components/controls/DndColumnSelectControl/DndColumnSelect',
@@ -111,6 +113,8 @@ describe('crosstab controlPanel', () => {
         'crosstabFieldConfig',
         'dynamicGroupBy',
         'dynamicMetric',
+        'parameters',
+        'calculatedFields',
         'showRowTotals',
         'showColumnTotals',
         'showRowSubtotals',
@@ -130,9 +134,14 @@ describe('crosstab controlPanel', () => {
     const crosstabControlNames = getControlNamesForSection('Crosstab');
     const dynamicGroupByIndex = crosstabControlNames.indexOf('dynamicGroupBy');
     const dynamicMetricIndex = crosstabControlNames.indexOf('dynamicMetric');
+    const parametersIndex = crosstabControlNames.indexOf('parameters');
+    const calculatedFieldsIndex =
+      crosstabControlNames.indexOf('calculatedFields');
 
     expect(dynamicGroupByIndex).toBeGreaterThanOrEqual(0);
     expect(dynamicMetricIndex).toBeGreaterThan(dynamicGroupByIndex);
+    expect(parametersIndex).toBeGreaterThan(dynamicMetricIndex);
+    expect(calculatedFieldsIndex).toBeGreaterThan(parametersIndex);
     [
       'showRowTotals',
       'showColumnTotals',
@@ -144,6 +153,8 @@ describe('crosstab controlPanel', () => {
       expect(controlIndex).toBeGreaterThanOrEqual(0);
       expect(dynamicGroupByIndex).toBeLessThan(controlIndex);
       expect(dynamicMetricIndex).toBeLessThan(controlIndex);
+      expect(parametersIndex).toBeLessThan(controlIndex);
+      expect(calculatedFieldsIndex).toBeLessThan(controlIndex);
     });
   });
 
@@ -154,6 +165,8 @@ describe('crosstab controlPanel', () => {
     );
     const dynamicGroupByIndex = controlNames.indexOf('dynamicGroupBy');
     const dynamicMetricIndex = controlNames.indexOf('dynamicMetric');
+    const parametersIndex = controlNames.indexOf('parameters');
+    const calculatedFieldsIndex = controlNames.indexOf('calculatedFields');
     const serverColumnPaginationIndex = controlNames.indexOf(
       'serverColumnPagination',
     );
@@ -161,7 +174,9 @@ describe('crosstab controlPanel', () => {
     expect(crosstabFieldConfigIndex).toBeGreaterThanOrEqual(0);
     expect(dynamicGroupByIndex).toBeGreaterThan(crosstabFieldConfigIndex);
     expect(dynamicMetricIndex).toBeGreaterThan(dynamicGroupByIndex);
-    expect(serverColumnPaginationIndex).toBeGreaterThan(dynamicMetricIndex);
+    expect(parametersIndex).toBeGreaterThan(dynamicMetricIndex);
+    expect(calculatedFieldsIndex).toBeGreaterThan(parametersIndex);
+    expect(serverColumnPaginationIndex).toBeGreaterThan(calculatedFieldsIndex);
   });
 
   it('exposes dynamic group-by as a chart-local slot editor', () => {
@@ -188,9 +203,43 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('registers dynamic slot control component types', () => {
+  it('exposes crosstab parameters and calculated fields as chart-local controls', () => {
+    expect(getControlConfig('parameters')).toEqual(
+      expect.objectContaining({
+        type: 'CrosstabParametersControl',
+        label: 'Parameters',
+        default: [],
+        renderTrigger: true,
+      }),
+    );
+    expect(getControlConfig('calculatedFields')).toEqual(
+      expect.objectContaining({
+        type: 'CrosstabCalculatedFieldsControl',
+        label: 'Calculated fields',
+        default: [],
+        renderTrigger: true,
+      }),
+    );
+  });
+
+  it('registers dynamic slot and v4 control component types', () => {
     expect(CrosstabDynamicGroupByControl).toBeDefined();
     expect(CrosstabDynamicMetricControl).toBeDefined();
+    expect(CrosstabParametersControl).toBeDefined();
+    expect(CrosstabCalculatedFieldsControl).toBeDefined();
+  });
+
+  it('renders the crosstab parameters control default number parameter', () => {
+    render(
+      createElement(CrosstabParametersControl, {
+        name: 'parameters',
+        onChange: jest.fn(),
+        value: [],
+      }),
+    );
+
+    expect(screen.getByText('Number parameter')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('adjustmentRate')).toBeInTheDocument();
   });
 
   it('renders dynamic metric control when saved value omits slots', () => {

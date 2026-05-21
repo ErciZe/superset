@@ -23,13 +23,17 @@ import {
   sharedControlComponents,
 } from '@superset-ui/chart-controls';
 import { t, validateInteger } from '@superset-ui/core';
+import CrosstabCalculatedFieldsControl from './CrosstabCalculatedFieldsControl';
 import CrosstabDynamicGroupByControl from './CrosstabDynamicGroupByControl';
 import CrosstabDynamicMetricControl from './CrosstabDynamicMetricControl';
 import CrosstabFieldConfigControl from './CrosstabFieldConfigControl';
+import CrosstabParametersControl from './CrosstabParametersControl';
 
 Object.assign(sharedControlComponents as Record<string, unknown>, {
+  CrosstabCalculatedFieldsControl,
   CrosstabDynamicGroupByControl,
   CrosstabDynamicMetricControl,
+  CrosstabParametersControl,
 });
 
 const config: ControlPanelConfig = {
@@ -135,6 +139,37 @@ const config: ControlPanelConfig = {
               mapStateToProps: ({ datasource }) => ({
                 columns: datasource?.columns ?? [],
                 datasource,
+                savedMetrics:
+                  datasource && 'metrics' in datasource
+                    ? datasource.metrics
+                    : [],
+              }),
+            },
+          },
+        ],
+        [
+          {
+            name: 'parameters',
+            config: {
+              type: 'CrosstabParametersControl',
+              label: t('Parameters'),
+              default: [],
+              renderTrigger: true,
+              description: t('Configure chart-local numeric parameters.'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'calculatedFields',
+            config: {
+              type: 'CrosstabCalculatedFieldsControl',
+              label: t('Calculated fields'),
+              default: [],
+              renderTrigger: true,
+              description: t('Create SQL-backed crosstab calculated fields.'),
+              mapStateToProps: ({ datasource, form_data }) => ({
+                formData: form_data,
                 savedMetrics:
                   datasource && 'metrics' in datasource
                     ? datasource.metrics
