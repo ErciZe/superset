@@ -47,6 +47,7 @@ import type {
   CrosstabChartProps,
   CrosstabColumnNode,
   CrosstabConditionalRule,
+  CrosstabNumberParameter,
   CrosstabOwnState,
 } from './types';
 import {
@@ -466,6 +467,48 @@ function getPreservedDynamicMetricOwnState(
   return preservedOwnState;
 }
 
+function getPreservedNumericParameterOwnState(
+  ownState: CrosstabChartProps['ownState'],
+) {
+  const preservedOwnState = {
+    ...((ownState ?? {}) as CrosstabOwnState),
+  };
+
+  delete preservedOwnState.effectiveMetricSignature;
+  delete preservedOwnState.serverColumnPageColumnSignature;
+  delete preservedOwnState.serverColumnPageTuples;
+  delete preservedOwnState.serverColumnPageTuplesPage;
+  delete preservedOwnState.serverColumnPageTuplesPageSize;
+  delete preservedOwnState.serverColumnTotalCount;
+
+  return preservedOwnState;
+}
+
+function validateNumericParameterValue(
+  parameter: CrosstabNumberParameter,
+  value: number,
+) {
+  if (!Number.isFinite(value)) {
+    throw new Error('Crosstab numeric parameter value is invalid.');
+  }
+
+  if (
+    (parameter.min !== undefined && value < parameter.min) ||
+    (parameter.max !== undefined && value > parameter.max)
+  ) {
+    throw new Error('Crosstab numeric parameter value is invalid.');
+  }
+
+  if (parameter.step !== undefined) {
+    const base = parameter.min ?? 0;
+    const quotient = (value - base) / parameter.step;
+
+    if (Math.abs(quotient - Math.round(quotient)) > 1e-9) {
+      throw new Error('Crosstab numeric parameter value is invalid.');
+    }
+  }
+}
+
 export default function CrosstabTable({
   columnTree,
   columns,
@@ -790,17 +833,15 @@ export default function CrosstabTable({
     ],
   );
   const updateNumericParameter = useCallback(
-    (name: string, value: number) => {
-      if (!Number.isFinite(value)) {
-        throw new Error('Crosstab numeric parameter value must be finite.');
-      }
+    (parameter: CrosstabNumberParameter, value: number) => {
+      validateNumericParameterValue(parameter, value);
 
       setDataMask?.({
         ownState: {
-          ...ownState,
+          ...getPreservedNumericParameterOwnState(ownState),
           numericParameters: {
             ...(ownState?.numericParameters ?? {}),
-            [name]: value,
+            [parameter.name]: value,
           },
           currentColumnPage: 0,
           currentColumnPageSize: effectiveColumnsPerPage,
@@ -1018,7 +1059,7 @@ export default function CrosstabTable({
             max={parameter.max}
             min={parameter.min}
             onChange={event =>
-              updateNumericParameter(parameter.name, Number(event.target.value))
+              updateNumericParameter(parameter, Number(event.target.value))
             }
             step={parameter.step}
             type="number"

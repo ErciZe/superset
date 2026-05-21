@@ -349,6 +349,25 @@ describe('CrosstabTable', () => {
     return button;
   }
 
+  function catchWindowErrors(callback: () => void) {
+    const errors: Error[] = [];
+    const handler = (event: ErrorEvent) => {
+      errors.push(event.error);
+      event.preventDefault();
+    };
+
+    window.addEventListener('error', handler);
+    try {
+      callback();
+    } catch (error) {
+      errors.push(error as Error);
+    } finally {
+      window.removeEventListener('error', handler);
+    }
+
+    return errors;
+  }
+
   function getGridContainer() {
     const gridContainer = container.querySelector(
       '[data-test="crosstab-grid-container"]',
@@ -1464,7 +1483,13 @@ describe('CrosstabTable', () => {
       ownState: {
         currentColumnPage: 2,
         currentColumnPageSize: 8,
+        effectiveMetricSignature: 'stale-metric-signature',
         expandedRowPaths: ['category::A'],
+        serverColumnPageColumnSignature: 'stale-column-signature',
+        serverColumnPageTuples: [['stale']],
+        serverColumnPageTuplesPage: 2,
+        serverColumnPageTuplesPageSize: 8,
+        serverColumnTotalCount: 100,
       },
       rowData: [],
       columns: [
@@ -1499,6 +1524,83 @@ describe('CrosstabTable', () => {
         expandedRowPaths: ['category::A'],
       }),
     });
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'effectiveMetricSignature',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnPageColumnSignature',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnTotalCount',
+    );
+  });
+
+  it('rejects invalid numeric parameter max and step values before writing own-state', () => {
+    const setDataMask = jest.fn();
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+        generatedColumnWidth: 120,
+        parameters: [
+          {
+            kind: 'number',
+            name: 'adjustmentRate',
+            label: '调整系数',
+            default: 1,
+            min: 0,
+            max: 2,
+            step: 0.01,
+          },
+        ],
+      },
+      hooks: {
+        setDataMask,
+      },
+      numericParameters: { adjustmentRate: 1 },
+      ownState: {
+        expandedRowPaths: ['category::A'],
+      },
+      rowData: [],
+      columns: [
+        {
+          key: 'metric_name',
+          label: '指标项',
+          dataType: GenericDataType.String,
+        },
+      ],
+      columnTree: [],
+      generatedColumnIds: [],
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    const input = getNumericParameterInput('adjustmentRate');
+
+    const maxErrors = catchWindowErrors(() => {
+      act(() => {
+        Simulate.change(input, { target: { value: '2.5' } } as never);
+      });
+    });
+    const stepErrors = catchWindowErrors(() => {
+      act(() => {
+        Simulate.change(input, { target: { value: '1.255' } } as never);
+      });
+    });
+
+    expect([...maxErrors, ...stepErrors]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Crosstab numeric parameter value is invalid.',
+        }),
+        expect.objectContaining({
+          message: 'Crosstab numeric parameter value is invalid.',
+        }),
+      ]),
+    );
+    expect(setDataMask).not.toHaveBeenCalled();
   });
 
   it('renders one dynamic metric selector per configured slot', () => {
