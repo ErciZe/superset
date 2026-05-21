@@ -50,8 +50,8 @@ test('emits Doris safe division for ratio', () => {
   );
 });
 
-test('allows quoted string literals in metric SQL', () => {
-  expect(
+test('rejects quoted string literals in metric SQL', () => {
+  expect(() =>
     emitCalculatedFieldSql(ratioField, {
       dialect: 'doris',
       metricSql: {
@@ -60,9 +60,7 @@ test('allows quoted string literals in metric SQL', () => {
       },
       parameterValues: {},
     }),
-  ).toBe(
-    "(CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(CASE WHEN state = 'CA' THEN gross_profit ELSE 0 END) / SUM(sales_amount) END)",
-  );
+  ).toThrow(ERR_CROSSTAB_CALC_METRIC);
 });
 
 test('emits difference', () => {

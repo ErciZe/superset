@@ -33,7 +33,7 @@ export type EmitCalculatedFieldSqlArgs = {
   parameterValues: Record<string, number>;
 };
 
-const unsafeSqlTokenPattern = /(;|--|\/\*|\*\/|\{\{|\}\}|\$\{)/;
+const unsafeSqlTokenPattern = /(;|--|\/\*|\*\/|'|\{\{|\}\}|\$\{)/;
 
 function assertDialect(
   dialect: CalcSqlDialect | string,
