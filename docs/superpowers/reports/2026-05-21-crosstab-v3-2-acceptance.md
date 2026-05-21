@@ -82,7 +82,8 @@ Date: 2026-05-21
   - Container: `apache-superset` is `running healthy`.
   - Public health: `curl -fsS --connect-timeout 10 http://111.230.91.24:8088/health` returned `OK`.
   - Static asset evidence: `crosstab-dynamic-metric-control` exists in both remote deployment assets and container assets.
-  - Recent post-restart log scan found no `error`, `exception`, `traceback`, or `critical` lines.
+  - Targeted post-browser log scan found no `TypeError`, `Cannot read`, `ERR_CROSSTAB`, `ERROR`, or `CRITICAL` entries.
+  - Residual log noise: one static-file 404 for `/static/assets/theme-[object Object].js` during Chrome refresh; the Explore page still rendered and the crosstab TypeError did not return.
 - Browser production validation: PASS.
   - Chrome authenticated Explore URL refreshed to the deployed bundle.
   - The `定制化配置` tab renders `Dynamic group by` and `Dynamic metrics` controls.
