@@ -27,3 +27,37 @@ Date: 2026-05-21
 - V3.2 dynamic metric uses selected metric definitions for summary semantics.
 - Server-column pagination still fails fast outside the current `1 row dimension + 1 metric` shape.
 - Malformed metric entries still fail fast with `Unsupported crosstab metric field.` instead of leaking raw metric-label TypeErrors.
+
+## Production Test Deployment
+
+- Git provenance: `noway-release` at `aaa792edadc19b8394ce3c04c198b5f1f10cf4af`, pushed to `fork/noway-release`.
+- Remote assets backup: `backups/assets-20260521180603`.
+- Asset dry-run before sync: 20 changed/new files, 9 delete entries, 1 other entry.
+- Asset sync: PASS.
+- Image rebuild: PASS.
+  - Image: `apache-superset-doris:6.0.0-zh-column-scheme-matrix`
+  - Image ID: `sha256:7321d981854bf20ac1b7479b87a13b3d26bc80eed43aaec1479499672b2991f0`
+  - Created: `2026-05-21T18:06:27.882450953+08:00`
+- Service restart: PASS.
+  - Container: `apache-superset`
+  - Status: `running healthy`
+- Health checks: PASS.
+  - Remote-local: `curl -fsS http://127.0.0.1:8088/health` returned `OK`.
+  - Public: `curl -fsS --connect-timeout 10 http://111.230.91.24:8088/health` returned `OK`.
+  - Public root returned `302` to `/superset/welcome/`.
+- Static asset evidence: PASS.
+  - `crosstab-dynamic-metric-control` exists in both remote deployment assets and container assets.
+- Slice 10 metadata inspection: PASS for no accidental formal mutation.
+  - Slice 10 exists: `订单利润指标矩阵 - 日维度`.
+  - `viz_type`: `crosstab-table`.
+  - `dynamicMetric`: not present yet.
+  - `dynamicGroupBy`: present.
+  - `crosstabFieldConfig`: present.
+- Logs: PASS.
+  - Recent post-restart scan found no `error`, `exception`, `traceback`, or `critical` lines.
+
+## Production Acceptance Boundary
+
+- Production test deployment is complete.
+- Copied-chart V3.1.1/V3.2 browser acceptance is still pending because authenticated Explore access is required and no copied-chart URL has been recorded yet.
+- Formal slice 10 metadata update remains gated until copied-chart acceptance passes.
