@@ -296,10 +296,65 @@ describe('crosstab controlPanel', () => {
             label: '含参毛利率',
             semantic: 'ratio',
             formatString: '.2%',
+            calculatedFieldId: '含参毛利率',
           }),
         ]),
       }),
     );
+  });
+
+  it('resolves calculated field metrics after selected chart metrics load', () => {
+    const onChange = jest.fn();
+    const setControlValue = jest.fn();
+    const salesMetric = {
+      expressionType: 'SQL',
+      label: 'sales',
+      sqlExpression: 'SUM(sales_amount)',
+    };
+    const profitMetric = {
+      expressionType: 'SQL',
+      label: 'profit',
+      sqlExpression: 'SUM(gross_profit)',
+    };
+    const { rerender } = render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        actions: { setControlValue },
+        name: 'calculatedFields',
+        onChange,
+        savedMetrics: [{ metric_name: 'unselected_metric' }],
+        value: [],
+      }),
+    );
+
+    rerender(
+      createElement(CrosstabCalculatedFieldsControl, {
+        actions: { setControlValue },
+        formData: {
+          crosstabFieldConfig: {
+            metrics: [
+              { metric: salesMetric, label: '销售额', semantic: 'additive' },
+              { metric: profitMetric, label: '毛利', semantic: 'additive' },
+            ],
+          },
+        },
+        name: 'calculatedFields',
+        onChange,
+        savedMetrics: [{ metric_name: 'unselected_metric' }],
+        value: [],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('New calculated field'));
+    fireEvent.click(screen.getByText('Save'));
+
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        inputs: expect.objectContaining({
+          leftMetric: salesMetric,
+          rightMetric: profitMetric,
+        }),
+      }),
+    ]);
   });
 
   it('renders dynamic metric control when saved value omits slots', () => {

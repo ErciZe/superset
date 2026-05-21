@@ -192,6 +192,21 @@ function getFieldConfig(formData?: CrosstabFormData): CrosstabFieldConfig {
   return formData?.crosstabFieldConfig ?? {};
 }
 
+function getSelectedMetricValue(
+  selectedValue: string | undefined,
+  metricOptions: MetricOption[],
+  fallbackIndex: number,
+): string | undefined {
+  if (
+    selectedValue !== undefined &&
+    metricOptions.some(option => option.value === selectedValue)
+  ) {
+    return selectedValue;
+  }
+
+  return metricOptions[fallbackIndex]?.value;
+}
+
 export default function CrosstabCalculatedFieldsControl({
   actions,
   formData,
@@ -217,8 +232,16 @@ export default function CrosstabCalculatedFieldsControl({
   const [rightMetric, setRightMetric] = useState<string | undefined>(
     metricOptions[1]?.value,
   );
-  const resolvedLeftMetric = leftMetric ?? metricOptions[0]?.value;
-  const resolvedRightMetric = rightMetric ?? metricOptions[1]?.value;
+  const resolvedLeftMetric = getSelectedMetricValue(
+    leftMetric,
+    metricOptions,
+    0,
+  );
+  const resolvedRightMetric = getSelectedMetricValue(
+    rightMetric,
+    metricOptions,
+    1,
+  );
 
   const selectedLeftMetric = metricOptions.find(
     option => option.value === resolvedLeftMetric,
@@ -252,6 +275,7 @@ export default function CrosstabCalculatedFieldsControl({
       metric: field.label as QueryFormMetric,
       label: field.label,
       semantic,
+      calculatedFieldId: field.id,
       ...(field.formatString ? { formatString: field.formatString } : {}),
     };
     const currentFieldConfig = getFieldConfig(formData);

@@ -242,6 +242,7 @@ export type MetricFieldConfig = {
   label?: string;
   semantic?: MetricSemantic;
   formatString?: string;
+  calculatedFieldId?: string;
 };
 
 export type CrosstabFieldConfig = {

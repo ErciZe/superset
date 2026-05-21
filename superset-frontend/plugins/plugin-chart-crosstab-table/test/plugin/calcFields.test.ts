@@ -100,6 +100,7 @@ test('replaces calculated field metric placeholders with generated SQL metrics',
         label: '含参毛利率',
         semantic: 'ratio',
         formatString: '.2%',
+        calculatedFieldId: 'adjusted_margin',
       },
     ],
     parameterValues: { adjustmentRate: 1.25 },
@@ -117,6 +118,25 @@ test('replaces calculated field metric placeholders with generated SQL metrics',
     semantic: 'ratio',
     formatString: '.2%',
   });
+});
+
+test('rejects real string metric labels that duplicate calculated fields', () => {
+  expect(() =>
+    expandCalculatedFieldMetricConfigs({
+      dialect: 'doris',
+      formData,
+      metricConfigs: [
+        ...metricConfigs,
+        {
+          metric: '含参毛利率',
+          label: '含参毛利率',
+          semantic: 'ratio',
+          formatString: '.2%',
+        },
+      ],
+      parameterValues: { adjustmentRate: 1.25 },
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
 
 test('creates stable signatures including parameter value', () => {
