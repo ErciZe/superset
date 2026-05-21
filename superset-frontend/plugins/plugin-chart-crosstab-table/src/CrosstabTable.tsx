@@ -839,6 +839,10 @@ export default function CrosstabTable({
     (parameter: CrosstabNumberParameter, value: number) => {
       validateNumericParameterValue(parameter, value);
 
+      if (!serverColumnPagination) {
+        setColumnPage(0);
+      }
+
       setDataMask?.({
         ownState: {
           ...getPreservedNumericParameterOwnState(ownState),
@@ -854,7 +858,13 @@ export default function CrosstabTable({
         },
       });
     },
-    [effectiveColumnsPerPage, ownState, setDataMask],
+    [
+      effectiveColumnsPerPage,
+      ownState,
+      serverColumnPagination,
+      setColumnPage,
+      setDataMask,
+    ],
   );
   const toggleRowPath = useCallback(
     (row: DataRecord) => {

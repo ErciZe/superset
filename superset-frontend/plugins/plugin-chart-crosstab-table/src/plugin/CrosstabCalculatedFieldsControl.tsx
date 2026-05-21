@@ -103,6 +103,16 @@ function metricOptionFromMetric(
   metric: QueryFormMetric,
   label?: string,
 ): MetricOption | undefined {
+  if (
+    typeof metric !== 'object' ||
+    metric === null ||
+    Array.isArray(metric) ||
+    metric.expressionType !== 'SQL' ||
+    typeof metric.sqlExpression !== 'string'
+  ) {
+    return undefined;
+  }
+
   const metricLabel = getMetricLabel(metric);
 
   if (!metricLabel) {
@@ -119,21 +129,14 @@ function metricOptionFromMetric(
 function metricOptionFromConfig(
   metricConfig: SavedMetric,
 ): MetricOption | undefined {
-  const metric =
-    metricConfig.metric ?? metricConfig.metric_name ?? metricConfig.label;
-
-  if (!metric) {
+  if (!metricConfig.metric) {
     return undefined;
   }
 
-  const queryMetric = metric as QueryFormMetric;
-  const metricLabel = getMetricLabel(queryMetric);
-
-  return {
-    label: metricConfig.label ?? metricConfig.verbose_name ?? metricLabel,
-    value: metricLabel,
-    metric: queryMetric,
-  };
+  return metricOptionFromMetric(
+    metricConfig.metric,
+    metricConfig.label ?? metricConfig.verbose_name,
+  );
 }
 
 function getMetricOptions(

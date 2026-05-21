@@ -398,6 +398,44 @@ describe('crosstab controlPanel', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('rejects non-SQL saved metrics for calculated fields', () => {
+    const onChange = jest.fn();
+    const setControlValue = jest.fn();
+
+    render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        actions: { setControlValue },
+        formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+        },
+        name: 'calculatedFields',
+        onChange,
+        savedMetrics: [
+          { metric_name: 'saved_sales' },
+          { metric_name: 'saved_profit' },
+        ],
+        value: [],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('New calculated field'));
+
+    const errors = catchWindowErrors(() =>
+      fireEvent.click(screen.getByText('Save')),
+    );
+
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Calculated fields require two saved metrics.',
+        }),
+      ]),
+    );
+    expect(onChange).not.toHaveBeenCalled();
+    expect(setControlValue).not.toHaveBeenCalled();
+  });
+
   it('resolves calculated field metrics after selected chart metrics load', () => {
     const onChange = jest.fn();
     const setControlValue = jest.fn();

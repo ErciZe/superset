@@ -727,6 +727,7 @@ describe('CrosstabTable', () => {
   });
 
   it('paginates generated columns while keeping row and total columns visible', () => {
+    const setDataMask = jest.fn();
     const generatedColumnIds = Array.from(
       { length: 101 },
       (_, index) => `__crosstab_col__number:${index + 1}__metric__amount`,
@@ -737,7 +738,22 @@ describe('CrosstabTable', () => {
       formData: {
         datasource: '1__table',
         viz_type: 'crosstab_table',
+        parameters: [
+          {
+            kind: 'number',
+            name: 'adjustmentRate',
+            label: '调整系数',
+            default: 1,
+            min: 0,
+            max: 2,
+            step: 0.01,
+          },
+        ],
       },
+      hooks: {
+        setDataMask,
+      },
+      numericParameters: { adjustmentRate: 1 },
       rowData: [
         generatedColumnIds.reduce<Record<string, unknown>>(
           (row, columnId, index) => ({
@@ -817,6 +833,15 @@ describe('CrosstabTable', () => {
     expect(getByText('D5')).toBeInTheDocument();
     expect(getByText('D8')).toBeInTheDocument();
     expect(() => getByText('D1')).toThrow('Unable to find text: D1');
+
+    const input = getNumericParameterInput('adjustmentRate');
+    act(() => {
+      Simulate.change(input, { target: { value: '1.25' } } as never);
+    });
+
+    expect(getByText('列 1-4 / 101')).toBeInTheDocument();
+    expect(getByText('D1')).toBeInTheDocument();
+    expect(container).not.toHaveTextContent(/D5/);
   });
 
   it('updates own state for server column pagination instead of slicing local columns', () => {
