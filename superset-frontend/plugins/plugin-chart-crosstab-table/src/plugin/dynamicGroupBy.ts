@@ -222,6 +222,18 @@ function validateOption(
   return { id, label, columns };
 }
 
+function assertUniqueOptionIds(options: CrosstabDynamicGroupByOption[]): void {
+  const seenOptionIds = new Set<string>();
+
+  options.forEach(option => {
+    if (seenOptionIds.has(option.id)) {
+      throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+    }
+
+    seenOptionIds.add(option.id);
+  });
+}
+
 function validateSlot(value: unknown): CrosstabDynamicGroupBySlot {
   if (!isObject(value)) {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
@@ -253,6 +265,8 @@ function validateSlot(value: unknown): CrosstabDynamicGroupBySlot {
   const normalizedOptions = options.map(option =>
     validateOption(option, spliceCount),
   );
+
+  assertUniqueOptionIds(normalizedOptions);
 
   if (!normalizedOptions.some(option => option.id === defaultOptionId)) {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION);

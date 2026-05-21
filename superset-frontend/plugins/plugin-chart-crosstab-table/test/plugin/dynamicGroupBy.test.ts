@@ -64,6 +64,12 @@ const sameLabelDifferentAdhocSqlColumn: QueryFormColumn = {
   sqlExpression: 'SUM(profit)',
 };
 
+const sameExpressionDifferentLabelAdhocSqlColumn: QueryFormColumn = {
+  expressionType: 'SQL',
+  label: 'Duplicated Revenue',
+  sqlExpression: 'SUM(revenue)',
+};
+
 const multiSlotConfig: CrosstabFormData['dynamicGroupBy'] = {
   enabled: true,
   slots: [
@@ -482,6 +488,36 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   });
 
+  it('rejects duplicate option ids within one canonical slot', () => {
+    expect(() =>
+      getDynamicGroupByConfig(
+        createFormData({
+          enabled: true,
+          slots: [
+            {
+              id: 'level2',
+              placement: 'columns',
+              slotIndex: 1,
+              defaultOptionId: 'dimension',
+              options: [
+                {
+                  id: 'dimension',
+                  label: '店铺',
+                  columns: ['shop_name'],
+                },
+                {
+                  id: 'dimension',
+                  label: '国家',
+                  columns: ['country'],
+                },
+              ],
+            },
+          ],
+        }),
+      ),
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+  });
+
   it('rejects enabled canonical config with no slots', () => {
     expect(() =>
       getDynamicGroupByConfig(createFormData({ enabled: true, slots: [] })),
@@ -782,6 +818,34 @@ describe('crosstab dynamic group by resolver', () => {
       sameLabelAdhocSqlColumn,
       sameLabelDifferentAdhocSqlColumn,
     ]);
+  });
+
+  it('throws when adhoc SQL columns share an expression with different labels', () => {
+    expect(() =>
+      resolveDynamicGroupByDimensions({
+        formData: createFormData({
+          enabled: true,
+          slots: [
+            {
+              id: 'append_sql',
+              placement: 'columns',
+              slotIndex: 2,
+              spliceCount: 1,
+              defaultOptionId: 'duplicated_revenue',
+              options: [
+                {
+                  id: 'duplicated_revenue',
+                  label: 'Duplicated revenue',
+                  columns: [sameExpressionDifferentLabelAdhocSqlColumn],
+                },
+              ],
+            },
+          ],
+        }),
+        rowDimensions: ['metric_name_with_unit'],
+        columnDimensions: ['biz_date', sameLabelAdhocSqlColumn],
+      }),
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_DUPLICATE_COLUMN);
   });
 
   it('throws when total effective dimensions exceed MAX_DIMENSIONS', () => {
