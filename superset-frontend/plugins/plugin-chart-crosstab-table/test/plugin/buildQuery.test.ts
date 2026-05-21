@@ -200,7 +200,7 @@ describe('crosstab buildQuery', () => {
     ]);
   });
 
-  it('uses canonical multi-slot dimensions for server domain, count, leaf, and summary queries', () => {
+  it('uses canonical multi-slot dimensions for pre-tuples server domain and count queries', () => {
     const queryContext = buildQuery(
       {
         datasource: '11__table',
@@ -241,6 +241,11 @@ describe('crosstab buildQuery', () => {
         row_offset: 0,
       }),
     );
+    expect(queryContext.queries[0].orderby).toEqual([
+      ['biz_date', true],
+      ['country', true],
+      ['msku', true],
+    ]);
     expect(queryContext.queries[1]).toEqual(
       expect.objectContaining({
         is_rowcount: true,
@@ -248,6 +253,63 @@ describe('crosstab buildQuery', () => {
         row_offset: 0,
       }),
     );
+  });
+
+  it('uses canonical multi-slot dimensions for cached-tuples server leaf and summary queries', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '11__table',
+        viz_type: 'crosstab-table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }, { field: 'shop_name' }],
+          metrics: [{ metric: '指标值', semantic: 'ratio' }],
+        },
+        dynamicGroupBy: canonicalMultiSlotGroupBy,
+        serverColumnPagination: true,
+        showRowTotals: true,
+        showRowSubtotals: true,
+        showColumnTotals: true,
+        showColumnSubtotals: true,
+        row_limit: 10000,
+      } as never,
+      {
+        ownState: {
+          currentColumnPage: 0,
+          currentColumnPageSize: 5,
+          serverColumnPageTuplesPage: 0,
+          serverColumnPageTuplesPageSize: 5,
+          serverColumnPageColumnSignature: 'biz_date\u001fcountry\u001fmsku',
+          serverColumnTotalCount: 2,
+          serverColumnPageTuples: [
+            ['2026-05-01', 'US', 'SKU-1'],
+            ['2026-05-01', 'CA', 'SKU-2'],
+          ],
+          selectedDynamicGroupBy: {
+            level2: 'country',
+            level3: 'msku',
+          },
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries.map(query => query.columns)).toEqual([
+      ['biz_date', 'country', 'msku'],
+      ['biz_date', 'country', 'msku'],
+      ['metric_name_with_unit', 'biz_date', 'country', 'msku'],
+      ['metric_name_with_unit'],
+      ['biz_date', 'country', 'msku'],
+      ['metric_name_with_unit', 'biz_date'],
+      ['biz_date'],
+      ['metric_name_with_unit', 'biz_date', 'country'],
+      ['biz_date', 'country'],
+      [],
+    ]);
+    expect(queryContext.queries[0].orderby).toEqual([
+      ['biz_date', true],
+      ['country', true],
+      ['msku', true],
+    ]);
   });
 
   it('includes row dimensions, column dimensions, and metrics in one aggregate query', () => {
