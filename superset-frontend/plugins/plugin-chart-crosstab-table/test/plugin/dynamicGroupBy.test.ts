@@ -23,10 +23,13 @@ import type {
 } from '../../src/types';
 import {
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG,
+  ERR_CROSSTAB_DYNAMIC_GROUP_BY_DUPLICATE_COLUMN,
+  ERR_CROSSTAB_DYNAMIC_GROUP_BY_MAX_DIMENSIONS,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_SELECTED_COLUMN,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_SPLICE_COUNT,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT,
+  ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT_OVERLAP,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION,
   getDynamicGroupByConfig,
   resolveDynamicGroupByDimensions,
@@ -47,6 +50,63 @@ const adhocSqlColumn: QueryFormColumn = {
   expressionType: 'SQL',
   label: 'Order month',
   sqlExpression: "DATE_TRUNC('month', order_date)",
+};
+
+const multiSlotConfig: CrosstabFormData['dynamicGroupBy'] = {
+  enabled: true,
+  slots: [
+    {
+      id: 'level2',
+      label: '二级维度',
+      placement: 'columns',
+      slotIndex: 1,
+      spliceCount: 1,
+      defaultOptionId: 'shop',
+      options: [
+        { id: 'shop', label: '店铺', columns: ['shop_name'] },
+        { id: 'country', label: '国家', columns: ['country'] },
+      ],
+    },
+    {
+      id: 'level3',
+      label: '三级维度',
+      placement: 'columns',
+      slotIndex: 2,
+      spliceCount: 1,
+      defaultOptionId: 'none',
+      options: [
+        { id: 'none', label: '(无)', columns: [] },
+        { id: 'msku', label: 'MSKU', columns: ['msku'] },
+        { id: 'parent_asin', label: '父体', columns: ['parent_asin'] },
+      ],
+    },
+  ],
+};
+
+const multiColumnOptionConfig: CrosstabFormData['dynamicGroupBy'] = {
+  enabled: true,
+  slots: [
+    {
+      id: 'level2_pair',
+      label: '二级组合',
+      placement: 'columns',
+      slotIndex: 1,
+      spliceCount: 2,
+      defaultOptionId: 'shop_country',
+      options: [
+        {
+          id: 'shop_country',
+          label: '店铺 + 国家',
+          columns: ['shop_name', 'country'],
+        },
+        {
+          id: 'msku_parent',
+          label: 'MSKU + 父体',
+          columns: ['msku', 'parent_asin'],
+        },
+      ],
+    },
+  ],
 };
 
 function createFormData(
@@ -72,6 +132,7 @@ describe('crosstab dynamic group by resolver', () => {
       columnDimensions: ['biz_date', 'shop_name'],
       config: undefined,
       selectedColumn: undefined,
+      selectedDynamicGroupBy: undefined,
       signature: 'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
     });
   });
@@ -187,6 +248,7 @@ describe('crosstab dynamic group by resolver', () => {
       columnDimensions: ['biz_date', 'shop_name'],
       config: undefined,
       selectedColumn: undefined,
+      selectedDynamicGroupBy: undefined,
       signature: 'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
     });
   });
@@ -466,5 +528,179 @@ describe('crosstab dynamic group by resolver', () => {
         }),
       ),
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SPLICE_COUNT);
+  });
+
+  it('applies multiple selected slots against original persisted positions', () => {
+    const result = resolveDynamicGroupByDimensions({
+      formData: createFormData(multiSlotConfig),
+      ownState: {
+        selectedDynamicGroupBy: {
+          level2: 'country',
+          level3: 'msku',
+        },
+      },
+      rowDimensions: ['metric_name_with_unit'],
+      columnDimensions: ['biz_date', 'shop_name'],
+    });
+
+    expect(result.columnDimensions).toEqual(['biz_date', 'country', 'msku']);
+    expect(result.selectedDynamicGroupBy).toEqual({
+      level2: 'country',
+      level3: 'msku',
+    });
+    expect(result.selectedColumn).toBe('country');
+    expect(result.signature).toBe(
+      'rows=metric_name_with_unit|columns=biz_date\u001fcountry\u001fmsku',
+    );
+  });
+
+  it('treats append-position empty option as no-op', () => {
+    const result = resolveDynamicGroupByDimensions({
+      formData: createFormData(multiSlotConfig),
+      ownState: {
+        selectedDynamicGroupBy: {
+          level2: 'shop',
+          level3: 'none',
+        },
+      },
+      rowDimensions: ['metric_name_with_unit'],
+      columnDimensions: ['biz_date', 'shop_name'],
+    });
+
+    expect(result.columnDimensions).toEqual(['biz_date', 'shop_name']);
+    expect(result.selectedDynamicGroupBy).toEqual({
+      level2: 'shop',
+      level3: 'none',
+    });
+  });
+
+  it('replaces multiple contiguous dimensions for a multi-column option', () => {
+    const result = resolveDynamicGroupByDimensions({
+      formData: createFormData(multiColumnOptionConfig),
+      ownState: {
+        selectedDynamicGroupBy: {
+          level2_pair: 'msku_parent',
+        },
+      },
+      rowDimensions: ['metric_name_with_unit'],
+      columnDimensions: ['biz_date', 'shop_name', 'country'],
+    });
+
+    expect(result.columnDimensions).toEqual([
+      'biz_date',
+      'msku',
+      'parent_asin',
+    ]);
+    expect(result.selectedDynamicGroupBy).toEqual({
+      level2_pair: 'msku_parent',
+    });
+  });
+
+  it('maps legacy selectedDynamicGroupByColumn to the legacy slot option', () => {
+    const result = resolveDynamicGroupByDimensions({
+      formData: createFormData(baseConfig),
+      ownState: { selectedDynamicGroupByColumn: 'country' },
+      rowDimensions: ['metric_name_with_unit'],
+      columnDimensions: ['biz_date', 'shop_name'],
+    });
+
+    expect(result.columnDimensions).toEqual(['biz_date', 'country']);
+    expect(result.selectedDynamicGroupBy).toEqual({ __legacy__: 'country' });
+    expect(result.selectedColumn).toBe('country');
+  });
+
+  it('throws when selected option id is outside the slot whitelist', () => {
+    expect(() =>
+      resolveDynamicGroupByDimensions({
+        formData: createFormData(multiSlotConfig),
+        ownState: {
+          selectedDynamicGroupBy: {
+            level2: 'bad-option',
+          },
+        },
+        rowDimensions: ['metric_name_with_unit'],
+        columnDimensions: ['biz_date', 'shop_name'],
+      }),
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION);
+  });
+
+  it('throws when slot ranges overlap within one placement', () => {
+    expect(() =>
+      resolveDynamicGroupByDimensions({
+        formData: createFormData({
+          enabled: true,
+          slots: [
+            {
+              id: 'first',
+              placement: 'columns',
+              slotIndex: 1,
+              spliceCount: 2,
+              defaultOptionId: 'shop_country',
+              options: [
+                {
+                  id: 'shop_country',
+                  label: '店铺 + 国家',
+                  columns: ['shop_name', 'country'],
+                },
+              ],
+            },
+            {
+              id: 'second',
+              placement: 'columns',
+              slotIndex: 2,
+              spliceCount: 1,
+              defaultOptionId: 'msku',
+              options: [{ id: 'msku', label: 'MSKU', columns: ['msku'] }],
+            },
+          ],
+        }),
+        rowDimensions: ['metric_name_with_unit'],
+        columnDimensions: ['biz_date', 'shop_name', 'country'],
+      }),
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT_OVERLAP);
+  });
+
+  it('throws when effective dimensions contain duplicate physical columns', () => {
+    expect(() =>
+      resolveDynamicGroupByDimensions({
+        formData: createFormData({
+          enabled: true,
+          slots: [
+            {
+              id: 'level3',
+              placement: 'columns',
+              slotIndex: 2,
+              spliceCount: 1,
+              defaultOptionId: 'shop',
+              options: [{ id: 'shop', label: '店铺', columns: ['shop_name'] }],
+            },
+          ],
+        }),
+        rowDimensions: ['metric_name_with_unit'],
+        columnDimensions: ['biz_date', 'shop_name'],
+      }),
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_DUPLICATE_COLUMN);
+  });
+
+  it('throws when total effective dimensions exceed MAX_DIMENSIONS', () => {
+    expect(() =>
+      resolveDynamicGroupByDimensions({
+        formData: createFormData({
+          enabled: true,
+          slots: [
+            {
+              id: 'append',
+              placement: 'columns',
+              slotIndex: 4,
+              spliceCount: 1,
+              defaultOptionId: 'extra',
+              options: [{ id: 'extra', label: 'Extra', columns: ['extra'] }],
+            },
+          ],
+        }),
+        rowDimensions: ['row1', 'row2', 'row3', 'row4'],
+        columnDimensions: ['col1', 'col2', 'col3', 'col4'],
+      }),
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_MAX_DIMENSIONS);
   });
 });

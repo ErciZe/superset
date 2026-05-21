@@ -62,7 +62,13 @@ type ResolveDynamicGroupByDimensionsResult = {
   columnDimensions: QueryFormColumn[];
   config?: CrosstabDynamicGroupByConfig;
   selectedColumn?: QueryFormColumn;
+  selectedDynamicGroupBy?: Record<string, string>;
   signature: string;
+};
+
+type ApplySlotsToDimensionsResult = {
+  dimensions: QueryFormColumn[];
+  selectedDynamicGroupBy: Record<string, string>;
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -275,32 +281,6 @@ function assertUniqueSlotIds(slots: CrosstabDynamicGroupBySlot[]): void {
   });
 }
 
-function assertNonOverlappingSlots(slots: CrosstabDynamicGroupBySlot[]): void {
-  const occupied = new Map<DynamicGroupByPlacement, Set<number>>([
-    ['rows', new Set<number>()],
-    ['columns', new Set<number>()],
-  ]);
-
-  slots.forEach(slot => {
-    const { placement, slotIndex, spliceCount } = slot;
-    const placementSlots = occupied.get(placement);
-
-    if (!placementSlots || spliceCount === undefined) {
-      throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
-    }
-
-    for (let offset = 0; offset < spliceCount; offset += 1) {
-      const dimensionIndex = slotIndex + offset;
-
-      if (placementSlots.has(dimensionIndex)) {
-        throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT_OVERLAP);
-      }
-
-      placementSlots.add(dimensionIndex);
-    }
-  });
-}
-
 export function normalizeDynamicGroupByConfig(
   value: unknown,
 ): CrosstabDynamicGroupByConfig {
@@ -323,7 +303,6 @@ export function normalizeDynamicGroupByConfig(
   const slots = value.slots.map(validateSlot);
 
   assertUniqueSlotIds(slots);
-  assertNonOverlappingSlots(slots);
 
   return {
     enabled: value.enabled,
@@ -371,20 +350,169 @@ function createGroupBySignature(
   return `rows=${rowKeys.join('\u001f')}|columns=${columnKeys.join('\u001f')}`;
 }
 
-function replaceDimension(
-  dimensions: QueryFormColumn[],
-  slotIndex: number,
-  selectedColumn: QueryFormColumn,
+function getDimensionsForPlacement(
+  placement: DynamicGroupByPlacement,
+  rowDimensions: QueryFormColumn[],
+  columnDimensions: QueryFormColumn[],
 ): QueryFormColumn[] {
-  if (slotIndex >= dimensions.length) {
-    throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT);
+  return placement === 'rows' ? rowDimensions : columnDimensions;
+}
+
+function getSlotSpliceCount(slot: CrosstabDynamicGroupBySlot): number {
+  return slot.spliceCount ?? 1;
+}
+
+function resolveLegacySelectedOptionId(
+  slot: CrosstabDynamicGroupBySlot,
+  selectedColumn: QueryFormColumn,
+): string {
+  const selectedOption = slot.options.find(
+    option =>
+      option.columns.length === 1 &&
+      getColumnLabel(option.columns[0]) === getColumnLabel(selectedColumn),
+  );
+
+  if (!selectedOption) {
+    throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SELECTED_COLUMN);
   }
 
-  return [
-    ...dimensions.slice(0, slotIndex),
-    selectedColumn,
-    ...dimensions.slice(slotIndex + 1),
-  ];
+  return selectedOption.id;
+}
+
+function resolveSelectedOptionId(
+  slot: CrosstabDynamicGroupBySlot,
+  ownState: CrosstabOwnState | undefined,
+): string {
+  const selectedOptionId = ownState?.selectedDynamicGroupBy?.[slot.id];
+
+  if (selectedOptionId !== undefined) {
+    return selectedOptionId;
+  }
+
+  if (
+    slot.id === LEGACY_SLOT_ID &&
+    ownState?.selectedDynamicGroupByColumn !== undefined
+  ) {
+    return resolveLegacySelectedOptionId(
+      slot,
+      ownState.selectedDynamicGroupByColumn,
+    );
+  }
+
+  return slot.defaultOptionId;
+}
+
+function validateSlotRanges(
+  slots: CrosstabDynamicGroupBySlot[],
+  dimensions: QueryFormColumn[],
+): void {
+  const occupied = new Set<number>();
+
+  slots.forEach(slot => {
+    const { slotIndex } = slot;
+    const spliceCount = getSlotSpliceCount(slot);
+
+    if (
+      (slot.id === LEGACY_SLOT_ID && slotIndex >= dimensions.length) ||
+      slotIndex > dimensions.length ||
+      (slotIndex < dimensions.length &&
+        slotIndex + spliceCount > dimensions.length)
+    ) {
+      throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT);
+    }
+
+    for (let offset = 0; offset < spliceCount; offset += 1) {
+      const dimensionIndex = slotIndex + offset;
+
+      if (occupied.has(dimensionIndex)) {
+        throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT_OVERLAP);
+      }
+
+      occupied.add(dimensionIndex);
+    }
+  });
+}
+
+function assertNoDuplicateColumns(dimensions: QueryFormColumn[]): void {
+  const seenColumns = new Set<string>();
+
+  dimensions.forEach(dimension => {
+    const columnLabel = getColumnLabel(dimension);
+
+    if (seenColumns.has(columnLabel)) {
+      throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_DUPLICATE_COLUMN);
+    }
+
+    seenColumns.add(columnLabel);
+  });
+}
+
+function assertMaxDimensions(
+  rowDimensions: QueryFormColumn[],
+  columnDimensions: QueryFormColumn[],
+): void {
+  if (rowDimensions.length + columnDimensions.length > MAX_DIMENSIONS) {
+    throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_MAX_DIMENSIONS);
+  }
+}
+
+function applySlotsToDimensions(
+  dimensions: QueryFormColumn[],
+  slots: CrosstabDynamicGroupBySlot[],
+  ownState: CrosstabOwnState | undefined,
+): ApplySlotsToDimensionsResult {
+  validateSlotRanges(slots, dimensions);
+
+  const selectedDynamicGroupBy: Record<string, string> = {};
+  const effectiveDimensions = [...dimensions];
+  const descendingSlots = [...slots].sort(
+    (leftSlot, rightSlot) => rightSlot.slotIndex - leftSlot.slotIndex,
+  );
+
+  descendingSlots.forEach(slot => {
+    const selectedOptionId = resolveSelectedOptionId(slot, ownState);
+    const selectedOption = slot.options.find(
+      option => option.id === selectedOptionId,
+    );
+
+    if (!selectedOption) {
+      throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION);
+    }
+
+    selectedDynamicGroupBy[slot.id] = selectedOption.id;
+    effectiveDimensions.splice(
+      slot.slotIndex,
+      slot.slotIndex === dimensions.length ? 0 : getSlotSpliceCount(slot),
+      ...selectedOption.columns,
+    );
+  });
+
+  return {
+    dimensions: effectiveDimensions,
+    selectedDynamicGroupBy,
+  };
+}
+
+function getSelectedColumn(
+  slots: CrosstabDynamicGroupBySlot[],
+  selectedDynamicGroupBy: Record<string, string>,
+): QueryFormColumn | undefined {
+  const legacySlot = slots.find(slot => slot.id === LEGACY_SLOT_ID);
+  const prioritizedSlots = legacySlot ? [legacySlot] : slots;
+
+  for (const slot of prioritizedSlots) {
+    const selectedOptionId = selectedDynamicGroupBy[slot.id];
+    const selectedOption = slot.options.find(
+      option => option.id === selectedOptionId,
+    );
+    const selectedColumn = selectedOption?.columns[0];
+
+    if (selectedColumn !== undefined) {
+      return selectedColumn;
+    }
+  }
+
+  return undefined;
 }
 
 export function resolveDynamicGroupByDimensions({
@@ -401,58 +529,42 @@ export function resolveDynamicGroupByDimensions({
       columnDimensions,
       config: undefined,
       selectedColumn: undefined,
+      selectedDynamicGroupBy: undefined,
       signature: createGroupBySignature(rowDimensions, columnDimensions),
     };
   }
 
-  const slot = config.slots[0];
+  const rowSlots = config.slots.filter(slot => slot.placement === 'rows');
+  const columnSlots = config.slots.filter(slot => slot.placement === 'columns');
+  const rowResult = applySlotsToDimensions(
+    getDimensionsForPlacement('rows', rowDimensions, columnDimensions),
+    rowSlots,
+    ownState,
+  );
+  const columnResult = applySlotsToDimensions(
+    getDimensionsForPlacement('columns', rowDimensions, columnDimensions),
+    columnSlots,
+    ownState,
+  );
+  const selectedDynamicGroupBy = {
+    ...rowResult.selectedDynamicGroupBy,
+    ...columnResult.selectedDynamicGroupBy,
+  };
+  const effectiveRowDimensions = rowResult.dimensions;
+  const effectiveColumnDimensions = columnResult.dimensions;
 
-  if (!slot?.options.length) {
-    throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS);
-  }
-
-  const selectedOptionId = ownState?.selectedDynamicGroupBy?.[slot.id];
-  const selectedColumn = ownState?.selectedDynamicGroupByColumn;
-  const selectedOption =
-    selectedOptionId !== undefined
-      ? slot.options.find(option => option.id === selectedOptionId)
-      : selectedColumn !== undefined
-        ? slot.options.find(option =>
-            option.columns.some(
-              column =>
-                getColumnLabel(column) === getColumnLabel(selectedColumn),
-            ),
-          )
-        : slot.options.find(option => option.id === slot.defaultOptionId);
-
-  if (!selectedOption) {
-    throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SELECTED_COLUMN);
-  }
-
-  const effectiveSelectedColumn = selectedOption.columns[0];
-
-  if (!isValidQueryFormColumn(effectiveSelectedColumn)) {
-    throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SELECTED_COLUMN);
-  }
-
-  const effectiveRowDimensions =
-    slot.placement === 'rows'
-      ? replaceDimension(rowDimensions, slot.slotIndex, effectiveSelectedColumn)
-      : rowDimensions;
-  const effectiveColumnDimensions =
-    slot.placement === 'columns'
-      ? replaceDimension(
-          columnDimensions,
-          slot.slotIndex,
-          effectiveSelectedColumn,
-        )
-      : columnDimensions;
+  assertNoDuplicateColumns([
+    ...effectiveRowDimensions,
+    ...effectiveColumnDimensions,
+  ]);
+  assertMaxDimensions(effectiveRowDimensions, effectiveColumnDimensions);
 
   return {
     rowDimensions: effectiveRowDimensions,
     columnDimensions: effectiveColumnDimensions,
     config,
-    selectedColumn: effectiveSelectedColumn,
+    selectedColumn: getSelectedColumn(config.slots, selectedDynamicGroupBy),
+    selectedDynamicGroupBy,
     signature: createGroupBySignature(
       effectiveRowDimensions,
       effectiveColumnDimensions,
