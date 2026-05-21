@@ -56,8 +56,41 @@ Date: 2026-05-21
 - Logs: PASS.
   - Recent post-restart scan found no `error`, `exception`, `traceback`, or `critical` lines.
 
+## Dynamic Slot Hotfix Deployment
+
+- Trigger: production Explore customization panel showed `TypeError: Cannot read properties of undefined (reading 'map')` in the Dynamic metrics control on slice 10.
+- Root cause: saved disabled dynamic-slot values can omit `slots`; the control render path and resolver path assumed canonical `slots[]`.
+- Fix commit: `71e23cf259` (`fix(crosstab): tolerate disabled dynamic slot values`), pushed to `fork/noway-release`.
+- Scope:
+  - Dynamic metric control render normalization for disabled/incomplete saved values.
+  - Dynamic group-by control render normalization for the same saved-value shape.
+  - Resolver compatibility for `{ enabled: false }` without `slots`, while keeping enabled configs without slots invalid.
+- Repository validation: PASS.
+  - `BABEL_ENV=test npx jest plugins/plugin-chart-crosstab-table/test/plugin/controlPanel.test.ts plugins/plugin-chart-crosstab-table/test/plugin/dynamicGroupBy.test.ts plugins/plugin-chart-crosstab-table/test/plugin/dynamicMetric.test.ts --runInBand`
+  - Result: 3 suites, 62 tests passed.
+  - `npx eslint plugins/plugin-chart-crosstab-table/src/plugin/CrosstabDynamicMetricControl.tsx plugins/plugin-chart-crosstab-table/src/plugin/CrosstabDynamicGroupByControl.tsx plugins/plugin-chart-crosstab-table/src/plugin/dynamicMetric.ts plugins/plugin-chart-crosstab-table/src/plugin/dynamicGroupBy.ts plugins/plugin-chart-crosstab-table/test/plugin/controlPanel.test.ts plugins/plugin-chart-crosstab-table/test/plugin/dynamicMetric.test.ts plugins/plugin-chart-crosstab-table/test/plugin/dynamicGroupBy.test.ts`
+  - Result: PASS.
+  - `npm run type -- --pretty false`
+  - Result: PASS.
+  - `BABEL_ENV=testableProduction npm run build`
+  - Result: PASS with existing webpack asset-size warnings.
+- Production test deployment: PASS.
+  - Remote assets backup: `backups/assets-20260521182056`.
+  - Asset dry-run before sync: 3 changed/new files, 10 delete entries, 2 other entries.
+  - Image: `apache-superset-doris:6.0.0-zh-column-scheme-matrix`.
+  - Image manifest list: `sha256:83fc8748223d230ec0988933f59320e20966cc3c9ec2b68129e4d242e6ea3be9`.
+  - Container: `apache-superset` is `running healthy`.
+  - Public health: `curl -fsS --connect-timeout 10 http://111.230.91.24:8088/health` returned `OK`.
+  - Static asset evidence: `crosstab-dynamic-metric-control` exists in both remote deployment assets and container assets.
+  - Recent post-restart log scan found no `error`, `exception`, `traceback`, or `critical` lines.
+- Browser production validation: PASS.
+  - Chrome authenticated Explore URL refreshed to the deployed bundle.
+  - The `定制化配置` tab renders `Dynamic group by` and `Dynamic metrics` controls.
+  - The previous `TypeError: Cannot read properties of undefined (reading 'map')` alert is no longer present.
+
 ## Production Acceptance Boundary
 
 - Production test deployment is complete.
+- Dynamic slot disabled-value hotfix is production-tested complete.
 - Copied-chart V3.1.1/V3.2 browser acceptance is still pending because authenticated Explore access is required and no copied-chart URL has been recorded yet.
 - Formal slice 10 metadata update remains gated until copied-chart acceptance passes.
