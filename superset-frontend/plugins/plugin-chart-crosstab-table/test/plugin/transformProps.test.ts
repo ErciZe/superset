@@ -17,7 +17,10 @@
  * under the License.
  */
 import { ChartProps, supersetTheme } from '@superset-ui/core';
-import type { CrosstabFormData } from '../../src/types';
+import type {
+  CrosstabDynamicGroupByConfig,
+  CrosstabFormData,
+} from '../../src/types';
 import transformProps from '../../src/plugin/transformProps';
 import {
   CROSSTAB_ROW_TYPE,
@@ -35,6 +38,54 @@ const dynamicColumnGroupBy: Exclude<
   options: [
     { label: '店铺', column: 'shop_name' },
     { label: '国家', column: 'country' },
+  ],
+};
+
+const normalizedDynamicColumnGroupBy: CrosstabDynamicGroupByConfig = {
+  enabled: true,
+  slots: [
+    {
+      id: '__legacy__',
+      label: '分组维度',
+      placement: 'columns',
+      slotIndex: 1,
+      spliceCount: 1,
+      defaultOptionId: 'shop_name',
+      options: [
+        { id: 'shop_name', label: '店铺', columns: ['shop_name'] },
+        { id: 'country', label: '国家', columns: ['country'] },
+      ],
+    },
+  ],
+};
+
+const canonicalMultiSlotGroupBy: CrosstabDynamicGroupByConfig = {
+  enabled: true,
+  slots: [
+    {
+      id: 'level2',
+      label: '二级维度',
+      placement: 'columns',
+      slotIndex: 1,
+      spliceCount: 1,
+      defaultOptionId: 'shop',
+      options: [
+        { id: 'shop', label: '店铺', columns: ['shop_name'] },
+        { id: 'country', label: '国家', columns: ['country'] },
+      ],
+    },
+    {
+      id: 'level3',
+      label: '三级维度',
+      placement: 'columns',
+      slotIndex: 2,
+      spliceCount: 1,
+      defaultOptionId: 'none',
+      options: [
+        { id: 'none', label: '(无)', columns: [] },
+        { id: 'msku', label: 'MSKU', columns: ['msku'] },
+      ],
+    },
   ],
 };
 
@@ -212,7 +263,8 @@ describe('crosstab transformProps', () => {
 
     const props = transformProps(chartProps);
 
-    expect(props.dynamicGroupByConfig).toEqual(dynamicColumnGroupBy);
+    expect(props.dynamicGroupByConfig).toEqual(normalizedDynamicColumnGroupBy);
+    expect(props.selectedDynamicGroupBy).toEqual({ __legacy__: 'country' });
     expect(props.selectedDynamicGroupByColumn).toBe('country');
     expect(props.effectiveGroupBySignature).toBe(
       'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
@@ -231,6 +283,81 @@ describe('crosstab transformProps', () => {
     ]);
     expect(props.generatedColumnIds).toEqual([
       '__crosstab_col__string:10:2026-05-01|string:2:US__metric__指标值',
+    ]);
+  });
+
+  it('passes canonical multi-slot dynamic group-by state to renderer props', () => {
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name'],
+        metrics: ['指标值'],
+        dynamicGroupBy: canonicalMultiSlotGroupBy,
+      },
+      ownState: {
+        selectedDynamicGroupBy: {
+          level2: 'country',
+          level3: 'msku',
+        },
+        effectiveGroupBySignature:
+          'rows=metric_name_with_unit|columns=biz_date\u001fcountry\u001fmsku',
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              metric_name_with_unit: '销售额',
+              biz_date: '2026-05-01',
+              country: 'US',
+              msku: 'A-001',
+              指标值: 10,
+            },
+          ],
+        },
+      ],
+      datasource: {
+        verboseMap: {
+          metric_name_with_unit: '指标项',
+          biz_date: '日期',
+          country: '国家',
+          msku: 'MSKU',
+          指标值: '指标值',
+        },
+      },
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(props.selectedDynamicGroupBy).toEqual({
+      level2: 'country',
+      level3: 'msku',
+    });
+    expect(props.dynamicGroupByConfig).toEqual(canonicalMultiSlotGroupBy);
+    expect(props.effectiveGroupBySignature).toBe(
+      'rows=metric_name_with_unit|columns=biz_date\u001fcountry\u001fmsku',
+    );
+    expect(props.columnTree).toEqual([
+      expect.objectContaining({
+        label: '2026-05-01',
+        children: [
+          expect.objectContaining({
+            label: 'US',
+            children: [
+              expect.objectContaining({
+                label: 'A-001',
+                field:
+                  '__crosstab_col__string:10:2026-05-01|string:2:US|string:5:A-001__metric__指标值',
+                metric: '指标值',
+              }),
+            ],
+          }),
+        ],
+      }),
     ]);
   });
 
@@ -342,7 +469,7 @@ describe('crosstab transformProps', () => {
     expect(setDataMask).toHaveBeenCalledWith({
       ownState: {
         unrelatedOwnStateField: 'preserved',
-        selectedDynamicGroupByColumn: 'country',
+        selectedDynamicGroupBy: { __legacy__: 'country' },
         effectiveGroupBySignature:
           'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
         currentColumnPage: 0,
@@ -353,6 +480,7 @@ describe('crosstab transformProps', () => {
       },
     });
     const resetOwnState = setDataMask.mock.calls[0][0].ownState;
+    expect(resetOwnState).not.toHaveProperty('selectedDynamicGroupByColumn');
     expect(resetOwnState).not.toHaveProperty('expandedRowPaths');
     expect(resetOwnState).not.toHaveProperty('serverColumnPageColumnSignature');
     expect(resetOwnState).not.toHaveProperty('serverColumnTotalCount');
@@ -361,6 +489,97 @@ describe('crosstab transformProps', () => {
     expect(props.effectiveGroupBySignature).toBe(
       'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
     );
+  });
+
+  it('resets stale server column pagination own state for canonical dynamic group-by slots', () => {
+    const setDataMask = jest.fn();
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name'],
+        metrics: ['指标值'],
+        serverColumnPagination: true,
+        columnPageSize: 98,
+        dynamicGroupBy: canonicalMultiSlotGroupBy,
+      },
+      ownState: {
+        selectedDynamicGroupBy: {
+          level2: 'country',
+          level3: 'msku',
+        },
+        selectedDynamicGroupByColumn: 'shop_name',
+        effectiveGroupBySignature:
+          'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+        currentColumnPage: 3,
+        currentColumnPageSize: 5,
+        expandedRowPaths: ['stale-row'],
+        unrelatedOwnStateField: 'preserved',
+        serverColumnPageColumnSignature: 'biz_date\u001fshop_name',
+        serverColumnPageTuples: [['2026-05-01', 'Shop A']],
+        serverColumnPageTuplesPage: 3,
+        serverColumnPageTuplesPageSize: 5,
+        serverColumnTotalCount: 999,
+      },
+      hooks: {
+        setDataMask,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              biz_date: '2026-05-01',
+              country: 'US',
+              msku: 'A-001',
+            },
+          ],
+        },
+        {
+          data: [{ rowcount: 1 }],
+        },
+        {
+          data: [
+            {
+              metric_name_with_unit: '销售额',
+              biz_date: '2026-05-01',
+              country: 'US',
+              msku: 'A-001',
+              指标值: 10,
+            },
+          ],
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(setDataMask).toHaveBeenCalledWith({
+      ownState: {
+        unrelatedOwnStateField: 'preserved',
+        selectedDynamicGroupBy: {
+          level2: 'country',
+          level3: 'msku',
+        },
+        effectiveGroupBySignature:
+          'rows=metric_name_with_unit|columns=biz_date\u001fcountry\u001fmsku',
+        currentColumnPage: 0,
+        currentColumnPageSize: 5,
+        serverColumnPageTuples: [],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: 5,
+      },
+    });
+    const resetOwnState = setDataMask.mock.calls[0][0].ownState;
+    expect(resetOwnState).not.toHaveProperty('selectedDynamicGroupByColumn');
+    expect(resetOwnState).not.toHaveProperty('expandedRowPaths');
+    expect(resetOwnState).not.toHaveProperty('serverColumnPageColumnSignature');
+    expect(resetOwnState).not.toHaveProperty('serverColumnTotalCount');
+    expect(props.rowData).toEqual([]);
+    expect(props.isServerColumnLoading).toBe(true);
   });
 
   it('stores the default dynamic group-by column when resetting stale own state', () => {
@@ -410,7 +629,7 @@ describe('crosstab transformProps', () => {
 
     expect(setDataMask).toHaveBeenCalledWith({
       ownState: {
-        selectedDynamicGroupByColumn: 'shop_name',
+        selectedDynamicGroupBy: { __legacy__: 'shop_name' },
         effectiveGroupBySignature:
           'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
         currentColumnPage: 0,

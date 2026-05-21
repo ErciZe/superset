@@ -194,6 +194,8 @@ function getPreservedDynamicGroupByOwnState(
 
   delete preservedOwnState.effectiveGroupBySignature;
   delete preservedOwnState.expandedRowPaths;
+  delete preservedOwnState.selectedDynamicGroupBy;
+  delete preservedOwnState.selectedDynamicGroupByColumn;
   delete preservedOwnState.serverColumnPageColumnSignature;
   delete preservedOwnState.serverColumnPageTuples;
   delete preservedOwnState.serverColumnPageTuplesPage;
@@ -346,7 +348,7 @@ export default function transformProps(
     setDataMask?.({
       ownState: {
         ...getPreservedDynamicGroupByOwnState(crosstabOwnState),
-        selectedDynamicGroupByColumn: dynamicGroupBy.selectedColumn,
+        selectedDynamicGroupBy: dynamicGroupBy.selectedDynamicGroupBy,
         effectiveGroupBySignature: dynamicGroupBy.signature,
         currentColumnPage: 0,
         currentColumnPageSize: columnPageSize,
@@ -586,6 +588,7 @@ export default function transformProps(
     ...(dynamicGroupBy.config
       ? {
           dynamicGroupByConfig: dynamicGroupBy.config,
+          selectedDynamicGroupBy: dynamicGroupBy.selectedDynamicGroupBy,
           selectedDynamicGroupByColumn: dynamicGroupBy.selectedColumn,
           effectiveGroupBySignature: dynamicGroupBy.signature,
         }
