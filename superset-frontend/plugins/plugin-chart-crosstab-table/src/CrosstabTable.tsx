@@ -62,6 +62,7 @@ import {
   decodeCrosstabRowPath,
   encodeCrosstabRowPath,
 } from './crosstab/engine';
+import { getCrosstabNumberParameters } from './plugin/parameters';
 import { getGeneratedColumnWidth } from './plugin/serverColumnPagination';
 
 ModuleRegistry.registerModules([AllCommunityModule, ClientSideRowModelModule]);
@@ -477,6 +478,7 @@ export default function CrosstabTable({
   ownState,
   rowData,
   expandedRowPaths,
+  numericParameters,
   selectedDynamicGroupBy,
   selectedDynamicMetric,
   serverColumnCurrentPage,
@@ -624,6 +626,14 @@ export default function CrosstabTable({
         };
       });
   }, [dynamicMetricConfig, selectedDynamicMetric]);
+  const numericParameterControls = useMemo(
+    () =>
+      getCrosstabNumberParameters(formData).map(parameter => ({
+        parameter,
+        value: numericParameters?.[parameter.name] ?? parameter.default,
+      })),
+    [formData, numericParameters],
+  );
   const totalGeneratedColumnCount = serverColumnPagination
     ? (serverColumnTotalCount ?? treeLeafColumnIds.length)
     : treeLeafColumnIds.length;
@@ -778,6 +788,29 @@ export default function CrosstabTable({
       selectedDynamicMetric,
       setDataMask,
     ],
+  );
+  const updateNumericParameter = useCallback(
+    (name: string, value: number) => {
+      if (!Number.isFinite(value)) {
+        throw new Error('Crosstab numeric parameter value must be finite.');
+      }
+
+      setDataMask?.({
+        ownState: {
+          ...ownState,
+          numericParameters: {
+            ...(ownState?.numericParameters ?? {}),
+            [name]: value,
+          },
+          currentColumnPage: 0,
+          currentColumnPageSize: effectiveColumnsPerPage,
+          serverColumnPageTuples: [],
+          serverColumnPageTuplesPage: 0,
+          serverColumnPageTuplesPageSize: effectiveColumnsPerPage,
+        },
+      });
+    },
+    [effectiveColumnsPerPage, ownState, setDataMask],
   );
   const toggleRowPath = useCallback(
     (row: DataRecord) => {
@@ -965,6 +998,36 @@ export default function CrosstabTable({
       />
     </div>
   ));
+  const numericParameterInputs = numericParameterControls.map(
+    ({ parameter, value }) => {
+      const label = parameter.label ?? parameter.name;
+
+      return (
+        <div
+          key={parameter.name}
+          data-test={`crosstab-parameter-control--${parameter.name}`}
+          style={{
+            alignItems: 'center',
+            display: 'inline-flex',
+            gap: theme.sizeUnit,
+          }}
+        >
+          <span>{label}</span>
+          <input
+            aria-label={label}
+            max={parameter.max}
+            min={parameter.min}
+            onChange={event =>
+              updateNumericParameter(parameter.name, Number(event.target.value))
+            }
+            step={parameter.step}
+            type="number"
+            value={value}
+          />
+        </div>
+      );
+    },
+  );
 
   return (
     <div
@@ -999,6 +1062,7 @@ export default function CrosstabTable({
         </Button>
         {dynamicGroupBySelects}
         {dynamicMetricSelects}
+        {numericParameterInputs}
       </div>
       <div
         data-test="crosstab-grid-container"

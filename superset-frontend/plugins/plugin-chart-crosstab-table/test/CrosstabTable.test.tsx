@@ -20,7 +20,7 @@ import '@testing-library/jest-dom';
 import { GenericDataType } from '@superset-ui/core';
 import type { ComponentProps, CSSProperties } from 'react';
 import ReactDOM from 'react-dom';
-import { act } from 'react-dom/test-utils';
+import { act, Simulate } from 'react-dom/test-utils';
 import type { ColDef } from '@superset-ui/core/components/ThemedAgGridReact';
 import CrosstabTable from '../src/CrosstabTable';
 import {
@@ -327,6 +327,16 @@ describe('CrosstabTable', () => {
       throw new Error('Unable to find dynamic metric select');
     }
     return select;
+  }
+
+  function getNumericParameterInput(name: string) {
+    const input = container.querySelector(
+      `[data-test="crosstab-parameter-control--${name}"] input`,
+    );
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error('Unable to find numeric parameter input');
+    }
+    return input;
   }
 
   function getInvalidSelectChangeButton() {
@@ -1424,6 +1434,71 @@ describe('CrosstabTable', () => {
     expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
       'serverColumnTotalCount',
     );
+  });
+
+  it('renders a numeric parameter control and writes own-state on change', () => {
+    const setDataMask = jest.fn();
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+        generatedColumnWidth: 120,
+        parameters: [
+          {
+            kind: 'number',
+            name: 'adjustmentRate',
+            label: '调整系数',
+            default: 1,
+            min: 0,
+            max: 2,
+            step: 0.01,
+          },
+        ],
+      },
+      hooks: {
+        setDataMask,
+      },
+      numericParameters: { adjustmentRate: 1 },
+      ownState: {
+        currentColumnPage: 2,
+        currentColumnPageSize: 8,
+        expandedRowPaths: ['category::A'],
+      },
+      rowData: [],
+      columns: [
+        {
+          key: 'metric_name',
+          label: '指标项',
+          dataType: GenericDataType.String,
+        },
+      ],
+      columnTree: [],
+      generatedColumnIds: [],
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    const input = getNumericParameterInput('adjustmentRate');
+    expect(input).toHaveAccessibleName('调整系数');
+    expect(input).toHaveValue(1);
+
+    act(() => {
+      Simulate.change(input, { target: { value: '1.25' } } as never);
+    });
+
+    expect(setDataMask).toHaveBeenCalledWith({
+      ownState: expect.objectContaining({
+        numericParameters: { adjustmentRate: 1.25 },
+        currentColumnPage: 0,
+        currentColumnPageSize: 5,
+        serverColumnPageTuples: [],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: 5,
+        expandedRowPaths: ['category::A'],
+      }),
+    });
   });
 
   it('renders one dynamic metric selector per configured slot', () => {
