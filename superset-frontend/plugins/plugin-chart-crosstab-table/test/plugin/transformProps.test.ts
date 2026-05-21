@@ -135,14 +135,19 @@ const dynamicMetric: CrosstabDynamicMetricConfig = {
   ],
 };
 
-function createProps(
-  props: ChartPropsConfig & { formData?: CrosstabFormData },
-) {
+type CrosstabChartPropsConfig = Omit<ChartPropsConfig, 'theme'> & {
+  formData?: CrosstabFormData;
+  theme?: ChartPropsConfig['theme'];
+};
+
+function createProps(props: CrosstabChartPropsConfig) {
+  const { theme = supersetTheme, ...restProps } = props;
+
   return new ChartProps<CrosstabFormData>({
     width: 800,
     height: 400,
-    theme: supersetTheme,
-    ...props,
+    ...restProps,
+    theme,
   });
 }
 
@@ -150,6 +155,8 @@ describe('crosstab transformProps', () => {
   it('includes numeric parameter values in effective metric signature', () => {
     const baseProps = createProps({
       formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
         groupbyRows: ['category'],
         groupbyColumns: ['biz_date'],
         crosstabFieldConfig: {

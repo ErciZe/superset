@@ -47,6 +47,7 @@ import type {
   CrosstabChartProps,
   CrosstabColumnNode,
   CrosstabConditionalRule,
+  CrosstabFormData,
   CrosstabNumberParameter,
   CrosstabOwnState,
 } from './types';
@@ -671,10 +672,12 @@ export default function CrosstabTable({
   }, [dynamicMetricConfig, selectedDynamicMetric]);
   const numericParameterControls = useMemo(
     () =>
-      getCrosstabNumberParameters(formData).map(parameter => ({
-        parameter,
-        value: numericParameters?.[parameter.name] ?? parameter.default,
-      })),
+      getCrosstabNumberParameters(formData as CrosstabFormData).map(
+        parameter => ({
+          parameter,
+          value: numericParameters?.[parameter.name] ?? parameter.default,
+        }),
+      ),
     [formData, numericParameters],
   );
   const totalGeneratedColumnCount = serverColumnPagination

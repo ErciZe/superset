@@ -18,6 +18,7 @@
  */
 import { createElement } from 'react';
 import { sharedControlComponents } from '@superset-ui/chart-controls';
+import type { QueryFormMetric } from '@superset-ui/core';
 import {
   fireEvent,
   render,
@@ -117,6 +118,14 @@ function catchWindowErrors(callback: () => void) {
   window.removeEventListener('error', handler);
 
   return errors;
+}
+
+function sqlMetric(label: string, sqlExpression: string): QueryFormMetric {
+  return {
+    expressionType: 'SQL',
+    label,
+    sqlExpression,
+  };
 }
 
 describe('crosstab controlPanel', () => {
@@ -298,21 +307,15 @@ describe('crosstab controlPanel', () => {
   it('saves calculated fields from selected crosstab metrics', () => {
     const onChange = jest.fn();
     const setControlValue = jest.fn();
-    const salesMetric = {
-      expressionType: 'SQL',
-      label: 'sales',
-      sqlExpression: 'SUM(sales_amount)',
-    };
-    const profitMetric = {
-      expressionType: 'SQL',
-      label: 'profit',
-      sqlExpression: 'SUM(gross_profit)',
-    };
+    const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
+    const profitMetric = sqlMetric('profit', 'SUM(gross_profit)');
 
     render(
       createElement(CrosstabCalculatedFieldsControl, {
         actions: { setControlValue },
         formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
           crosstabFieldConfig: {
             metrics: [
               { metric: salesMetric, label: '销售额', semantic: 'additive' },
@@ -358,20 +361,14 @@ describe('crosstab controlPanel', () => {
 
   it('rejects saving calculated fields without crosstab field config updates', () => {
     const onChange = jest.fn();
-    const salesMetric = {
-      expressionType: 'SQL',
-      label: 'sales',
-      sqlExpression: 'SUM(sales_amount)',
-    };
-    const profitMetric = {
-      expressionType: 'SQL',
-      label: 'profit',
-      sqlExpression: 'SUM(gross_profit)',
-    };
+    const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
+    const profitMetric = sqlMetric('profit', 'SUM(gross_profit)');
 
     render(
       createElement(CrosstabCalculatedFieldsControl, {
         formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
           crosstabFieldConfig: {
             metrics: [
               { metric: salesMetric, label: '销售额', semantic: 'additive' },
@@ -404,16 +401,8 @@ describe('crosstab controlPanel', () => {
   it('resolves calculated field metrics after selected chart metrics load', () => {
     const onChange = jest.fn();
     const setControlValue = jest.fn();
-    const salesMetric = {
-      expressionType: 'SQL',
-      label: 'sales',
-      sqlExpression: 'SUM(sales_amount)',
-    };
-    const profitMetric = {
-      expressionType: 'SQL',
-      label: 'profit',
-      sqlExpression: 'SUM(gross_profit)',
-    };
+    const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
+    const profitMetric = sqlMetric('profit', 'SUM(gross_profit)');
     const { rerender } = render(
       createElement(CrosstabCalculatedFieldsControl, {
         actions: { setControlValue },
@@ -428,6 +417,8 @@ describe('crosstab controlPanel', () => {
       createElement(CrosstabCalculatedFieldsControl, {
         actions: { setControlValue },
         formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
           crosstabFieldConfig: {
             metrics: [
               { metric: salesMetric, label: '销售额', semantic: 'additive' },
