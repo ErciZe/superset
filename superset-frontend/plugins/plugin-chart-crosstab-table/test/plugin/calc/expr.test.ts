@@ -220,19 +220,18 @@ test.each([
   ['template start', '{{', 'SUM({{ profit)'],
   ['template end', '}}', 'SUM(profit }})'],
   ['template expression', '${', 'SUM(profit ${ adjustmentRate)'],
-])('rejects unsafe SQL metric expressions containing %s token %s', (
-  _label,
-  _token,
-  profitSql,
-) => {
-  expect(() =>
-    emitCalculatedFieldSql(ratioField, {
-      dialect: 'doris',
-      metricSql: {
-        ...metricSql,
-        profit: profitSql,
-      },
-      parameterValues: {},
-    }),
-  ).toThrow(ERR_CROSSTAB_CALC_METRIC);
-});
+])(
+  'rejects unsafe SQL metric expressions containing %s token %s',
+  (_label, _token, profitSql) => {
+    expect(() =>
+      emitCalculatedFieldSql(ratioField, {
+        dialect: 'doris',
+        metricSql: {
+          ...metricSql,
+          profit: profitSql,
+        },
+        parameterValues: {},
+      }),
+    ).toThrow(ERR_CROSSTAB_CALC_METRIC);
+  },
+);

@@ -202,13 +202,10 @@ test('creates deterministic signatures for reordered field and parameter keys', 
     id: 'adjusted_margin',
   } as CrosstabCalculatedField;
 
-  const signature = getCalculatedFieldsSignature(
-    [calculatedField],
-    {
-      secondaryRate: 0.8,
-      adjustmentRate: 1.25,
-    },
-  );
+  const signature = getCalculatedFieldsSignature([calculatedField], {
+    secondaryRate: 0.8,
+    adjustmentRate: 1.25,
+  });
   const reorderedSignature = getCalculatedFieldsSignature(
     [reorderedCalculatedField],
     {
