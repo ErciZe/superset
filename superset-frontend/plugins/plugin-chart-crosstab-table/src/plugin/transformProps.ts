@@ -56,8 +56,8 @@ import type { CrosstabOwnState as ServerColumnOwnState } from './serverColumnPag
 import {
   getCrosstabColumnColumns,
   getCrosstabFieldLabels,
-  getCrosstabMetricConfigs,
   getCrosstabMetrics,
+  getPersistedCrosstabMetricConfigs,
   getCrosstabRowColumns,
   getCrosstabRowSubtotalDepths,
   getCrosstabSemanticOverrideField,
@@ -70,6 +70,7 @@ import {
 import { buildCrosstabQueryPlan } from './summaryQueryPlan';
 import { buildSummaryResultMap } from './summaryResults';
 import { resolveDynamicGroupByDimensions } from './dynamicGroupBy';
+import { resolveDynamicMetricConfigs } from './dynamicMetric';
 
 type CrosstabQueryData = ChartProps<CrosstabFormData>['queriesData'][number];
 
@@ -196,6 +197,23 @@ function getPreservedDynamicGroupByOwnState(
   delete preservedOwnState.expandedRowPaths;
   delete preservedOwnState.selectedDynamicGroupBy;
   delete preservedOwnState.selectedDynamicGroupByColumn;
+  delete preservedOwnState.serverColumnPageColumnSignature;
+  delete preservedOwnState.serverColumnPageTuples;
+  delete preservedOwnState.serverColumnPageTuplesPage;
+  delete preservedOwnState.serverColumnPageTuplesPageSize;
+  delete preservedOwnState.serverColumnTotalCount;
+
+  return preservedOwnState;
+}
+
+function getPreservedDynamicMetricOwnState(
+  ownState: CrosstabOwnState,
+): Record<string, unknown> {
+  const preservedOwnState: Record<string, unknown> = { ...ownState };
+
+  delete preservedOwnState.currentColumnPage;
+  delete preservedOwnState.effectiveMetricSignature;
+  delete preservedOwnState.selectedDynamicMetric;
   delete preservedOwnState.serverColumnPageColumnSignature;
   delete preservedOwnState.serverColumnPageTuples;
   delete preservedOwnState.serverColumnPageTuplesPage;
@@ -333,8 +351,20 @@ export default function transformProps(
   });
   const rowFields = dynamicGroupBy.rowDimensions.map(normalizeColumn);
   const columnFields = dynamicGroupBy.columnDimensions.map(normalizeColumn);
-  const metricFields =
-    ensureIsArray<QueryFormMetric>(metrics).map(normalizeMetric);
+  const persistedMetricConfigs =
+    getPersistedCrosstabMetricConfigs(crosstabFormData);
+  const baseMetricConfigs = persistedMetricConfigs.length
+    ? persistedMetricConfigs
+    : ensureIsArray<QueryFormMetric>(metrics).map(metric => ({ metric }));
+  const dynamicMetricResult = resolveDynamicMetricConfigs({
+    formData: crosstabFormData,
+    metricConfigs: baseMetricConfigs,
+    ownState: crosstabOwnState,
+  });
+  const effectiveMetricConfigs = dynamicMetricResult.metricConfigs;
+  const metricFields = effectiveMetricConfigs.map(config =>
+    normalizeMetric(config.metric),
+  );
   const serverColumnPagination = Boolean(formData.serverColumnPagination);
   const currentPage = getCurrentColumnPage(crosstabOwnState);
   const columnPageSize = getColumnPageSize(
@@ -343,13 +373,35 @@ export default function transformProps(
   const resetDynamicGroupByOwnState =
     dynamicGroupBy.config !== undefined &&
     crosstabOwnState.effectiveGroupBySignature !== dynamicGroupBy.signature;
+  const resetDynamicMetricOwnState =
+    dynamicMetricResult.config !== undefined &&
+    crosstabOwnState.effectiveMetricSignature !== dynamicMetricResult.signature;
 
   if (resetDynamicGroupByOwnState) {
     setDataMask?.({
       ownState: {
         ...getPreservedDynamicGroupByOwnState(crosstabOwnState),
         selectedDynamicGroupBy: dynamicGroupBy.selectedDynamicGroupBy,
+        ...(dynamicMetricResult.selectedDynamicMetric
+          ? { selectedDynamicMetric: dynamicMetricResult.selectedDynamicMetric }
+          : {}),
         effectiveGroupBySignature: dynamicGroupBy.signature,
+        ...(dynamicMetricResult.config
+          ? { effectiveMetricSignature: dynamicMetricResult.signature }
+          : {}),
+        currentColumnPage: 0,
+        currentColumnPageSize: columnPageSize,
+        serverColumnPageTuples: [],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: columnPageSize,
+      },
+    });
+  } else if (resetDynamicMetricOwnState) {
+    setDataMask?.({
+      ownState: {
+        ...getPreservedDynamicMetricOwnState(crosstabOwnState),
+        selectedDynamicMetric: dynamicMetricResult.selectedDynamicMetric,
+        effectiveMetricSignature: dynamicMetricResult.signature,
         currentColumnPage: 0,
         currentColumnPageSize: columnPageSize,
         serverColumnPageTuples: [],
@@ -359,12 +411,11 @@ export default function transformProps(
     });
   }
 
-  const metricConfigs = getCrosstabMetricConfigs(crosstabFormData);
   const semanticOverrideField =
     getCrosstabSemanticOverrideField(crosstabFormData);
   const semanticOverrides = getCrosstabSemanticOverrides(crosstabFormData);
   const hasNonAdditiveSummary = hasSqlSummarySemanticConfig(
-    metricConfigs,
+    effectiveMetricConfigs,
     semanticOverrides,
   );
   const queryPlan = buildCrosstabQueryPlan({
@@ -378,6 +429,7 @@ export default function transformProps(
     serverColumnPagination,
     hasServerColumnPageTuples: serverColumnPagination
       ? !resetDynamicGroupByOwnState &&
+        !resetDynamicMetricOwnState &&
         ((crosstabOwnState.serverColumnPageTuples?.length ?? 0) > 0 ||
           queriesData.length > 2)
       : undefined,
@@ -510,7 +562,11 @@ export default function transformProps(
       : {}),
   };
 
-  if (serverColumnPagination && !resetDynamicGroupByOwnState) {
+  if (
+    serverColumnPagination &&
+    !resetDynamicGroupByOwnState &&
+    !resetDynamicMetricOwnState
+  ) {
     const columnTuples = recordsToColumnTuples(
       (domainQuery?.data ?? []) as DataRecord[],
       columnFields,
@@ -552,13 +608,14 @@ export default function transformProps(
       resolveMetricSemantic({
         metric,
         row,
-        metricConfigs,
+        metricConfigs: effectiveMetricConfigs,
         semanticOverrideField,
         semanticOverrides,
       }),
   });
   const rowData =
-    serverColumnPagination && (resetDynamicGroupByOwnState || !dataQuery)
+    serverColumnPagination &&
+    (resetDynamicGroupByOwnState || resetDynamicMetricOwnState || !dataQuery)
       ? []
       : serverColumnPagination && legacyServerRowTotalQuery?.data
         ? applyRowTotals(
@@ -583,7 +640,8 @@ export default function transformProps(
     serverColumnPageSize: columnPageSize,
     serverColumnTotalCount: totalCount,
     isServerColumnLoading:
-      serverColumnPagination && (resetDynamicGroupByOwnState || !dataQuery),
+      serverColumnPagination &&
+      (resetDynamicGroupByOwnState || resetDynamicMetricOwnState || !dataQuery),
     expandedRowPaths: crosstabOwnState.expandedRowPaths,
     ...(dynamicGroupBy.config
       ? {
@@ -591,6 +649,13 @@ export default function transformProps(
           selectedDynamicGroupBy: dynamicGroupBy.selectedDynamicGroupBy,
           selectedDynamicGroupByColumn: dynamicGroupBy.selectedColumn,
           effectiveGroupBySignature: dynamicGroupBy.signature,
+        }
+      : {}),
+    ...(dynamicMetricResult.config
+      ? {
+          dynamicMetricConfig: dynamicMetricResult.config,
+          selectedDynamicMetric: dynamicMetricResult.selectedDynamicMetric,
+          effectiveMetricSignature: dynamicMetricResult.signature,
         }
       : {}),
   };

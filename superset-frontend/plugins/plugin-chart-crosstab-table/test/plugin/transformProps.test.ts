@@ -19,6 +19,7 @@
 import { ChartProps, supersetTheme } from '@superset-ui/core';
 import type {
   CrosstabDynamicGroupByConfig,
+  CrosstabDynamicMetricConfig,
   CrosstabFormData,
 } from '../../src/types';
 import transformProps from '../../src/plugin/transformProps';
@@ -26,6 +27,7 @@ import {
   CROSSTAB_ROW_TYPE,
   CROSSTAB_TOTAL_COLUMN_ID,
 } from '../../src/crosstab/engine';
+import { getMetricConfigSignature } from '../../src/plugin/dynamicMetric';
 
 const dynamicColumnGroupBy: Exclude<
   CrosstabFormData['dynamicGroupBy'],
@@ -84,6 +86,46 @@ const canonicalMultiSlotGroupBy: CrosstabDynamicGroupByConfig = {
       options: [
         { id: 'none', label: '(无)', columns: [] },
         { id: 'msku', label: 'MSKU', columns: ['msku'] },
+      ],
+    },
+  ],
+};
+
+const dynamicMetric: CrosstabDynamicMetricConfig = {
+  enabled: true,
+  slots: [
+    {
+      id: 'primary_metric',
+      label: 'Primary metric',
+      slotIndex: 0,
+      spliceCount: 1,
+      defaultOptionId: 'amount',
+      options: [
+        {
+          id: 'amount',
+          label: 'Amount',
+          metrics: [
+            { metric: 'amount', label: 'Amount', semantic: 'additive' },
+          ],
+        },
+        {
+          id: 'profit',
+          label: 'Profit',
+          metrics: [
+            { metric: 'profit', label: 'Profit', semantic: 'additive' },
+          ],
+        },
+        {
+          id: 'margin_rate',
+          label: 'Margin rate',
+          metrics: [
+            {
+              metric: 'margin_rate',
+              label: 'Margin Rate',
+              semantic: 'ratio',
+            },
+          ],
+        },
       ],
     },
   ],
@@ -642,6 +684,319 @@ describe('crosstab transformProps', () => {
     expect(props.rowData).toEqual([]);
     expect(props.isServerColumnLoading).toBe(true);
     expect(props.selectedDynamicGroupByColumn).toBe('shop_name');
+  });
+
+  it('passes dynamic metric state to renderer props and renders the selected metric', () => {
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date'],
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }],
+          metrics: [
+            { metric: 'amount', label: 'Amount', semantic: 'additive' },
+          ],
+        },
+        dynamicMetric,
+      },
+      ownState: {
+        selectedDynamicMetric: {
+          primary_metric: 'profit',
+        },
+        effectiveMetricSignature: getMetricConfigSignature([
+          { metric: 'profit', label: 'Profit', semantic: 'additive' },
+        ]),
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              metric_name_with_unit: '销售额',
+              biz_date: '2026-05-01',
+              profit: 7,
+            },
+          ],
+        },
+      ],
+      datasource: {
+        verboseMap: {
+          metric_name_with_unit: '指标项',
+          biz_date: '日期',
+          profit: 'Profit',
+        },
+      },
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(props.dynamicMetricConfig).toEqual(dynamicMetric);
+    expect(props.selectedDynamicMetric).toEqual({ primary_metric: 'profit' });
+    expect(props.effectiveMetricSignature).toBe(
+      getMetricConfigSignature([
+        { metric: 'profit', label: 'Profit', semantic: 'additive' },
+      ]),
+    );
+    expect(props.generatedColumnIds).toEqual([
+      '__crosstab_col__string:10:2026-05-01__metric__profit',
+    ]);
+    expect(props.rowData).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metric_name_with_unit: '销售额',
+          '__crosstab_col__string:10:2026-05-01__metric__profit': 7,
+        }),
+      ]),
+    );
+    expect(props.columnTree).toEqual([
+      expect.objectContaining({
+        label: '2026-05-01',
+        field: '__crosstab_col__string:10:2026-05-01__metric__profit',
+        metric: 'profit',
+      }),
+    ]);
+  });
+
+  it('uses selected dynamic metric semantics for SQL summary values', () => {
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }],
+          metrics: [
+            { metric: 'amount', label: 'Amount', semantic: 'additive' },
+          ],
+        },
+        dynamicMetric,
+        showRowTotals: true,
+        showColumnTotals: true,
+      },
+      ownState: {
+        selectedDynamicMetric: {
+          primary_metric: 'margin_rate',
+        },
+        effectiveMetricSignature: getMetricConfigSignature([
+          { metric: 'margin_rate', label: 'Margin Rate', semantic: 'ratio' },
+        ]),
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              metric_name_with_unit: '毛利率（%）',
+              biz_date: '2026-05-01',
+              margin_rate: -4.1111,
+            },
+            {
+              metric_name_with_unit: '毛利率（%）',
+              biz_date: '2026-05-02',
+              margin_rate: -5.2222,
+            },
+          ],
+        },
+        {
+          data: [
+            {
+              metric_name_with_unit: '毛利率（%）',
+              margin_rate: -9.5145,
+            },
+          ],
+        },
+        {
+          data: [
+            {
+              biz_date: '2026-05-01',
+              margin_rate: -4.1111,
+            },
+            {
+              biz_date: '2026-05-02',
+              margin_rate: -5.2222,
+            },
+          ],
+        },
+        {
+          data: [
+            {
+              margin_rate: -9.5145,
+            },
+          ],
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+    const ratioRow = props.rowData.find(
+      row => row.metric_name_with_unit === '毛利率（%）',
+    );
+    const grandTotalRow = props.rowData.find(
+      row => row[CROSSTAB_ROW_TYPE] === 'grand_total',
+    );
+
+    expect(ratioRow).toEqual(
+      expect.objectContaining({
+        [CROSSTAB_TOTAL_COLUMN_ID]: -9.5145,
+      }),
+    );
+    expect(grandTotalRow).toEqual(
+      expect.objectContaining({
+        [CROSSTAB_TOTAL_COLUMN_ID]: -9.5145,
+      }),
+    );
+  });
+
+  it('clears stale metric server column caches and preserves expanded rows', () => {
+    const setDataMask = jest.fn();
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name'],
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }, { field: 'shop_name' }],
+          metrics: [
+            { metric: 'amount', label: 'Amount', semantic: 'additive' },
+          ],
+        },
+        serverColumnPagination: true,
+        columnPageSize: 98,
+        dynamicMetric,
+      },
+      ownState: {
+        selectedDynamicMetric: {
+          primary_metric: 'profit',
+        },
+        effectiveGroupBySignature:
+          'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+        effectiveMetricSignature: getMetricConfigSignature([
+          { metric: 'amount', label: 'Amount', semantic: 'additive' },
+        ]),
+        currentColumnPage: 3,
+        currentColumnPageSize: 5,
+        expandedRowPaths: ['kept-row'],
+        unrelatedOwnStateField: 'preserved',
+        serverColumnPageColumnSignature: 'biz_date\u001fshop_name',
+        serverColumnPageTuples: [['2026-05-01', 'Shop A']],
+        serverColumnPageTuplesPage: 3,
+        serverColumnPageTuplesPageSize: 5,
+        serverColumnTotalCount: 999,
+      },
+      hooks: {
+        setDataMask,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              biz_date: '2026-05-01',
+              shop_name: 'Shop A',
+            },
+          ],
+        },
+        {
+          data: [{ rowcount: 1 }],
+        },
+        {
+          data: [
+            {
+              metric_name_with_unit: '销售额',
+              biz_date: '2026-05-01',
+              shop_name: 'Shop A',
+              profit: 10,
+            },
+          ],
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(setDataMask).toHaveBeenCalledWith({
+      ownState: {
+        currentColumnPageSize: 5,
+        expandedRowPaths: ['kept-row'],
+        unrelatedOwnStateField: 'preserved',
+        effectiveGroupBySignature:
+          'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+        selectedDynamicMetric: { primary_metric: 'profit' },
+        effectiveMetricSignature: getMetricConfigSignature([
+          { metric: 'profit', label: 'Profit', semantic: 'additive' },
+        ]),
+        currentColumnPage: 0,
+        serverColumnPageTuples: [],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: 5,
+      },
+    });
+    const resetOwnState = setDataMask.mock.calls[0][0].ownState;
+    expect(resetOwnState).not.toHaveProperty('serverColumnPageColumnSignature');
+    expect(resetOwnState).not.toHaveProperty('serverColumnTotalCount');
+    expect(props.rowData).toEqual([]);
+    expect(props.isServerColumnLoading).toBe(true);
+    expect(props.expandedRowPaths).toEqual(['kept-row']);
+    expect(props.effectiveMetricSignature).toBe(
+      getMetricConfigSignature([
+        { metric: 'profit', label: 'Profit', semantic: 'additive' },
+      ]),
+    );
+  });
+
+  it.each([
+    ['missing dynamic metric config', undefined],
+    [
+      'disabled dynamic metric config',
+      {
+        enabled: false,
+        slots: [],
+      },
+    ],
+  ])('preserves existing metric behavior with %s', (_label, dynamicMetricConfig) => {
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+        groupbyRows: ['contract_type'],
+        groupbyColumns: ['pay_type'],
+        metrics: ['amount', 'profit'],
+        ...(dynamicMetricConfig
+          ? { dynamicMetric: dynamicMetricConfig as CrosstabDynamicMetricConfig }
+          : {}),
+      },
+      queriesData: [
+        {
+          data: [
+            { contract_type: 'A', pay_type: 'Cash', amount: 10, profit: 2 },
+          ],
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(props.dynamicMetricConfig).toBeUndefined();
+    expect(props.selectedDynamicMetric).toBeUndefined();
+    expect(props.effectiveMetricSignature).toBeUndefined();
+    expect(props.generatedColumnIds).toEqual([
+      '__crosstab_col__string:4:Cash__metric__amount',
+      '__crosstab_col__string:4:Cash__metric__profit',
+    ]);
   });
 
   it('stores server column page tuples after loading the column domain query', () => {
