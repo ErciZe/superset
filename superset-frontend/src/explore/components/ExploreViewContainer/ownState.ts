@@ -28,6 +28,7 @@ const CROSSTAB_OWN_STATE_KEYS = [
   'serverColumnPageTuplesPage',
   'serverColumnPageTuplesPageSize',
   'serverColumnTotalCount',
+  'selectedDynamicGroupBy',
   'selectedDynamicGroupByColumn',
 ];
 

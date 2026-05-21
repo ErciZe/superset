@@ -32,6 +32,7 @@ test('filters crosstab chart-local ownState from extra form data', () => {
         serverColumnPageTuplesPage: 1,
         serverColumnPageTuplesPageSize: 12,
         serverColumnTotalCount: 100,
+        selectedDynamicGroupBy: { level2: 'country', level3: 'msku' },
         selectedDynamicGroupByColumn: 'shop_name',
         filterState: { value: ['kept'] },
       },
