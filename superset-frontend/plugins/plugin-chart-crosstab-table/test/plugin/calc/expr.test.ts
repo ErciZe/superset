@@ -50,6 +50,21 @@ test('emits Doris safe division for ratio', () => {
   );
 });
 
+test('allows quoted string literals in metric SQL', () => {
+  expect(
+    emitCalculatedFieldSql(ratioField, {
+      dialect: 'doris',
+      metricSql: {
+        sales: metricSql.sales,
+        profit: "SUM(CASE WHEN state = 'CA' THEN gross_profit ELSE 0 END)",
+      },
+      parameterValues: {},
+    }),
+  ).toBe(
+    "(CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(CASE WHEN state = 'CA' THEN gross_profit ELSE 0 END) / SUM(sales_amount) END)",
+  );
+});
+
 test('emits difference', () => {
   expect(
     emitCalculatedFieldSql(
