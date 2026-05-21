@@ -21,6 +21,7 @@ import { omit } from 'lodash';
 const CROSSTAB_OWN_STATE_KEYS = [
   'currentColumnPage',
   'currentColumnPageSize',
+  'effectiveMetricSignature',
   'effectiveGroupBySignature',
   'expandedRowPaths',
   'serverColumnPageColumnSignature',
@@ -30,6 +31,7 @@ const CROSSTAB_OWN_STATE_KEYS = [
   'serverColumnTotalCount',
   'selectedDynamicGroupBy',
   'selectedDynamicGroupByColumn',
+  'selectedDynamicMetric',
 ];
 
 type FormDataWithVizType = {
