@@ -167,6 +167,11 @@ function normalizeLegacyConfig(
       columns: [option.column],
     };
   });
+  const defaultOptionId = getColumnLabel(defaultColumn);
+
+  if (!normalizedOptions.some(option => option.id === defaultOptionId)) {
+    throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION);
+  }
 
   return {
     enabled,
@@ -177,7 +182,7 @@ function normalizeLegacyConfig(
         placement,
         slotIndex: parsedSlotIndex,
         spliceCount: 1,
-        defaultOptionId: getColumnLabel(defaultColumn),
+        defaultOptionId,
         options: normalizedOptions,
       },
     ],

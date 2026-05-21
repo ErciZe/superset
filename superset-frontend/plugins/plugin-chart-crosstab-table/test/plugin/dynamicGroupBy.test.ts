@@ -23,10 +23,10 @@ import type {
 } from '../../src/types';
 import {
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG,
-  ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_SELECTED_COLUMN,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_SPLICE_COUNT,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT,
+  ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION,
   getDynamicGroupByConfig,
   resolveDynamicGroupByDimensions,
 } from '../../src/plugin/dynamicGroupBy';
@@ -203,14 +203,14 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   });
 
-  it('throws when enabled config has empty options', () => {
+  it('throws when enabled legacy config has empty options', () => {
     expect(() =>
       resolveDynamicGroupByDimensions({
         formData: createFormData({ ...baseConfig, options: [] }),
         rowDimensions: ['metric_name_with_unit'],
         columnDimensions: ['biz_date', 'shop_name'],
       }),
-    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS);
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION);
   });
 
   it('throws when selected column is outside the whitelist', () => {
@@ -252,6 +252,17 @@ describe('crosstab dynamic group by resolver', () => {
         },
       ],
     });
+  });
+
+  it('rejects legacy config when default column is outside options', () => {
+    expect(() =>
+      getDynamicGroupByConfig(
+        createFormData({
+          ...baseConfig,
+          defaultColumn: 'category_level1',
+        }),
+      ),
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION);
   });
 
   it('accepts the canonical slot-array shape without rewriting stable ids', () => {
