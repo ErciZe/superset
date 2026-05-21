@@ -191,8 +191,8 @@ export function resolveCrosstabParameters(
 export function getParameterSignature(
   resolved: ResolvedCrosstabParameters,
 ): string {
-  return Object.entries(resolved.values)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, value]) => `${name}=${value}`)
+  return Object.keys(resolved.values)
+    .sort()
+    .map(name => `${name}=${resolved.values[name]}`)
     .join('\u001f');
 }
