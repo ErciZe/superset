@@ -34,6 +34,10 @@ type ExpandCalculatedFieldMetricConfigsArgs = {
   parameterValues: Record<string, number>;
 };
 
+type ExpandCalculatedFieldMetricConfigsResult = {
+  metricConfigs: MetricFieldConfig[];
+};
+
 type JsonValue =
   | null
   | boolean
@@ -194,7 +198,9 @@ function stableSerialize(value: unknown): string {
 
   const entries = Object.entries(value as Record<string, JsonValue>)
     .filter(([, entryValue]) => entryValue !== undefined)
-    .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey));
+    .sort(([leftKey], [rightKey]) =>
+      leftKey === rightKey ? 0 : leftKey > rightKey ? 1 : -1,
+    );
 
   return `{${entries
     .map(
@@ -219,35 +225,37 @@ export function expandCalculatedFieldMetricConfigs({
   formData,
   metricConfigs,
   parameterValues,
-}: ExpandCalculatedFieldMetricConfigsArgs): MetricFieldConfig[] {
+}: ExpandCalculatedFieldMetricConfigsArgs): ExpandCalculatedFieldMetricConfigsResult {
   const calculatedFields = getCalculatedFields(formData);
 
   if (calculatedFields.length === 0) {
-    return metricConfigs;
+    return { metricConfigs };
   }
 
   const metricSql = getMetricSqlMap(metricConfigs);
 
   assertNoDuplicateLabels(metricConfigs, calculatedFields);
 
-  return [
-    ...metricConfigs,
-    ...calculatedFields.map(field => ({
-      metric: calculatedMetric(
-        field,
-        emitCalculatedFieldSql(field, {
-          dialect,
-          metricSql,
-          parameterValues,
-        }),
-      ),
-      label: field.label,
-      semantic: field.semantic,
-      ...(field.formatString === undefined
-        ? {}
-        : { formatString: field.formatString }),
-    })),
-  ];
+  return {
+    metricConfigs: [
+      ...metricConfigs,
+      ...calculatedFields.map(field => ({
+        metric: calculatedMetric(
+          field,
+          emitCalculatedFieldSql(field, {
+            dialect,
+            metricSql,
+            parameterValues,
+          }),
+        ),
+        label: field.label,
+        semantic: field.semantic,
+        ...(field.formatString === undefined
+          ? {}
+          : { formatString: field.formatString }),
+      })),
+    ],
+  };
 }
 
 export function getCalculatedFieldsSignature(
@@ -256,7 +264,7 @@ export function getCalculatedFieldsSignature(
 ): string {
   const sortedParameterValues = Object.fromEntries(
     Object.entries(parameterValues).sort(([leftKey], [rightKey]) =>
-      leftKey.localeCompare(rightKey),
+      leftKey === rightKey ? 0 : leftKey > rightKey ? 1 : -1,
     ),
   );
   const parameterSignature = Object.entries(sortedParameterValues)

@@ -75,8 +75,8 @@ test('expands calculated fields into SQL metric configs', () => {
     parameterValues: { adjustmentRate: 1.25 },
   });
 
-  expect(result).toHaveLength(3);
-  expect(result[2]).toEqual({
+  expect(result.metricConfigs).toHaveLength(3);
+  expect(result.metricConfigs[2]).toEqual({
     metric: {
       expressionType: 'SQL',
       label: '含参毛利率',
