@@ -308,11 +308,11 @@ export function normalizeDynamicGroupByConfig(
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   }
 
-  if (!Array.isArray(value.slots)) {
+  if (!('slots' in value)) {
     return normalizeLegacyConfig(value);
   }
 
-  if (typeof value.enabled !== 'boolean') {
+  if (typeof value.enabled !== 'boolean' || !Array.isArray(value.slots)) {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   }
 

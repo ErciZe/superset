@@ -414,6 +414,21 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   });
 
+  it('rejects non-array canonical slots even with legacy fields present', () => {
+    expect(() =>
+      getDynamicGroupByConfig(
+        createFormData({
+          enabled: true,
+          slots: 'bad',
+          placement: 'columns',
+          slotIndex: 1,
+          defaultColumn: 'shop_name',
+          options: [{ label: '店铺', column: 'shop_name' }],
+        }),
+      ),
+    ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+  });
+
   it('rejects canonical slots with empty options', () => {
     expect(() =>
       getDynamicGroupByConfig(
