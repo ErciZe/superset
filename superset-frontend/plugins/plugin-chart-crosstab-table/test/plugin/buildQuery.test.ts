@@ -45,6 +45,71 @@ const canonicalMultiSlotGroupBy = {
   ],
 } as const;
 
+const dynamicMetric = {
+  enabled: true,
+  slots: [
+    {
+      id: 'primary_metric',
+      label: '主指标',
+      slotIndex: 0,
+      spliceCount: 1,
+      defaultOptionId: 'amount',
+      options: [
+        {
+          id: 'amount',
+          label: '销售额',
+          metrics: [
+            { metric: 'amount', label: '销售额', semantic: 'additive' },
+          ],
+        },
+        {
+          id: 'rate',
+          label: '毛利率',
+          metrics: [
+            { metric: 'margin_rate', label: '毛利率', semantic: 'ratio' },
+          ],
+        },
+        {
+          id: 'profit',
+          label: '利润',
+          metrics: [{ metric: 'profit', label: '利润', semantic: 'additive' }],
+        },
+      ],
+    },
+  ],
+} as const;
+
+const dynamicMetricPair = {
+  enabled: true,
+  slots: [
+    {
+      id: 'metric_pair',
+      label: '指标组合',
+      slotIndex: 0,
+      spliceCount: 2,
+      defaultOptionId: 'amount_profit',
+      options: [
+        {
+          id: 'amount_profit',
+          label: '销售额和利润',
+          metrics: [
+            { metric: 'amount', label: '销售额', semantic: 'additive' },
+            { metric: 'profit', label: '利润', semantic: 'additive' },
+          ],
+        },
+        {
+          id: 'amount_and_rate',
+          label: '销售额和毛利率',
+          metrics: [
+            { metric: 'amount', label: '销售额', semantic: 'additive' },
+            { metric: 'margin_rate', label: '毛利率', semantic: 'ratio' },
+          ],
+        },
+      ],
+    },
+  ],
+} as const;
+
 describe('crosstab buildQuery', () => {
   it('uses the default dynamic group-by column in query dimensions', () => {
     const queryContext = buildQuery({
@@ -410,6 +475,33 @@ describe('crosstab buildQuery', () => {
     expect(queryContext.queries[0].metrics).toEqual(['指标值']);
   });
 
+  it('uses the selected dynamic metric in the leaf query metrics', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '11__table',
+        viz_type: 'crosstab-table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }, { field: 'shop_name' }],
+          metrics: [
+            { metric: 'amount', label: '销售额', semantic: 'additive' },
+          ],
+        },
+        dynamicMetric,
+      } as never,
+      {
+        ownState: {
+          selectedDynamicMetric: {
+            primary_metric: 'profit',
+          },
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries).toHaveLength(1);
+    expect(queryContext.queries[0].metrics).toEqual(['profit']);
+  });
+
   it('emits SQL summary queries for configured non-additive metric semantics', () => {
     const queryContext = buildQuery({
       datasource: '11__table',
@@ -443,6 +535,107 @@ describe('crosstab buildQuery', () => {
       expect(query.post_processing).toEqual([]);
     });
   });
+
+  it('plans summary queries from selected dynamic metric semantics', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '11__table',
+        viz_type: 'crosstab-table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'category' }, { field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }, { field: 'shop_name' }],
+          metrics: [
+            { metric: 'amount', label: '销售额', semantic: 'additive' },
+          ],
+        },
+        dynamicMetric,
+        showRowTotals: true,
+        showRowSubtotals: true,
+        showColumnTotals: true,
+        showColumnSubtotals: true,
+        row_limit: 10000,
+      } as never,
+      {
+        ownState: {
+          selectedDynamicMetric: {
+            primary_metric: 'rate',
+          },
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries.map(query => query.columns)).toEqual([
+      ['category', 'metric_name_with_unit', 'biz_date', 'shop_name'],
+      ['category', 'metric_name_with_unit'],
+      ['category', 'biz_date', 'shop_name'],
+      ['category'],
+      ['biz_date', 'shop_name'],
+      ['category', 'metric_name_with_unit', 'biz_date'],
+      ['biz_date'],
+      ['category', 'biz_date'],
+      [],
+    ]);
+    queryContext.queries.forEach(query => {
+      expect(query.metrics).toEqual(['margin_rate']);
+    });
+  });
+
+  it.each([
+    ['missing dynamic metric config', undefined],
+    [
+      'disabled dynamic metric config',
+      {
+        enabled: false,
+        slots: [],
+      },
+    ],
+  ])(
+    'preserves existing metrics behavior with %s',
+    (_label, dynamicMetricConfig) => {
+      const queryContext = buildQuery({
+        datasource: '11__table',
+        viz_type: 'crosstab-table',
+        groupbyRows: ['contract_type'],
+        groupbyColumns: ['pay_type'],
+        metrics: ['amount', 'profit'],
+        ...(dynamicMetricConfig ? { dynamicMetric: dynamicMetricConfig } : {}),
+      } as never);
+
+      expect(queryContext.queries).toHaveLength(1);
+      expect(queryContext.queries[0].metrics).toEqual(['amount', 'profit']);
+    },
+  );
+
+  it.each([
+    ['empty persisted metrics', { metrics: [] }],
+    ['missing persisted metrics', {}],
+  ])(
+    'falls back to legacy metrics when crosstabFieldConfig has %s',
+    (_label, crosstabFieldConfigMetrics) => {
+      const queryContext = buildQuery({
+        datasource: '11__table',
+        viz_type: 'crosstab-table',
+        metrics: ['legacy_amount'],
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }, { field: 'shop_name' }],
+          ...crosstabFieldConfigMetrics,
+        },
+        dynamicMetric: {
+          enabled: false,
+          slots: [],
+        },
+      } as never);
+
+      expect(queryContext.queries).toHaveLength(1);
+      expect(queryContext.queries[0]).toEqual(
+        expect.objectContaining({
+          columns: ['metric_name_with_unit', 'biz_date', 'shop_name'],
+          metrics: ['legacy_amount'],
+        }),
+      );
+    },
+  );
 
   it('rejects server pagination', () => {
     expect(() =>
@@ -753,6 +946,29 @@ describe('crosstab buildQuery', () => {
         metrics: ['指标值'],
         serverColumnPagination: true,
       } as never),
+    ).toThrow(ERR_SERVER_COLUMN_PAGINATION_SHAPE);
+  });
+
+  it('rejects server column pagination when dynamic metric expands to multiple effective metrics', () => {
+    expect(() =>
+      buildQuery(
+        {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+          groupbyRows: ['metric_name_with_unit'],
+          groupbyColumns: ['biz_date', 'shop_name', 'country'],
+          metrics: ['amount', 'profit'],
+          dynamicMetric: dynamicMetricPair,
+          serverColumnPagination: true,
+        } as never,
+        {
+          ownState: {
+            selectedDynamicMetric: {
+              metric_pair: 'amount_and_rate',
+            },
+          },
+        } as never,
+      ),
     ).toThrow(ERR_SERVER_COLUMN_PAGINATION_SHAPE);
   });
 });

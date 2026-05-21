@@ -23,12 +23,17 @@ import type {
   QueryFormMetric,
   QueryObject,
 } from '@superset-ui/core';
-import type { CrosstabFormData, CrosstabQueryPlanItem } from '../types';
+import type {
+  CrosstabFormData,
+  CrosstabOwnState as DynamicOwnState,
+  CrosstabQueryPlanItem,
+  MetricFieldConfig,
+} from '../types';
 import { resolveDynamicGroupByDimensions } from './dynamicGroupBy';
+import { resolveDynamicMetricConfigs } from './dynamicMetric';
 import {
   getCrosstabColumnColumns,
-  getCrosstabMetricConfigs,
-  getCrosstabMetrics,
+  getPersistedCrosstabMetricConfigs,
   getCrosstabRowColumns,
   getCrosstabSemanticOverrides,
 } from './fieldConfig';
@@ -40,7 +45,7 @@ import {
   getCurrentColumnPage,
   getServerColumnPageTuples,
 } from './serverColumnPagination';
-import type { CrosstabOwnState } from './serverColumnPagination';
+import type { CrosstabOwnState as ServerColumnOwnState } from './serverColumnPagination';
 import { buildCrosstabQueryPlan } from './summaryQueryPlan';
 
 const unique = <T>(values: T[]): T[] => [...new Set(values)];
@@ -128,9 +133,21 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
     rowDimensions: persistedRowDimensions,
     columnDimensions: persistedColumnDimensions,
   });
-  const metrics = ensureIsArray<QueryFormMetric>(getCrosstabMetrics(formData));
+  const persistedMetricConfigs = getPersistedCrosstabMetricConfigs(formData);
+  const baseMetricConfigs: MetricFieldConfig[] = persistedMetricConfigs.length
+    ? persistedMetricConfigs
+    : ensureIsArray<QueryFormMetric>(formData.metrics).map(metric => ({
+        metric,
+      }));
+  const dynamicMetricResult = resolveDynamicMetricConfigs({
+    formData,
+    metricConfigs: baseMetricConfigs,
+    ownState: options?.ownState as DynamicOwnState | undefined,
+  });
+  const effectiveMetricConfigs = dynamicMetricResult.metricConfigs;
+  const metrics = effectiveMetricConfigs.map(config => config.metric);
   const hasNonAdditiveSummary = hasSqlSummarySemanticConfig(
-    getCrosstabMetricConfigs(formData),
+    effectiveMetricConfigs,
     getCrosstabSemanticOverrides(formData),
   );
 
@@ -145,7 +162,7 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
 
           const currentPage = getCurrentColumnPage(options?.ownState);
           const ownColumnPageSize = (
-            options?.ownState as CrosstabOwnState | undefined
+            options?.ownState as ServerColumnOwnState | undefined
           )?.currentColumnPageSize;
           const columnPageSize = getColumnPageSize(
             ownColumnPageSize ?? formData.columnPageSize,

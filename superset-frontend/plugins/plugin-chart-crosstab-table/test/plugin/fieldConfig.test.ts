@@ -26,6 +26,7 @@ import {
   getCrosstabFieldLabels,
   getCrosstabMetricConfigs,
   getCrosstabMetrics,
+  getPersistedCrosstabMetricConfigs,
   getCrosstabRowColumns,
   getCrosstabRowSubtotalDepths,
   getCrosstabSemanticOverrideField,
@@ -110,6 +111,50 @@ describe('crosstab field config', () => {
     });
 
     expect(getCrosstabMetricConfigs(formData)).toEqual(metricConfigs);
+  });
+
+  it('returns persisted metric configs unchanged', () => {
+    const metricConfigs: MetricFieldConfig[] = [
+      {
+        metric: 'amount',
+        label: 'Amount',
+        semantic: 'additive',
+      },
+      {
+        metric: {
+          expressionType: 'SIMPLE',
+          column: {
+            column_name: 'margin_rate',
+            type: 'DOUBLE',
+          },
+          aggregate: 'AVG',
+          label: 'Margin Rate',
+        },
+        label: 'Margin Rate %',
+        semantic: 'average',
+      },
+    ];
+    const formData = createFormData({
+      crosstabFieldConfig: {
+        metrics: metricConfigs,
+      },
+    });
+
+    expect(getPersistedCrosstabMetricConfigs(formData)).toBe(metricConfigs);
+    expect(getPersistedCrosstabMetricConfigs(formData)).toEqual([
+      expect.objectContaining({
+        metric: 'amount',
+        label: 'Amount',
+        semantic: 'additive',
+      }),
+      expect.objectContaining({
+        metric: expect.objectContaining({
+          label: 'Margin Rate',
+        }),
+        label: 'Margin Rate %',
+        semantic: 'average',
+      }),
+    ]);
   });
 
   it('extracts semantic override config with empty defaults', () => {

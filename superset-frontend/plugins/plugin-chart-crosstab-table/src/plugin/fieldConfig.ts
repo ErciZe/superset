@@ -24,6 +24,7 @@ import {
   type QueryFormMetric,
 } from '@superset-ui/core';
 import type { CrosstabFieldConfig, CrosstabFormData } from '../types';
+import type { MetricFieldConfig } from '../types';
 
 function hasFieldConfig(config?: CrosstabFieldConfig) {
   return Boolean(
@@ -52,8 +53,14 @@ export function getCrosstabMetrics(formData: CrosstabFormData) {
     : ensureIsArray<QueryFormMetric>(formData.metrics);
 }
 
-export function getCrosstabMetricConfigs(formData: CrosstabFormData) {
+export function getPersistedCrosstabMetricConfigs(
+  formData: CrosstabFormData,
+): MetricFieldConfig[] {
   return formData.crosstabFieldConfig?.metrics ?? [];
+}
+
+export function getCrosstabMetricConfigs(formData: CrosstabFormData) {
+  return getPersistedCrosstabMetricConfigs(formData);
 }
 
 export function getCrosstabSemanticOverrideField(formData: CrosstabFormData) {
