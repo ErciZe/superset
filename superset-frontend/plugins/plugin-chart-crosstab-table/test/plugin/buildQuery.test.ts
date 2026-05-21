@@ -293,6 +293,10 @@ describe('crosstab buildQuery', () => {
       } as never,
     );
 
+    const tupleWhere =
+      "(biz_date = '2026-05-01' AND country = 'US' AND msku = 'SKU-1') OR " +
+      "(biz_date = '2026-05-01' AND country = 'CA' AND msku = 'SKU-2')";
+
     expect(queryContext.queries.map(query => query.columns)).toEqual([
       ['biz_date', 'country', 'msku'],
       ['biz_date', 'country', 'msku'],
@@ -310,6 +314,13 @@ describe('crosstab buildQuery', () => {
       ['country', true],
       ['msku', true],
     ]);
+    expect(queryContext.queries[2].extras?.where).toBe(tupleWhere);
+    expect(queryContext.queries[4].extras?.where).toBe(tupleWhere);
+    expect(queryContext.queries[5].extras?.where).toBe(tupleWhere);
+    expect(queryContext.queries[6].extras?.where).toBe(tupleWhere);
+    expect(queryContext.queries[7].extras?.where).toBe(tupleWhere);
+    expect(queryContext.queries[8].extras?.where).toBe(tupleWhere);
+    expect(queryContext.queries[9].extras?.where ?? '').toBe('');
   });
 
   it('includes row dimensions, column dimensions, and metrics in one aggregate query', () => {
