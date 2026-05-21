@@ -20,9 +20,17 @@ import {
   ControlPanelConfig,
   sections,
   sharedControls,
+  sharedControlComponents,
 } from '@superset-ui/chart-controls';
 import { t, validateInteger } from '@superset-ui/core';
+import CrosstabDynamicGroupByControl from './CrosstabDynamicGroupByControl';
+import CrosstabDynamicMetricControl from './CrosstabDynamicMetricControl';
 import CrosstabFieldConfigControl from './CrosstabFieldConfigControl';
+
+Object.assign(sharedControlComponents as Record<string, unknown>, {
+  CrosstabDynamicGroupByControl,
+  CrosstabDynamicMetricControl,
+});
 
 const config: ControlPanelConfig = {
   controlPanelSections: [
@@ -104,14 +112,34 @@ const config: ControlPanelConfig = {
           {
             name: 'dynamicGroupBy',
             config: {
-              type: 'TextAreaControl',
+              type: 'CrosstabDynamicGroupByControl',
               label: t('Dynamic group by'),
-              default: '',
-              language: 'json',
+              default: { enabled: false, slots: [] },
               renderTrigger: true,
-              description: t(
-                'JSON config for one chart-local dynamic group-by slot.',
-              ),
+              description: t('Configure chart-local dynamic group-by slots.'),
+              mapStateToProps: ({ datasource }) => ({
+                columns: datasource?.columns ?? [],
+              }),
+            },
+          },
+        ],
+        [
+          {
+            name: 'dynamicMetric',
+            config: {
+              type: 'CrosstabDynamicMetricControl',
+              label: t('Dynamic metrics'),
+              default: { enabled: false, slots: [] },
+              renderTrigger: true,
+              description: t('Configure chart-local dynamic metric slots.'),
+              mapStateToProps: ({ datasource }) => ({
+                columns: datasource?.columns ?? [],
+                datasource,
+                savedMetrics:
+                  datasource && 'metrics' in datasource
+                    ? datasource.metrics
+                    : [],
+              }),
             },
           },
         ],

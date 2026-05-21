@@ -23,6 +23,8 @@ import {
   screen,
 } from '../../../../spec/helpers/testing-library';
 import controlPanel from '../../src/plugin/controlPanel';
+import CrosstabDynamicGroupByControl from '../../src/plugin/CrosstabDynamicGroupByControl';
+import CrosstabDynamicMetricControl from '../../src/plugin/CrosstabDynamicMetricControl';
 import CrosstabFieldConfigControl from '../../src/plugin/CrosstabFieldConfigControl';
 
 jest.mock(
@@ -108,6 +110,7 @@ describe('crosstab controlPanel', () => {
       expect.arrayContaining([
         'crosstabFieldConfig',
         'dynamicGroupBy',
+        'dynamicMetric',
         'showRowTotals',
         'showColumnTotals',
         'showRowSubtotals',
@@ -123,11 +126,13 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('places dynamic group-by before crosstab totals controls', () => {
+  it('places dynamic slot controls before crosstab totals controls', () => {
     const crosstabControlNames = getControlNamesForSection('Crosstab');
     const dynamicGroupByIndex = crosstabControlNames.indexOf('dynamicGroupBy');
+    const dynamicMetricIndex = crosstabControlNames.indexOf('dynamicMetric');
 
     expect(dynamicGroupByIndex).toBeGreaterThanOrEqual(0);
+    expect(dynamicMetricIndex).toBeGreaterThan(dynamicGroupByIndex);
     [
       'showRowTotals',
       'showColumnTotals',
@@ -138,20 +143,54 @@ describe('crosstab controlPanel', () => {
 
       expect(controlIndex).toBeGreaterThanOrEqual(0);
       expect(dynamicGroupByIndex).toBeLessThan(controlIndex);
+      expect(dynamicMetricIndex).toBeLessThan(controlIndex);
     });
   });
 
-  it('exposes dynamic group-by as a chart-local JSON text area', () => {
+  it('keeps crosstab field config, dynamic slots, and server pagination in order', () => {
+    const controlNames = getControlNames();
+    const crosstabFieldConfigIndex = controlNames.indexOf(
+      'crosstabFieldConfig',
+    );
+    const dynamicGroupByIndex = controlNames.indexOf('dynamicGroupBy');
+    const dynamicMetricIndex = controlNames.indexOf('dynamicMetric');
+    const serverColumnPaginationIndex = controlNames.indexOf(
+      'serverColumnPagination',
+    );
+
+    expect(crosstabFieldConfigIndex).toBeGreaterThanOrEqual(0);
+    expect(dynamicGroupByIndex).toBeGreaterThan(crosstabFieldConfigIndex);
+    expect(dynamicMetricIndex).toBeGreaterThan(dynamicGroupByIndex);
+    expect(serverColumnPaginationIndex).toBeGreaterThan(dynamicMetricIndex);
+  });
+
+  it('exposes dynamic group-by as a chart-local slot editor', () => {
     expect(getControlConfig('dynamicGroupBy')).toEqual(
       expect.objectContaining({
-        type: 'TextAreaControl',
+        type: 'CrosstabDynamicGroupByControl',
         label: 'Dynamic group by',
-        default: '',
-        language: 'json',
+        default: { enabled: false, slots: [] },
         renderTrigger: true,
-        description: 'JSON config for one chart-local dynamic group-by slot.',
+        description: 'Configure chart-local dynamic group-by slots.',
       }),
     );
+  });
+
+  it('exposes dynamic metrics as a chart-local slot editor', () => {
+    expect(getControlConfig('dynamicMetric')).toEqual(
+      expect.objectContaining({
+        type: 'CrosstabDynamicMetricControl',
+        label: 'Dynamic metrics',
+        default: { enabled: false, slots: [] },
+        renderTrigger: true,
+        description: 'Configure chart-local dynamic metric slots.',
+      }),
+    );
+  });
+
+  it('registers dynamic slot control component types', () => {
+    expect(CrosstabDynamicGroupByControl).toBeDefined();
+    expect(CrosstabDynamicMetricControl).toBeDefined();
   });
 
   it('keeps legacy field controls hidden for saved chart compatibility', () => {
