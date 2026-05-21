@@ -312,7 +312,20 @@ export function getDynamicMetricConfig(
 }
 
 function getMetricConfigIdentity(config: MetricFieldConfig): string {
-  return config.label ?? getMetricLabel(config.metric);
+  if (config.label) {
+    return config.label;
+  }
+
+  if (config.metric === null || config.metric === undefined) {
+    throw new Error('Unsupported crosstab metric field.');
+  }
+
+  const label = getMetricLabel(config.metric);
+  if (!label) {
+    throw new Error('Unsupported crosstab metric field.');
+  }
+
+  return label;
 }
 
 function stableStringify(value: unknown): string {

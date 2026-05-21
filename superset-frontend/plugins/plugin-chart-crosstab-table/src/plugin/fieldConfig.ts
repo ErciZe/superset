@@ -23,8 +23,11 @@ import {
   type QueryFormColumn,
   type QueryFormMetric,
 } from '@superset-ui/core';
-import type { CrosstabFieldConfig, CrosstabFormData } from '../types';
-import type { MetricFieldConfig } from '../types';
+import type {
+  CrosstabFieldConfig,
+  CrosstabFormData,
+  MetricFieldConfig,
+} from '../types';
 
 function hasFieldConfig(config?: CrosstabFieldConfig) {
   return Boolean(

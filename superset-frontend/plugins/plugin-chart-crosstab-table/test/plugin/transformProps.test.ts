@@ -964,40 +964,46 @@ describe('crosstab transformProps', () => {
         slots: [],
       },
     ],
-  ])('preserves existing metric behavior with %s', (_label, dynamicMetricConfig) => {
-    const chartProps = new ChartProps<CrosstabFormData>({
-      width: 800,
-      height: 400,
-      formData: {
-        datasource: '1__table',
-        viz_type: 'crosstab_table',
-        groupbyRows: ['contract_type'],
-        groupbyColumns: ['pay_type'],
-        metrics: ['amount', 'profit'],
-        ...(dynamicMetricConfig
-          ? { dynamicMetric: dynamicMetricConfig as CrosstabDynamicMetricConfig }
-          : {}),
-      },
-      queriesData: [
-        {
-          data: [
-            { contract_type: 'A', pay_type: 'Cash', amount: 10, profit: 2 },
-          ],
+  ])(
+    'preserves existing metric behavior with %s',
+    (_label, dynamicMetricConfig) => {
+      const chartProps = new ChartProps<CrosstabFormData>({
+        width: 800,
+        height: 400,
+        formData: {
+          datasource: '1__table',
+          viz_type: 'crosstab_table',
+          groupbyRows: ['contract_type'],
+          groupbyColumns: ['pay_type'],
+          metrics: ['amount', 'profit'],
+          ...(dynamicMetricConfig
+            ? {
+                dynamicMetric:
+                  dynamicMetricConfig as CrosstabDynamicMetricConfig,
+              }
+            : {}),
         },
-      ],
-      theme: supersetTheme,
-    });
+        queriesData: [
+          {
+            data: [
+              { contract_type: 'A', pay_type: 'Cash', amount: 10, profit: 2 },
+            ],
+          },
+        ],
+        theme: supersetTheme,
+      });
 
-    const props = transformProps(chartProps);
+      const props = transformProps(chartProps);
 
-    expect(props.dynamicMetricConfig).toBeUndefined();
-    expect(props.selectedDynamicMetric).toBeUndefined();
-    expect(props.effectiveMetricSignature).toBeUndefined();
-    expect(props.generatedColumnIds).toEqual([
-      '__crosstab_col__string:4:Cash__metric__amount',
-      '__crosstab_col__string:4:Cash__metric__profit',
-    ]);
-  });
+      expect(props.dynamicMetricConfig).toBeUndefined();
+      expect(props.selectedDynamicMetric).toBeUndefined();
+      expect(props.effectiveMetricSignature).toBeUndefined();
+      expect(props.generatedColumnIds).toEqual([
+        '__crosstab_col__string:4:Cash__metric__amount',
+        '__crosstab_col__string:4:Cash__metric__profit',
+      ]);
+    },
+  );
 
   it('stores server column page tuples after loading the column domain query', () => {
     const setDataMask = jest.fn();

@@ -602,9 +602,7 @@ export default function CrosstabTable({
     }
 
     return [...dynamicMetricConfig.slots]
-      .sort(
-        (leftSlot, rightSlot) => leftSlot.slotIndex - rightSlot.slotIndex,
-      )
+      .sort((leftSlot, rightSlot) => leftSlot.slotIndex - rightSlot.slotIndex)
       .map(slot => {
         const options = slot.options.map(option => ({
           label: option.label,
