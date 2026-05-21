@@ -15,6 +15,36 @@ const dynamicColumnGroupBy = {
   ],
 } as const;
 
+const canonicalMultiSlotGroupBy = {
+  enabled: true,
+  slots: [
+    {
+      id: 'level2',
+      label: '二级维度',
+      placement: 'columns',
+      slotIndex: 1,
+      spliceCount: 1,
+      defaultOptionId: 'shop',
+      options: [
+        { id: 'shop', label: '店铺', columns: ['shop_name'] },
+        { id: 'country', label: '国家', columns: ['country'] },
+      ],
+    },
+    {
+      id: 'level3',
+      label: '三级维度',
+      placement: 'columns',
+      slotIndex: 2,
+      spliceCount: 1,
+      defaultOptionId: 'none',
+      options: [
+        { id: 'none', label: '(无)', columns: [] },
+        { id: 'msku', label: 'MSKU', columns: ['msku'] },
+      ],
+    },
+  ],
+} as const;
+
 describe('crosstab buildQuery', () => {
   it('uses the default dynamic group-by column in query dimensions', () => {
     const queryContext = buildQuery({
@@ -139,6 +169,85 @@ describe('crosstab buildQuery', () => {
       ['category', 'biz_date'],
       [],
     ]);
+  });
+
+  it('uses canonical multi-slot dimensions in non-server query dimensions', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '11__table',
+        viz_type: 'crosstab-table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name'],
+        metrics: ['amount'],
+        dynamicGroupBy: canonicalMultiSlotGroupBy,
+      } as never,
+      {
+        ownState: {
+          selectedDynamicGroupBy: {
+            level2: 'country',
+            level3: 'msku',
+          },
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries).toHaveLength(1);
+    expect(queryContext.queries[0].columns).toEqual([
+      'metric_name_with_unit',
+      'biz_date',
+      'country',
+      'msku',
+    ]);
+  });
+
+  it('uses canonical multi-slot dimensions for server domain, count, leaf, and summary queries', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '11__table',
+        viz_type: 'crosstab-table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }, { field: 'shop_name' }],
+          metrics: [{ metric: '指标值', semantic: 'ratio' }],
+        },
+        dynamicGroupBy: canonicalMultiSlotGroupBy,
+        serverColumnPagination: true,
+        showRowTotals: true,
+        showRowSubtotals: true,
+        showColumnTotals: true,
+        showColumnSubtotals: true,
+        row_limit: 10000,
+      } as never,
+      {
+        ownState: {
+          currentColumnPage: 0,
+          currentColumnPageSize: 5,
+          selectedDynamicGroupBy: {
+            level2: 'country',
+            level3: 'msku',
+          },
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries.map(query => query.columns)).toEqual([
+      ['biz_date', 'country', 'msku'],
+      ['biz_date', 'country', 'msku'],
+    ]);
+    expect(queryContext.queries[0]).toEqual(
+      expect.objectContaining({
+        metrics: [],
+        row_limit: 5,
+        row_offset: 0,
+      }),
+    );
+    expect(queryContext.queries[1]).toEqual(
+      expect.objectContaining({
+        is_rowcount: true,
+        row_limit: 0,
+        row_offset: 0,
+      }),
+    );
   });
 
   it('includes row dimensions, column dimensions, and metrics in one aggregate query', () => {
