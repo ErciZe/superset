@@ -19,89 +19,125 @@
 import {
   ERR_CROSSTAB_PARAMETER_CONFIG,
   ERR_CROSSTAB_PARAMETER_VALUE,
+  getCrosstabNumberParameters,
+  getCrosstabParameters,
   getParameterSignature,
   resolveCrosstabParameters,
 } from '../../src/plugin/parameters';
 import type {
   CrosstabFormData,
   CrosstabNumberParameter,
+  CrosstabParameter,
   CrosstabOwnState,
 } from '../../src/types';
 
-const numberParameters: CrosstabNumberParameter[] = [
+const crosstabParameters: CrosstabParameter[] = [
   {
+    id: 'param_adjustment',
     kind: 'number',
     name: 'adjustmentRate',
     label: '调整系数',
-    default: 1,
+    defaultValue: 1,
     min: 0,
     max: 2,
     step: 0.01,
+  },
+  {
+    id: 'param_country',
+    kind: 'text',
+    name: 'countryFilter',
+    label: '国家',
+    defaultValue: 'DE',
+    allowedValues: ['DE', 'FR'],
   },
 ];
 
 const formData: CrosstabFormData = {
   viz_type: 'crosstab-table',
   datasource: '7__table',
-  parameters: numberParameters,
+  crosstabParameters,
 };
 
-test('uses the default number parameter when own-state is empty', () => {
+test('normalizes canonical number and text parameter config', () => {
+  expect(getCrosstabParameters(formData)).toEqual(crosstabParameters);
+});
+
+test('uses default canonical parameter values when own-state is empty', () => {
   expect(resolveCrosstabParameters(formData, undefined)).toEqual({
-    config: formData.parameters,
-    values: { adjustmentRate: 1 },
+    config: crosstabParameters,
+    values: {
+      number: { param_adjustment: 1 },
+      text: { param_country: 'DE' },
+    },
   });
 });
 
-test('uses runtime number parameter from own-state', () => {
+test('uses runtime canonical parameter values from own-state by id', () => {
   const ownState: CrosstabOwnState = {
-    numericParameters: { adjustmentRate: 1.25 },
+    numericParameters: { param_adjustment: 1.25 },
+    textParameters: { param_country: 'FR' },
   };
 
   expect(resolveCrosstabParameters(formData, ownState).values).toEqual({
-    adjustmentRate: 1.25,
+    number: { param_adjustment: 1.25 },
+    text: { param_country: 'FR' },
   });
 });
 
-test('rejects values outside min and max', () => {
+test('rejects duplicate canonical ids', () => {
   expect(() =>
-    resolveCrosstabParameters(formData, {
-      numericParameters: { adjustmentRate: 3 },
+    getCrosstabParameters({
+      ...formData,
+      crosstabParameters: [
+        ...crosstabParameters,
+        { ...crosstabParameters[1], name: 'otherName' },
+      ],
     }),
-  ).toThrow(ERR_CROSSTAB_PARAMETER_VALUE);
-});
-
-test('rejects values that do not align to step', () => {
-  expect(() =>
-    resolveCrosstabParameters(formData, {
-      numericParameters: { adjustmentRate: 1.234 },
-    }),
-  ).toThrow(ERR_CROSSTAB_PARAMETER_VALUE);
-});
-
-test('rejects more than one number parameter in v4 core', () => {
-  const parameters: CrosstabNumberParameter[] = [
-    ...numberParameters,
-    { kind: 'number', name: 'otherRate', default: 1 },
-  ];
-
-  expect(() =>
-    resolveCrosstabParameters(
-      {
-        ...formData,
-        parameters,
-      },
-      undefined,
-    ),
   ).toThrow(ERR_CROSSTAB_PARAMETER_CONFIG);
 });
 
-test('rejects malformed JSON parameter config with config error', () => {
+test('rejects duplicate canonical names', () => {
+  expect(() =>
+    getCrosstabParameters({
+      ...formData,
+      crosstabParameters: [
+        ...crosstabParameters,
+        { ...crosstabParameters[1], id: 'param_other' },
+      ],
+    }),
+  ).toThrow(ERR_CROSSTAB_PARAMETER_CONFIG);
+});
+
+test('rejects numeric values outside min and max', () => {
+  expect(() =>
+    resolveCrosstabParameters(formData, {
+      numericParameters: { param_adjustment: 3 },
+    }),
+  ).toThrow(ERR_CROSSTAB_PARAMETER_VALUE);
+});
+
+test('rejects numeric values that do not align to step', () => {
+  expect(() =>
+    resolveCrosstabParameters(formData, {
+      numericParameters: { param_adjustment: 1.234 },
+    }),
+  ).toThrow(ERR_CROSSTAB_PARAMETER_VALUE);
+});
+
+test('rejects text values outside allowed values', () => {
+  expect(() =>
+    resolveCrosstabParameters(formData, {
+      textParameters: { param_country: 'US' },
+    }),
+  ).toThrow(ERR_CROSSTAB_PARAMETER_VALUE);
+});
+
+test('rejects malformed canonical JSON parameter config with config error', () => {
   expect(() =>
     resolveCrosstabParameters(
       {
         ...formData,
-        parameters: '[{"kind":"number"',
+        crosstabParameters: '[{"kind":"number"',
       },
       undefined,
     ),
@@ -111,28 +147,89 @@ test('rejects malformed JSON parameter config with config error', () => {
 test.each([
   [
     'valid JSON object',
-    '{"kind":"number","name":"adjustmentRate","default":1}',
+    '{"id":"param_adjustment","kind":"number","name":"adjustmentRate","label":"调整系数","defaultValue":1}',
   ],
-  ['missing default', [{ kind: 'number', name: 'adjustmentRate' }]],
+  [
+    'missing id',
+    [
+      {
+        kind: 'number',
+        name: 'adjustmentRate',
+        label: '调整系数',
+        defaultValue: 1,
+      },
+    ],
+  ],
+  [
+    'missing label',
+    [
+      {
+        id: 'param_adjustment',
+        kind: 'number',
+        name: 'adjustmentRate',
+        defaultValue: 1,
+      },
+    ],
+  ],
   [
     'string default',
-    [{ kind: 'number', name: 'adjustmentRate', default: '1' }],
+    [
+      {
+        id: 'param_adjustment',
+        kind: 'number',
+        name: 'adjustmentRate',
+        label: '调整系数',
+        defaultValue: '1',
+      },
+    ],
   ],
-  ['invalid kind', [{ kind: 'text', name: 'adjustmentRate', default: 1 }]],
   [
     'min greater than max',
-    [{ kind: 'number', name: 'adjustmentRate', default: 1, min: 2, max: 1 }],
+    [
+      {
+        id: 'param_adjustment',
+        kind: 'number',
+        name: 'adjustmentRate',
+        label: '调整系数',
+        defaultValue: 1,
+        min: 2,
+        max: 1,
+      },
+    ],
   ],
   [
     'non-positive step',
-    [{ kind: 'number', name: 'adjustmentRate', default: 1, step: 0 }],
+    [
+      {
+        id: 'param_adjustment',
+        kind: 'number',
+        name: 'adjustmentRate',
+        label: '调整系数',
+        defaultValue: 1,
+        step: 0,
+      },
+    ],
+  ],
+  [
+    'text default outside allowed values',
+    [
+      {
+        id: 'param_country',
+        kind: 'text',
+        name: 'countryFilter',
+        label: '国家',
+        defaultValue: 'US',
+        allowedValues: ['DE', 'FR'],
+      },
+    ],
   ],
 ])('rejects invalid parameter shape: %s', (_description, parameters) => {
   expect(() =>
     resolveCrosstabParameters(
       {
         ...formData,
-        parameters: parameters as CrosstabFormData['parameters'],
+        crosstabParameters:
+          parameters as CrosstabFormData['crosstabParameters'],
       },
       undefined,
     ),
@@ -140,18 +237,41 @@ test.each([
 });
 
 test('creates stable signatures from resolved parameter values', () => {
-  const resolved = resolveCrosstabParameters(formData, {
-    numericParameters: { adjustmentRate: 1.25 },
-  });
+  const resolved = resolveCrosstabParameters(formData, undefined);
 
-  expect(getParameterSignature(resolved)).toBe('adjustmentRate=1.25');
+  expect(getParameterSignature(resolved)).toBe(
+    'number:param_adjustment=1|text:param_country=DE',
+  );
 });
 
-test('sorts parameter signatures by code point order', () => {
+test('preserves strict legacy number helper for formData.parameters only', () => {
+  const legacyParameters: CrosstabNumberParameter[] = [
+    {
+      kind: 'number',
+      name: 'adjustmentRate',
+      label: '调整系数',
+      default: 1,
+      min: 0,
+      max: 2,
+      step: 0.01,
+    },
+  ];
+
   expect(
-    getParameterSignature({
-      config: [],
-      values: { a: 2, Z: 1 },
+    getCrosstabNumberParameters({
+      ...formData,
+      parameters: legacyParameters,
     }),
-  ).toBe('Z=1\u001fa=2');
+  ).toEqual(legacyParameters);
+});
+
+test('canonical config takes precedence over legacy parameters', () => {
+  expect(
+    getCrosstabParameters({
+      ...formData,
+      parameters: [
+        { kind: 'number', name: 'legacyAdjustmentRate', default: 9 },
+      ],
+    }),
+  ).toEqual(crosstabParameters);
 });
