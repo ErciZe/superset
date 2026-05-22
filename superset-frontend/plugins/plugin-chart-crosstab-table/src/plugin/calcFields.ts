@@ -206,6 +206,7 @@ function addDatasourceMetricSql(
   metricSql: Record<string, string>,
   key: string,
   sqlExpression: string,
+  referencedMetricIds: Set<string>,
 ): void {
   const existingSqlExpression = metricSql[key];
 
@@ -213,6 +214,10 @@ function addDatasourceMetricSql(
     existingSqlExpression !== undefined &&
     existingSqlExpression !== sqlExpression
   ) {
+    if (!referencedMetricIds.has(key)) {
+      return;
+    }
+
     throw new Error(ERR_CROSSTAB_CALC_METRIC);
   }
 
@@ -270,8 +275,10 @@ function addMetricConfigSql(
 function getMetricSqlMap(
   metricConfigs: MetricFieldConfig[],
   formData: CrosstabFormData,
+  calculatedFields: CrosstabV4CalculatedField[],
 ): Record<string, string> {
   const datasourceMetricLookup = getDatasourceMetricLookup(formData);
+  const referencedMetricIds = getReferencedMetricIds(calculatedFields);
   const datasourceMetricSql = getDatasourceSavedMetrics(
     formData,
   ).reduce<Record<string, string>>((metricSql, metric) => {
@@ -284,7 +291,12 @@ function getMetricSqlMap(
     const nextMetricSql = { ...metricSql };
 
     getSavedMetricNames(metric).forEach(metricName => {
-      addDatasourceMetricSql(nextMetricSql, metricName, sqlExpression);
+      addDatasourceMetricSql(
+        nextMetricSql,
+        metricName,
+        sqlExpression,
+        referencedMetricIds,
+      );
     });
 
     return nextMetricSql;
@@ -467,6 +479,18 @@ function collectMetricRefs(
   }
 }
 
+function getReferencedMetricIds(
+  calculatedFields: CrosstabV4CalculatedField[],
+): Set<string> {
+  const referencedMetricIds = new Set<string>();
+
+  calculatedFields.forEach(field => {
+    collectMetricRefs(field.ast, referencedMetricIds);
+  });
+
+  return referencedMetricIds;
+}
+
 function assertNoRecursiveCalculatedFields(
   calculatedFields: CrosstabV4CalculatedField[],
 ): void {
@@ -577,7 +601,11 @@ export function expandCalculatedFieldMetricConfigs({
     metricConfigs,
     calculatedFields,
   );
-  const metricSql = getMetricSqlMap(baseMetricConfigs, formData);
+  const metricSql = getMetricSqlMap(
+    baseMetricConfigs,
+    formData,
+    calculatedFields,
+  );
 
   assertNoDuplicateFields(baseMetricConfigs, calculatedFields);
   assertNoRecursiveCalculatedFields(calculatedFields);

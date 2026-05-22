@@ -354,6 +354,61 @@ test('rejects conflicting datasource saved metric aliases for calculated depende
   ).toThrow(ERR_CROSSTAB_CALC_METRIC);
 });
 
+test('ignores unrelated duplicate datasource saved metric display aliases', () => {
+  const result = expandCalculatedFieldMetricConfigs({
+    dialect: 'doris',
+    formData: {
+      ...formData,
+      datasourceMetrics: [
+        {
+          metric_name: 'v4_gross_profit_sum',
+          verbose_name: '重复指标',
+          expression: 'SUM(gross_profit)',
+        },
+        {
+          metric_name: 'v4_sales_amount_sum',
+          verbose_name: '重复指标',
+          expression: 'SUM(sales_amount)',
+        },
+      ],
+      crosstabCalculatedFields: [
+        {
+          id: 'calc_margin_pct_v4',
+          name: 'V4示例毛利率',
+          resultType: 'percent',
+          formatString: '.2%',
+          ast: {
+            kind: 'pct',
+            numerator: {
+              kind: 'metric_ref',
+              metricId: 'v4_gross_profit_sum',
+            },
+            denominator: {
+              kind: 'metric_ref',
+              metricId: 'v4_sales_amount_sum',
+            },
+          },
+        },
+      ],
+    } as unknown as CrosstabFormData,
+    metricConfigs: [
+      {
+        metric: 'V4示例毛利率',
+        label: 'V4示例毛利率',
+        calculatedFieldId: 'calc_margin_pct_v4',
+      },
+    ],
+    parameterValues: { number: {}, text: {} },
+  });
+
+  expect(result.metricConfigs[0].metric).toEqual({
+    expressionType: 'SQL',
+    label: 'V4示例毛利率',
+    sqlExpression:
+      '((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 100)',
+  });
+});
+
 test('fails fast when saved metric SQL cannot be resolved', () => {
   expect(() =>
     expandCalculatedFieldMetricConfigs({
