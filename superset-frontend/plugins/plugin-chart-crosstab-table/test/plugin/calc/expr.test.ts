@@ -46,11 +46,14 @@ const parameterValues = {
   },
 };
 
-function field(ast: CrosstabExpressionNode): CrosstabV4CalculatedField {
+function field(
+  ast: CrosstabExpressionNode,
+  resultType: CrosstabV4CalculatedField['resultType'] = 'number',
+): CrosstabV4CalculatedField {
   return {
     id: 'gross_margin_rate',
     name: '毛利率',
-    resultType: 'number',
+    resultType,
     ast,
   };
 }
@@ -160,6 +163,35 @@ test('rejects text params inside numeric expressions', () => {
     }),
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
+
+test('rejects text AST for number result fields', () => {
+  expect(() =>
+    emitCalculatedFieldAstSql(
+      field({ kind: 'literal_text', value: 'not numeric' }, 'number'),
+      {
+        dialect: 'doris',
+        metricSql,
+        parameterValues,
+      },
+    ),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
+test.each([
+  ['literal_number', { kind: 'literal_number', value: 1 }],
+  ['metric_ref', { kind: 'metric_ref', metricId: 'profit' }],
+] satisfies Array<[string, CrosstabExpressionNode]>)(
+  'rejects %s AST for text result fields',
+  (_label, ast) => {
+    expect(() =>
+      emitCalculatedFieldAstSql(field(ast, 'text'), {
+        dialect: 'doris',
+        metricSql,
+        parameterValues,
+      }),
+    ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+  },
+);
 
 test.each(['safe_div', 'pct', 'ratio'] as const)(
   'rejects literal zero denominator in %s during validation',

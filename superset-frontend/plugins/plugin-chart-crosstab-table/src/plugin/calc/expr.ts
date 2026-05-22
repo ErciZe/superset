@@ -49,6 +49,8 @@ export type LegacyEmitCalculatedFieldSqlArgs = {
 const unsafeSqlTokenPattern = /(;|--|\/\*|\*\/|'|\{\{|\}\}|\$\{)/;
 const binaryOperators: ReadonlySet<unknown> = new Set(['+', '-', '*', '/']);
 
+type AstValueType = 'number' | 'text';
+
 function assertDialect(
   dialect: CalcSqlDialect | string,
 ): asserts dialect is 'doris' {
@@ -96,6 +98,59 @@ function assertNumericNode(node: CrosstabExpressionNode): void {
 function assertNonZeroLiteralDenominator(node: CrosstabExpressionNode): void {
   if (node.kind === 'literal_number' && node.value === 0) {
     throw new Error(ERR_CROSSTAB_CALC_FIELD);
+  }
+}
+
+function getNumericCompositionType(
+  nodes: CrosstabExpressionNode[],
+): AstValueType {
+  nodes.forEach(node => {
+    if (getAstValueType(node) !== 'number') {
+      throw new Error(ERR_CROSSTAB_CALC_FIELD);
+    }
+  });
+
+  return 'number';
+}
+
+function getAstValueType(node: CrosstabExpressionNode): AstValueType {
+  switch (node.kind) {
+    case 'metric_ref':
+    case 'number_param':
+    case 'literal_number':
+      return 'number';
+    case 'text_param':
+    case 'literal_text':
+      return 'text';
+    case 'binary_op':
+      return getNumericCompositionType([node.left, node.right]);
+    case 'safe_div':
+    case 'pct':
+    case 'ratio':
+      return getNumericCompositionType([node.numerator, node.denominator]);
+    default:
+      throw new Error(ERR_CROSSTAB_CALC_FIELD);
+  }
+}
+
+function assertResultTypeMatchesAst(field: CrosstabV4CalculatedField): void {
+  const astValueType = getAstValueType(field.ast);
+
+  switch (field.resultType) {
+    case 'number':
+    case 'ratio':
+    case 'percent':
+      if (astValueType !== 'number') {
+        throw new Error(ERR_CROSSTAB_CALC_FIELD);
+      }
+      return;
+    case 'text':
+      if (astValueType !== 'text') {
+        throw new Error(ERR_CROSSTAB_CALC_FIELD);
+      }
+      return;
+    default:
+      throw new Error(ERR_CROSSTAB_CALC_FIELD);
   }
 }
 
@@ -320,6 +375,7 @@ export function emitCalculatedFieldAstSql(
   }
 
   validateCalculatedFieldAst(field.ast);
+  assertResultTypeMatchesAst(field);
 
   return emitNodeSql(field.ast, args);
 }
