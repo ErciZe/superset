@@ -138,6 +138,18 @@ function sqlMetric(label: string, sqlExpression: string): QueryFormMetric {
   };
 }
 
+const existingProfitRateField = {
+  id: 'profitRate',
+  name: 'Profit rate',
+  resultType: 'percent' as const,
+  formatString: '.2%',
+  ast: {
+    kind: 'pct' as const,
+    numerator: { kind: 'metric_ref' as const, metricId: 'sales' },
+    denominator: { kind: 'metric_ref' as const, metricId: 'profit' },
+  },
+};
+
 describe('crosstab controlPanel', () => {
   it('exposes the crosstab field entry with totals, formatting, and display controls', () => {
     const controlNames = getControlNames();
@@ -381,6 +393,59 @@ describe('crosstab controlPanel', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('keeps parameter edit targets stable when another parameter is deleted', () => {
+    const onChange = jest.fn();
+    const value = [
+      {
+        id: 'rate',
+        kind: 'number' as const,
+        name: 'rate',
+        label: 'Rate',
+        defaultValue: 1,
+      },
+      {
+        id: 'market',
+        kind: 'text' as const,
+        name: 'market',
+        label: 'Market',
+        defaultValue: 'US',
+      },
+    ];
+    const { rerender } = render(
+      createElement(CrosstabParametersControl, {
+        name: 'crosstabParameters',
+        onChange,
+        value,
+      }),
+    );
+
+    fireEvent.click(screen.getAllByText('Edit')[1]);
+    fireEvent.change(screen.getByLabelText('Parameter label'), {
+      target: { value: 'Market code' },
+    });
+    fireEvent.click(screen.getAllByText('Delete')[0]);
+
+    rerender(
+      createElement(CrosstabParametersControl, {
+        name: 'crosstabParameters',
+        onChange,
+        value: onChange.mock.calls[0][0],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('Save parameter'));
+
+    expect(onChange).toHaveBeenLastCalledWith([
+      {
+        id: 'market',
+        kind: 'text',
+        name: 'market',
+        label: 'Market code',
+        defaultValue: 'US',
+      },
+    ]);
+  });
+
   it('saves a pct calculated field and appends crosstab metric config', () => {
     const onChange = jest.fn();
     const onControlChange = jest.fn();
@@ -443,6 +508,222 @@ describe('crosstab controlPanel', () => {
             calculatedFieldId: 'profitRate',
           }),
         ]),
+      }),
+    );
+  });
+
+  it('creates pct fields from saved metric names and datasource metric records', () => {
+    const onChange = jest.fn();
+    const onControlChange = jest.fn();
+
+    render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+          crosstabFieldConfig: {
+            metrics: [{ metric: 'saved_sales' }, { metric: 'saved_profit' }],
+          },
+        },
+        name: 'crosstabCalculatedFields',
+        onControlChange,
+        onChange,
+        savedMetrics: [
+          { metric_name: 'saved_sales', expression: 'SUM(sales_amount)' },
+          {
+            metric_name: 'saved_profit',
+            verbose_name: 'Saved profit',
+            expression: 'SUM(gross_profit)',
+          },
+        ],
+        value: [],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('New calculated field'));
+    fireEvent.click(screen.getByText('Save calculated field'));
+
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        ast: {
+          kind: 'pct',
+          numerator: { kind: 'metric_ref', metricId: 'saved_sales' },
+          denominator: { kind: 'metric_ref', metricId: 'saved_profit' },
+        },
+      }),
+    ]);
+  });
+
+  it('updates an existing calculated field and metric config without duplicates', () => {
+    const onChange = jest.fn();
+    const onControlChange = jest.fn();
+    const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
+    const costMetric = sqlMetric('cost', 'SUM(cost_amount)');
+
+    render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+          crosstabFieldConfig: {
+            metrics: [
+              { metric: salesMetric, label: 'Sales', semantic: 'additive' },
+              { metric: costMetric, label: 'Cost', semantic: 'additive' },
+              {
+                metric: 'Profit rate',
+                label: 'Profit rate',
+                semantic: 'ratio',
+                formatString: '.2%',
+                calculatedFieldId: 'profitRate',
+              },
+            ],
+          },
+        },
+        name: 'crosstabCalculatedFields',
+        onControlChange,
+        onChange,
+        value: [existingProfitRateField],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.change(screen.getByLabelText('Calculated field name'), {
+      target: { value: 'Profit percent' },
+    });
+    fireEvent.click(screen.getByText('Save calculated field'));
+
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'profitRate',
+        name: 'Profit percent',
+      }),
+    ]);
+    expect(onControlChange).toHaveBeenCalledWith(
+      'crosstabFieldConfig',
+      expect.objectContaining({
+        metrics: [
+          { metric: salesMetric, label: 'Sales', semantic: 'additive' },
+          { metric: costMetric, label: 'Cost', semantic: 'additive' },
+          {
+            metric: 'Profit percent',
+            label: 'Profit percent',
+            calculatedFieldId: 'profitRate',
+            semantic: 'ratio',
+            formatString: '.2%',
+          },
+        ],
+      }),
+    );
+  });
+
+  it('rejects new calculated fields that duplicate ids or metric labels', () => {
+    const onChange = jest.fn();
+    const onControlChange = jest.fn();
+    const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
+    const profitMetric = sqlMetric('profit', 'SUM(gross_profit)');
+
+    render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+          crosstabFieldConfig: {
+            metrics: [
+              { metric: salesMetric, label: 'Sales', semantic: 'additive' },
+              { metric: profitMetric, label: 'Profit', semantic: 'additive' },
+            ],
+          },
+        },
+        name: 'crosstabCalculatedFields',
+        onControlChange,
+        onChange,
+        value: [existingProfitRateField],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('New calculated field'));
+    fireEvent.change(screen.getByLabelText('Calculated field id'), {
+      target: { value: 'newField' },
+    });
+    fireEvent.change(screen.getByLabelText('Calculated field name'), {
+      target: { value: 'Sales' },
+    });
+
+    const errors = catchWindowErrors(() =>
+      fireEvent.click(screen.getByText('Save calculated field')),
+    );
+
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Calculated field ids and names must be unique.',
+        }),
+      ]),
+    );
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onControlChange).not.toHaveBeenCalled();
+  });
+
+  it('deletes calculated fields and only their matching metric config', () => {
+    const onChange = jest.fn();
+    const onControlChange = jest.fn();
+    const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
+
+    render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+          crosstabFieldConfig: {
+            metrics: [
+              { metric: salesMetric, label: 'Sales', semantic: 'additive' },
+              {
+                metric: 'Profit rate',
+                label: 'Profit rate',
+                semantic: 'ratio',
+                formatString: '.2%',
+                calculatedFieldId: 'profitRate',
+              },
+              {
+                metric: 'Other calc',
+                label: 'Other calc',
+                semantic: 'ratio',
+                calculatedFieldId: 'otherCalc',
+              },
+            ],
+          },
+        },
+        name: 'crosstabCalculatedFields',
+        onControlChange,
+        onChange,
+        value: [
+          existingProfitRateField,
+          {
+            ...existingProfitRateField,
+            id: 'otherCalc',
+            name: 'Other calc',
+          },
+        ],
+      }),
+    );
+
+    fireEvent.click(screen.getAllByText('Delete')[0]);
+
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'otherCalc', name: 'Other calc' }),
+    ]);
+    expect(onControlChange).toHaveBeenCalledWith(
+      'crosstabFieldConfig',
+      expect.objectContaining({
+        metrics: [
+          { metric: salesMetric, label: 'Sales', semantic: 'additive' },
+          {
+            metric: 'Other calc',
+            label: 'Other calc',
+            semantic: 'ratio',
+            calculatedFieldId: 'otherCalc',
+          },
+        ],
       }),
     );
   });

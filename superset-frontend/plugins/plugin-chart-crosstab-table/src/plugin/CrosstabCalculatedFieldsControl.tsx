@@ -50,9 +50,12 @@ const Field = styled.label`
 `;
 
 type SavedMetric = {
+  expression?: string;
   label?: string;
   metric?: QueryFormMetric;
   metric_name?: string;
+  sqlExpression?: string;
+  sql_expression?: string;
   verbose_name?: string;
 };
 
@@ -60,6 +63,14 @@ type MetricOption = {
   label: string;
   value: string;
   metric: QueryFormMetric;
+};
+
+type CalculatedFieldDraft = {
+  editingFieldId?: string;
+  fieldId: string;
+  fieldName: string;
+  numeratorMetric?: string;
+  denominatorMetric?: string;
 };
 
 type CrosstabCalculatedFieldsControlProps = {
@@ -76,44 +87,133 @@ type CrosstabCalculatedFieldsControlProps = {
   value?: CrosstabV4CalculatedField[];
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
+function getSavedMetricName(metric: SavedMetric): string | undefined {
+  return (
+    nonEmptyString(metric.metric_name) ??
+    nonEmptyString(metric.label) ??
+    nonEmptyString(metric.verbose_name)
+  );
+}
+
+function getSavedMetricExpression(metric: SavedMetric): string | undefined {
+  return (
+    nonEmptyString(metric.expression) ??
+    nonEmptyString(metric.sqlExpression) ??
+    nonEmptyString(metric.sql_expression)
+  );
+}
+
+function metricFromSavedMetric(metric: SavedMetric): QueryFormMetric | undefined {
+  if (metric.metric) {
+    return metric.metric;
+  }
+
+  const metricName = getSavedMetricName(metric);
+  const sqlExpression = getSavedMetricExpression(metric);
+
+  if (!metricName) {
+    return undefined;
+  }
+
+  if (sqlExpression) {
+    return {
+      expressionType: 'SQL',
+      label: metricName,
+      sqlExpression,
+    };
+  }
+
+  return undefined;
+}
+
+function getSavedMetricLookup(savedMetrics: SavedMetric[]) {
+  return new Map(
+    savedMetrics.flatMap(metric => {
+      const metricName = getSavedMetricName(metric);
+      const metricValue = metricFromSavedMetric(metric);
+
+      return metricName && metricValue ? [[metricName, metricValue]] : [];
+    }),
+  );
+}
+
 function metricOptionFromMetric(
   metric: QueryFormMetric,
   label?: string,
+  savedMetricLookup?: Map<string, QueryFormMetric>,
 ): MetricOption | undefined {
-  if (
-    typeof metric !== 'object' ||
-    metric === null ||
-    Array.isArray(metric) ||
-    metric.expressionType !== 'SQL' ||
-    typeof metric.sqlExpression !== 'string'
-  ) {
-    return undefined;
+  if (typeof metric === 'string') {
+    const savedMetric = savedMetricLookup?.get(metric);
+
+    return savedMetric
+      ? {
+          label: label ?? metric,
+          value: metric,
+          metric: savedMetric,
+        }
+      : undefined;
   }
 
-  const metricLabel = getMetricLabel(metric);
+  if (isRecord(metric) && nonEmptyString(metric.metric_name)) {
+    const metricName = nonEmptyString(metric.metric_name) as string;
+    const savedMetric =
+      getSavedMetricExpression(metric as SavedMetric) === undefined
+        ? savedMetricLookup?.get(metricName)
+        : metricFromSavedMetric(metric as SavedMetric);
 
-  if (!metricLabel) {
-    return undefined;
+    return savedMetric
+      ? {
+          label:
+            label ??
+            nonEmptyString(metric.verbose_name) ??
+            nonEmptyString(metric.label) ??
+            metricName,
+          value: metricName,
+          metric: savedMetric,
+        }
+      : undefined;
   }
 
-  return {
-    label: label ?? metricLabel,
-    value: metricLabel,
-    metric,
-  };
+  if (isRecord(metric)) {
+    const metricLabel = getMetricLabel(metric);
+
+    if (!metricLabel) {
+      return undefined;
+    }
+
+    return {
+      label: label ?? metricLabel,
+      value: metricLabel,
+      metric,
+    };
+  }
+
+  return undefined;
 }
 
 function metricOptionFromConfig(
   metricConfig: SavedMetric,
+  savedMetricLookup: Map<string, QueryFormMetric>,
 ): MetricOption | undefined {
-  if (!metricConfig.metric) {
-    return undefined;
-  }
+  const metric = metricFromSavedMetric(metricConfig);
 
-  return metricOptionFromMetric(
-    metricConfig.metric,
-    metricConfig.label ?? metricConfig.verbose_name,
-  );
+  return metric
+    ? metricOptionFromMetric(
+        metric,
+        metricConfig.label ?? metricConfig.verbose_name,
+        savedMetricLookup,
+      )
+    : undefined;
 }
 
 function getMetricOptions(
@@ -121,11 +221,16 @@ function getMetricOptions(
   savedMetrics: SavedMetric[],
 ): MetricOption[] {
   const fieldMetrics = formData?.crosstabFieldConfig?.metrics ?? [];
+  const savedMetricLookup = getSavedMetricLookup(savedMetrics);
 
   if (fieldMetrics.length > 0) {
     return fieldMetrics
       .map(metricConfig =>
-        metricOptionFromMetric(metricConfig.metric, metricConfig.label),
+        metricOptionFromMetric(
+          metricConfig.metric,
+          metricConfig.label,
+          savedMetricLookup,
+        ),
       )
       .filter((option): option is MetricOption => option !== undefined);
   }
@@ -134,12 +239,12 @@ function getMetricOptions(
 
   if (legacyMetrics.length > 0) {
     return legacyMetrics
-      .map(metric => metricOptionFromMetric(metric))
+      .map(metric => metricOptionFromMetric(metric, undefined, savedMetricLookup))
       .filter((option): option is MetricOption => option !== undefined);
   }
 
   return savedMetrics
-    .map(metricOptionFromConfig)
+    .map(metric => metricOptionFromConfig(metric, savedMetricLookup))
     .filter((option): option is MetricOption => option !== undefined);
 }
 
@@ -170,6 +275,117 @@ function validateCalculatedFields(nextValue: CrosstabV4CalculatedField[]): void 
   } as CrosstabFormData);
 }
 
+function pctMetricRef(
+  field: CrosstabV4CalculatedField,
+  role: 'numerator' | 'denominator',
+): string | undefined {
+  if (field.ast.kind !== 'pct') {
+    return undefined;
+  }
+
+  const node = field.ast[role];
+
+  return node.kind === 'metric_ref' ? node.metricId : undefined;
+}
+
+function calculatedMetricConfig(
+  field: CrosstabV4CalculatedField,
+): MetricFieldConfig {
+  return {
+    metric: field.name,
+    label: field.name,
+    calculatedFieldId: field.id,
+    semantic: 'ratio',
+    formatString: field.formatString,
+  };
+}
+
+function getMetricConfigLabel(config: MetricFieldConfig): string {
+  return config.label ?? getMetricLabel(config.metric);
+}
+
+function getNextCalculatedFields(
+  value: CrosstabV4CalculatedField[],
+  field: CrosstabV4CalculatedField,
+  editingFieldId?: string,
+): CrosstabV4CalculatedField[] {
+  const targetId = editingFieldId ?? field.id;
+  const existingIndex = value.findIndex(existingField => existingField.id === targetId);
+
+  if (existingIndex >= 0) {
+    return value.map((existingField, index) =>
+      index === existingIndex ? field : existingField,
+    );
+  }
+
+  return [...value, field];
+}
+
+function assertUniqueCalculatedField(
+  value: CrosstabV4CalculatedField[],
+  field: CrosstabV4CalculatedField,
+  fieldConfig: CrosstabFieldConfig,
+  editingFieldId?: string,
+): void {
+  const targetId = editingFieldId ?? field.id;
+  const hasCalculatedFieldConflict = value.some(
+    existingField =>
+      existingField.id !== targetId &&
+      (existingField.id === field.id ||
+        existingField.id === field.name ||
+        existingField.name === field.id ||
+        existingField.name === field.name),
+  );
+  const hasMetricConflict = (fieldConfig.metrics ?? []).some(
+    metricConfig =>
+      metricConfig.calculatedFieldId === undefined &&
+      [field.id, field.name].includes(getMetricConfigLabel(metricConfig)),
+  );
+
+  if (hasCalculatedFieldConflict || hasMetricConflict) {
+    throw new Error(t('Calculated field ids and names must be unique.'));
+  }
+}
+
+function syncCalculatedMetricConfig(
+  fieldConfig: CrosstabFieldConfig,
+  field: CrosstabV4CalculatedField,
+  editingFieldId?: string,
+): CrosstabFieldConfig {
+  const targetId = editingFieldId ?? field.id;
+  const metrics = fieldConfig.metrics ?? [];
+  const nextMetricConfig = calculatedMetricConfig(field);
+  const existingIndex = metrics.findIndex(
+    metricConfig => metricConfig.calculatedFieldId === targetId,
+  );
+
+  if (existingIndex >= 0) {
+    return {
+      ...fieldConfig,
+      metrics: metrics.map((metricConfig, index) =>
+        index === existingIndex ? nextMetricConfig : metricConfig,
+      ),
+    };
+  }
+
+  return {
+    ...fieldConfig,
+    metrics: [...metrics, nextMetricConfig],
+  };
+}
+
+function removeCalculatedMetricConfig(
+  fieldConfig: CrosstabFieldConfig,
+  fieldId: string,
+): CrosstabFieldConfig {
+  return {
+    ...fieldConfig,
+    metrics: (fieldConfig.metrics ?? []).filter(
+      metricConfig => metricConfig.calculatedFieldId !== fieldId,
+    ),
+  };
+}
+
 export default function CrosstabCalculatedFieldsControl({
   actions,
   formData,
@@ -186,22 +402,18 @@ export default function CrosstabCalculatedFieldsControl({
     () => getMetricOptions(formData, savedMetrics),
     [formData, savedMetrics],
   );
-  const [fieldId, setFieldId] = useState('profitRate');
-  const [fieldName, setFieldName] = useState(t('Profit rate'));
-  const [numeratorMetric, setNumeratorMetric] = useState<string | undefined>(
-    metricOptions[0]?.value,
-  );
-  const [denominatorMetric, setDenominatorMetric] = useState<
-    string | undefined
-  >(metricOptions[1]?.value);
+  const [draft, setDraft] = useState<CalculatedFieldDraft>({
+    fieldId: 'profitRate',
+    fieldName: t('Profit rate'),
+  });
 
   const resolvedNumeratorMetric = getSelectedMetricValue(
-    numeratorMetric,
+    draft.numeratorMetric,
     metricOptions,
     0,
   );
   const resolvedDenominatorMetric = getSelectedMetricValue(
-    denominatorMetric,
+    draft.denominatorMetric,
     metricOptions,
     1,
   );
@@ -226,8 +438,8 @@ export default function CrosstabCalculatedFieldsControl({
     }
 
     const field: CrosstabV4CalculatedField = {
-      id: fieldId.trim(),
-      name: fieldName.trim(),
+      id: draft.fieldId.trim(),
+      name: draft.fieldName.trim(),
       resultType: 'percent',
       formatString: '.2%',
       ast: {
@@ -242,28 +454,35 @@ export default function CrosstabCalculatedFieldsControl({
         },
       },
     };
-    const nextValue = [...value, field];
-    const nextMetricConfig: MetricFieldConfig = {
-      metric: field.name,
-      label: field.name,
-      calculatedFieldId: field.id,
-      semantic: 'ratio',
-      formatString: field.formatString,
-    };
     const currentFieldConfig = getFieldConfig(formData);
-    const nextFieldConfig: CrosstabFieldConfig = {
-      ...currentFieldConfig,
-      metrics: [...(currentFieldConfig.metrics ?? []), nextMetricConfig],
-    };
+    const nextValue = getNextCalculatedFields(
+      value,
+      field,
+      draft.editingFieldId,
+    );
+    const nextFieldConfig = syncCalculatedMetricConfig(
+      currentFieldConfig,
+      field,
+      draft.editingFieldId,
+    );
 
+    assertUniqueCalculatedField(
+      value,
+      field,
+      currentFieldConfig,
+      draft.editingFieldId,
+    );
     validateCalculatedFields(nextValue);
     onChange(nextValue);
     setControlValue('crosstabFieldConfig', nextFieldConfig);
     setIsOpen(false);
+    setDraft({
+      fieldId: 'profitRate',
+      fieldName: t('Profit rate'),
+    });
   }, [
     actions,
-    fieldId,
-    fieldName,
+    draft,
     formData,
     onChange,
     onControlChange,
@@ -271,6 +490,35 @@ export default function CrosstabCalculatedFieldsControl({
     selectedNumeratorMetric,
     value,
   ]);
+
+  const deleteField = useCallback(
+    (fieldId: string) => {
+      const setControlValue = onControlChange ?? actions?.setControlValue;
+
+      if (!setControlValue) {
+        throw new Error(
+          t('Calculated fields require crosstab field config updates.'),
+        );
+      }
+
+      const nextValue = value.filter(field => field.id !== fieldId);
+      const nextFieldConfig = removeCalculatedMetricConfig(
+        getFieldConfig(formData),
+        fieldId,
+      );
+
+      validateCalculatedFields(nextValue);
+      onChange(nextValue);
+      setControlValue('crosstabFieldConfig', nextFieldConfig);
+      setDraft(currentDraft =>
+        currentDraft.editingFieldId === fieldId
+          ? { fieldId: 'profitRate', fieldName: t('Profit rate') }
+          : currentDraft,
+      );
+      setIsOpen(false);
+    },
+    [actions, formData, onChange, onControlChange, value],
+  );
 
   return (
     <Editor data-test="crosstab-calculated-fields-control">
@@ -283,10 +531,39 @@ export default function CrosstabCalculatedFieldsControl({
       <Button
         buttonSize="small"
         buttonStyle="secondary"
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          setDraft({
+            fieldId: 'profitRate',
+            fieldName: t('Profit rate'),
+          });
+          setIsOpen(true);
+        }}
       >
         {t('New calculated field')}
       </Button>
+      {value.map(field => (
+        <div key={field.id}>
+          <span>{field.name}</span>
+          <Button
+            buttonSize="small"
+            onClick={() => {
+              setDraft({
+                editingFieldId: field.id,
+                fieldId: field.id,
+                fieldName: field.name,
+                numeratorMetric: pctMetricRef(field, 'numerator'),
+                denominatorMetric: pctMetricRef(field, 'denominator'),
+              });
+              setIsOpen(true);
+            }}
+          >
+            {t('Edit')}
+          </Button>
+          <Button buttonSize="small" onClick={() => deleteField(field.id)}>
+            {t('Delete')}
+          </Button>
+        </div>
+      ))}
       <Drawer
         onClose={() => setIsOpen(false)}
         open={isOpen}
@@ -298,16 +575,26 @@ export default function CrosstabCalculatedFieldsControl({
             {t('Id')}
             <Input
               aria-label={t('Calculated field id')}
-              value={fieldId}
-              onChange={event => setFieldId(event.target.value)}
+              value={draft.fieldId}
+              onChange={event =>
+                setDraft(currentDraft => ({
+                  ...currentDraft,
+                  fieldId: event.target.value,
+                }))
+              }
             />
           </Field>
           <Field>
             {t('Name')}
             <Input
               aria-label={t('Calculated field name')}
-              value={fieldName}
-              onChange={event => setFieldName(event.target.value)}
+              value={draft.fieldName}
+              onChange={event =>
+                setDraft(currentDraft => ({
+                  ...currentDraft,
+                  fieldName: event.target.value,
+                }))
+              }
             />
           </Field>
           <Field>
@@ -317,7 +604,12 @@ export default function CrosstabCalculatedFieldsControl({
               allowSelectAll={false}
               options={metricOptions}
               value={resolvedNumeratorMetric}
-              onChange={nextMetric => setNumeratorMetric(String(nextMetric))}
+              onChange={nextMetric =>
+                setDraft(currentDraft => ({
+                  ...currentDraft,
+                  numeratorMetric: String(nextMetric),
+                }))
+              }
             />
           </Field>
           <Field>
@@ -327,7 +619,12 @@ export default function CrosstabCalculatedFieldsControl({
               allowSelectAll={false}
               options={metricOptions}
               value={resolvedDenominatorMetric}
-              onChange={nextMetric => setDenominatorMetric(String(nextMetric))}
+              onChange={nextMetric =>
+                setDraft(currentDraft => ({
+                  ...currentDraft,
+                  denominatorMetric: String(nextMetric),
+                }))
+              }
             />
           </Field>
           <Button buttonSize="small" buttonStyle="primary" onClick={saveField}>

@@ -148,7 +148,7 @@ export default function CrosstabParametersControl({
   value = [],
 }: CrosstabParametersControlProps) {
   const [draft, setDraft] = useState<ParameterDraft | undefined>();
-  const [editingIndex, setEditingIndex] = useState<number | undefined>();
+  const [editingId, setEditingId] = useState<string | undefined>();
 
   const saveDraft = useCallback(() => {
     if (!draft) {
@@ -157,17 +157,17 @@ export default function CrosstabParametersControl({
 
     const parameter = parameterFromDraft(draft);
     const nextValue =
-      editingIndex === undefined
+      editingId === undefined
         ? [...value, parameter]
-        : value.map((existingParameter, index) =>
-            index === editingIndex ? parameter : existingParameter,
+        : value.map(existingParameter =>
+            existingParameter.id === editingId ? parameter : existingParameter,
           );
 
     validateParameters(nextValue);
     onChange(nextValue);
     setDraft(undefined);
-    setEditingIndex(undefined);
-  }, [draft, editingIndex, onChange, value]);
+    setEditingId(undefined);
+  }, [draft, editingId, onChange, value]);
 
   const deleteParameter = useCallback(
     (indexToDelete: number) => {
@@ -175,6 +175,14 @@ export default function CrosstabParametersControl({
 
       validateParameters(nextValue);
       onChange(nextValue);
+      setDraft(currentDraft =>
+        currentDraft?.id === value[indexToDelete]?.id ? undefined : currentDraft,
+      );
+      setEditingId(currentEditingId =>
+        currentEditingId === value[indexToDelete]?.id
+          ? undefined
+          : currentEditingId,
+      );
     },
     [onChange, value],
   );
@@ -202,7 +210,7 @@ export default function CrosstabParametersControl({
           buttonStyle="secondary"
           onClick={() => {
             setDraft(numberDraft());
-            setEditingIndex(undefined);
+            setEditingId(undefined);
           }}
         >
           {t('Add number parameter')}
@@ -212,7 +220,7 @@ export default function CrosstabParametersControl({
           buttonStyle="secondary"
           onClick={() => {
             setDraft(textDraft());
-            setEditingIndex(undefined);
+            setEditingId(undefined);
           }}
         >
           {t('Add text parameter')}
@@ -225,7 +233,7 @@ export default function CrosstabParametersControl({
             buttonSize="small"
             onClick={() => {
               setDraft(draftFromParameter(parameter));
-              setEditingIndex(index);
+              setEditingId(parameter.id);
             }}
           >
             {t('Edit')}
