@@ -22,6 +22,7 @@ import {
   getCalculatedFields,
   getCalculatedFieldsSignature,
 } from '../../src/plugin/calcFields';
+import { ERR_CROSSTAB_CALC_METRIC } from '../../src/plugin/calc/expr';
 import type {
   CrosstabCalculatedField,
   CrosstabFormData,
@@ -160,6 +161,197 @@ test('expands calculated fields that reference selected saved metric names', () 
     sqlExpression:
       '((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 100)',
   });
+});
+
+test('expands calculated fields that reference hidden datasource saved metrics', () => {
+  const result = expandCalculatedFieldMetricConfigs({
+    dialect: 'doris',
+    formData: {
+      ...formData,
+      datasourceMetrics: [
+        {
+          metric_name: 'v4_gross_profit_sum',
+          verbose_name: 'V4毛利',
+          expression: 'SUM(gross_profit)',
+        },
+        {
+          metric_name: 'v4_sales_amount_sum',
+          verbose_name: 'V4销售额',
+          expression: 'SUM(sales_amount)',
+        },
+      ],
+      crosstabCalculatedFields: [
+        {
+          id: 'calc_margin_pct_v4',
+          name: 'V4示例毛利率',
+          resultType: 'percent',
+          formatString: '.2%',
+          ast: {
+            kind: 'pct',
+            numerator: {
+              kind: 'metric_ref',
+              metricId: 'v4_gross_profit_sum',
+            },
+            denominator: {
+              kind: 'metric_ref',
+              metricId: 'v4_sales_amount_sum',
+            },
+          },
+        },
+      ],
+    } as unknown as CrosstabFormData,
+    metricConfigs: [
+      {
+        metric: 'V4示例毛利率',
+        label: 'V4示例毛利率',
+        calculatedFieldId: 'calc_margin_pct_v4',
+      },
+    ],
+    parameterValues: { number: {}, text: {} },
+  });
+
+  expect(result.metricConfigs).toEqual([
+    {
+      metric: {
+        expressionType: 'SQL',
+        label: 'V4示例毛利率',
+        sqlExpression:
+          '((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 100)',
+      },
+      label: 'V4示例毛利率',
+      semantic: 'ratio',
+      formatString: '.2%',
+    },
+  ]);
+});
+
+test('prefers legacy SQL metrics over datasource saved metrics for hidden calculated dependencies', () => {
+  const result = expandCalculatedFieldMetricConfigs({
+    dialect: 'doris',
+    formData: {
+      ...formData,
+      metrics: [
+        {
+          expressionType: 'SQL',
+          label: 'v4_gross_profit_sum',
+          sqlExpression: 'SUM(legacy_gross_profit)',
+        },
+        {
+          expressionType: 'SQL',
+          label: 'v4_sales_amount_sum',
+          sqlExpression: 'SUM(legacy_sales_amount)',
+        },
+      ],
+      datasourceMetrics: [
+        {
+          metric_name: 'v4_gross_profit_sum',
+          verbose_name: 'V4毛利',
+          expression: 'SUM(datasource_gross_profit)',
+        },
+        {
+          metric_name: 'v4_sales_amount_sum',
+          verbose_name: 'V4销售额',
+          expression: 'SUM(datasource_sales_amount)',
+        },
+      ],
+      crosstabCalculatedFields: [
+        {
+          id: 'calc_margin_pct_v4',
+          name: 'V4示例毛利率',
+          resultType: 'percent',
+          formatString: '.2%',
+          ast: {
+            kind: 'pct',
+            numerator: {
+              kind: 'metric_ref',
+              metricId: 'v4_gross_profit_sum',
+            },
+            denominator: {
+              kind: 'metric_ref',
+              metricId: 'v4_sales_amount_sum',
+            },
+          },
+        },
+      ],
+    } as unknown as CrosstabFormData,
+    metricConfigs: [
+      {
+        metric: 'V4示例毛利率',
+        label: 'V4示例毛利率',
+        calculatedFieldId: 'calc_margin_pct_v4',
+      },
+    ],
+    parameterValues: { number: {}, text: {} },
+  });
+
+  expect(result.metricConfigs).toEqual([
+    {
+      metric: {
+        expressionType: 'SQL',
+        label: 'V4示例毛利率',
+        sqlExpression:
+          '((CASE WHEN SUM(legacy_sales_amount) = 0 THEN NULL ELSE SUM(legacy_gross_profit) / SUM(legacy_sales_amount) END) * 100)',
+      },
+      label: 'V4示例毛利率',
+      semantic: 'ratio',
+      formatString: '.2%',
+    },
+  ]);
+});
+
+test('rejects conflicting datasource saved metric aliases for calculated dependencies', () => {
+  expect(() =>
+    expandCalculatedFieldMetricConfigs({
+      dialect: 'doris',
+      formData: {
+        ...formData,
+        datasourceMetrics: [
+          {
+            metric_name: 'v4_gross_profit_sum',
+            verbose_name: 'V4毛利',
+            expression: 'SUM(datasource_gross_profit)',
+          },
+          {
+            label: 'v4_gross_profit_sum',
+            verbose_name: 'V4毛利冲突',
+            expression: 'SUM(conflicting_gross_profit)',
+          },
+          {
+            metric_name: 'v4_sales_amount_sum',
+            verbose_name: 'V4销售额',
+            expression: 'SUM(datasource_sales_amount)',
+          },
+        ],
+        crosstabCalculatedFields: [
+          {
+            id: 'calc_margin_pct_v4',
+            name: 'V4示例毛利率',
+            resultType: 'percent',
+            formatString: '.2%',
+            ast: {
+              kind: 'pct',
+              numerator: {
+                kind: 'metric_ref',
+                metricId: 'v4_gross_profit_sum',
+              },
+              denominator: {
+                kind: 'metric_ref',
+                metricId: 'v4_sales_amount_sum',
+              },
+            },
+          },
+        ],
+      } as unknown as CrosstabFormData,
+      metricConfigs: [
+        {
+          metric: 'V4示例毛利率',
+          label: 'V4示例毛利率',
+          calculatedFieldId: 'calc_margin_pct_v4',
+        },
+      ],
+      parameterValues: { number: {}, text: {} },
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_METRIC);
 });
 
 test('fails fast when saved metric SQL cannot be resolved', () => {

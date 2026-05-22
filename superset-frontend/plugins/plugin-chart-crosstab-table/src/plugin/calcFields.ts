@@ -16,7 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { getMetricLabel, type QueryFormMetric } from '@superset-ui/core';
+import {
+  ensureIsArray,
+  getMetricLabel,
+  type QueryFormMetric,
+} from '@superset-ui/core';
 
 import type {
   CrosstabExpressionNode,
@@ -25,6 +29,7 @@ import type {
   MetricFieldConfig,
 } from '../types';
 import {
+  ERR_CROSSTAB_CALC_METRIC,
   emitCalculatedFieldAstSql,
   type CalcSqlDialect,
   type EmitCalculatedFieldAstSqlArgs,
@@ -133,6 +138,14 @@ function getSavedMetricName(metric: SavedMetricRecord): string | undefined {
   );
 }
 
+function getSavedMetricNames(metric: SavedMetricRecord): string[] {
+  return [
+    nonEmptyString(metric.metric_name),
+    nonEmptyString(metric.label),
+    nonEmptyString(metric.verbose_name),
+  ].filter((name): name is string => name !== undefined);
+}
+
 function getSavedMetricExpression(
   metric: SavedMetricRecord,
 ): string | undefined {
@@ -156,19 +169,15 @@ function getDatasourceSavedMetrics(
       savedMetrics?: unknown;
     };
 
-  if (isObject(datasource) && Array.isArray(datasource.metrics)) {
-    return datasource.metrics.filter(isObject);
-  }
-
-  if (Array.isArray(datasourceMetrics)) {
-    return datasourceMetrics.filter(isObject);
-  }
-
-  if (Array.isArray(savedMetrics)) {
-    return savedMetrics.filter(isObject);
-  }
-
-  return [];
+  return [
+    ...(isObject(datasource) && Array.isArray(datasource.metrics)
+      ? datasource.metrics.filter(isObject)
+      : []),
+    ...(Array.isArray(datasourceMetrics)
+      ? datasourceMetrics.filter(isObject)
+      : []),
+    ...(Array.isArray(savedMetrics) ? savedMetrics.filter(isObject) : []),
+  ];
 }
 
 function getDatasourceMetricLookup(
@@ -176,9 +185,9 @@ function getDatasourceMetricLookup(
 ): Map<string, SavedMetricRecord> {
   return new Map(
     getDatasourceSavedMetrics(formData).flatMap(metric => {
-      const metricName = getSavedMetricName(metric);
+      const metricNames = getSavedMetricNames(metric);
 
-      return metricName === undefined ? [] : [[metricName, metric]];
+      return metricNames.map(metricName => [metricName, metric]);
     }),
   );
 }
@@ -193,55 +202,106 @@ function addMetricSql(
   }
 }
 
+function addDatasourceMetricSql(
+  metricSql: Record<string, string>,
+  key: string,
+  sqlExpression: string,
+): void {
+  const existingSqlExpression = metricSql[key];
+
+  if (
+    existingSqlExpression !== undefined &&
+    existingSqlExpression !== sqlExpression
+  ) {
+    throw new Error(ERR_CROSSTAB_CALC_METRIC);
+  }
+
+  metricSql[key] = sqlExpression;
+}
+
+function addMetricConfigSql(
+  metricSql: Record<string, string>,
+  config: MetricFieldConfig,
+  datasourceMetricLookup: Map<string, SavedMetricRecord>,
+): Record<string, string> {
+  const metricRecord = isObject(config.metric)
+    ? (config.metric as SavedMetricRecord)
+    : undefined;
+  const metricName =
+    typeof config.metric === 'string'
+      ? config.metric
+      : metricRecord === undefined
+        ? undefined
+        : getSavedMetricName(metricRecord);
+  const datasourceMetric =
+    metricName === undefined
+      ? undefined
+      : datasourceMetricLookup.get(metricName);
+  const sqlExpression =
+    getSqlMetricExpression(config.metric) ??
+    (metricRecord === undefined
+      ? undefined
+      : getSavedMetricExpression(metricRecord)) ??
+    (datasourceMetric === undefined
+      ? undefined
+      : getSavedMetricExpression(datasourceMetric));
+
+  if (sqlExpression === undefined) {
+    return metricSql;
+  }
+
+  const nextMetricSql = { ...metricSql };
+  const metricLabel = getMetricLabel(config.metric);
+
+  addMetricSql(nextMetricSql, metricLabel, sqlExpression);
+  addMetricSql(nextMetricSql, config.label, sqlExpression);
+  addMetricSql(nextMetricSql, metricName, sqlExpression);
+  addMetricSql(
+    nextMetricSql,
+    datasourceMetric === undefined
+      ? undefined
+      : getSavedMetricName(datasourceMetric),
+    sqlExpression,
+  );
+
+  return nextMetricSql;
+}
+
 function getMetricSqlMap(
   metricConfigs: MetricFieldConfig[],
   formData: CrosstabFormData,
 ): Record<string, string> {
   const datasourceMetricLookup = getDatasourceMetricLookup(formData);
+  const datasourceMetricSql = getDatasourceSavedMetrics(
+    formData,
+  ).reduce<Record<string, string>>((metricSql, metric) => {
+    const sqlExpression = getSavedMetricExpression(metric);
 
-  return metricConfigs.reduce<Record<string, string>>((metricSql, config) => {
-    const metricRecord = isObject(config.metric)
-      ? (config.metric as SavedMetricRecord)
-      : undefined;
-    const metricName =
-      typeof config.metric === 'string'
-        ? config.metric
-        : metricRecord === undefined
-          ? undefined
-          : getSavedMetricName(metricRecord);
-    const datasourceMetric =
-      metricName === undefined
-        ? undefined
-        : datasourceMetricLookup.get(metricName);
-    const sqlExpression =
-      getSqlMetricExpression(config.metric) ??
-      (metricRecord === undefined
-        ? undefined
-        : getSavedMetricExpression(metricRecord)) ??
-      (datasourceMetric === undefined
-        ? undefined
-        : getSavedMetricExpression(datasourceMetric));
-
-    if (sqlExpression !== undefined) {
-      const nextMetricSql = { ...metricSql };
-      const metricLabel = getMetricLabel(config.metric);
-
-      addMetricSql(nextMetricSql, metricLabel, sqlExpression);
-      addMetricSql(nextMetricSql, config.label, sqlExpression);
-      addMetricSql(nextMetricSql, metricName, sqlExpression);
-      addMetricSql(
-        nextMetricSql,
-        datasourceMetric === undefined
-          ? undefined
-          : getSavedMetricName(datasourceMetric),
-        sqlExpression,
-      );
-
-      return nextMetricSql;
+    if (sqlExpression === undefined) {
+      return metricSql;
     }
 
-    return metricSql;
+    const nextMetricSql = { ...metricSql };
+
+    getSavedMetricNames(metric).forEach(metricName => {
+      addDatasourceMetricSql(nextMetricSql, metricName, sqlExpression);
+    });
+
+    return nextMetricSql;
   }, {});
+  const legacyMetricSql = ensureIsArray<QueryFormMetric>(
+    formData.metrics,
+  ).reduce<Record<string, string>>(
+    (metricSql, metric) =>
+      addMetricConfigSql(metricSql, { metric }, datasourceMetricLookup),
+    datasourceMetricSql,
+  );
+
+  return metricConfigs.reduce<Record<string, string>>(
+    (metricSql, config) =>
+      addMetricConfigSql(metricSql, config, datasourceMetricLookup),
+    legacyMetricSql,
+  );
 }
 
 function isCalculatedFieldPlaceholder(

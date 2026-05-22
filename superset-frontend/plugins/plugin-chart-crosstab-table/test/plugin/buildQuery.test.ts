@@ -250,6 +250,66 @@ describe('crosstab buildQuery', () => {
     );
   });
 
+  it('includes a calculated SQL metric from hidden datasource saved metrics', () => {
+    const queryContext = buildQuery({
+      datasource: '7__table',
+      datasourceMetrics: [
+        {
+          metric_name: 'v4_gross_profit_sum',
+          verbose_name: 'V4毛利',
+          expression: 'SUM(gross_profit)',
+        },
+        {
+          metric_name: 'v4_sales_amount_sum',
+          verbose_name: 'V4销售额',
+          expression: 'SUM(sales_amount)',
+        },
+      ],
+      viz_type: 'crosstab-table',
+      groupbyRows: ['category'],
+      groupbyColumns: ['biz_date'],
+      crosstabFieldConfig: {
+        rows: [{ field: 'category' }],
+        columns: [{ field: 'biz_date' }],
+        metrics: [
+          {
+            metric: 'V4示例毛利率',
+            label: 'V4示例毛利率',
+            calculatedFieldId: 'calc_margin_pct_v4',
+          },
+        ],
+      },
+      crosstabCalculatedFields: [
+        {
+          id: 'calc_margin_pct_v4',
+          name: 'V4示例毛利率',
+          resultType: 'percent',
+          formatString: '.2%',
+          ast: {
+            kind: 'pct',
+            numerator: {
+              kind: 'metric_ref',
+              metricId: 'v4_gross_profit_sum',
+            },
+            denominator: {
+              kind: 'metric_ref',
+              metricId: 'v4_sales_amount_sum',
+            },
+          },
+        },
+      ],
+    } as never);
+
+    expect(queryContext.queries[0].metrics).toEqual([
+      {
+        expressionType: 'SQL',
+        label: 'V4示例毛利率',
+        sqlExpression:
+          '((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 100)',
+      },
+    ]);
+  });
+
   it('uses the default dynamic group-by column in query dimensions', () => {
     const queryContext = buildQuery({
       datasource: '11__table',

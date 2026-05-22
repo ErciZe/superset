@@ -555,6 +555,85 @@ describe('crosstab controlPanel', () => {
     ]);
   });
 
+  it('edits calculated field refs from saved metrics when only placeholder is selected', () => {
+    const onChange = jest.fn();
+    const onControlChange = jest.fn();
+    const field = {
+      id: 'calc_margin_pct_v4',
+      name: 'V4示例毛利率',
+      resultType: 'percent' as const,
+      formatString: '.2%',
+      ast: {
+        kind: 'pct' as const,
+        numerator: {
+          kind: 'metric_ref' as const,
+          metricId: 'v4_gross_profit_sum',
+        },
+        denominator: {
+          kind: 'metric_ref' as const,
+          metricId: 'v4_sales_amount_sum',
+        },
+      },
+    };
+
+    render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+          crosstabFieldConfig: {
+            metrics: [
+              {
+                metric: 'V4示例毛利率',
+                label: 'V4示例毛利率',
+                calculatedFieldId: 'calc_margin_pct_v4',
+                semantic: 'ratio',
+                formatString: '.2%',
+              },
+            ],
+          },
+        },
+        name: 'crosstabCalculatedFields',
+        onControlChange,
+        onChange,
+        savedMetrics: [
+          {
+            metric_name: 'v4_gross_profit_sum',
+            verbose_name: 'V4毛利',
+            expression: 'SUM(gross_profit)',
+          },
+          {
+            metric_name: 'v4_sales_amount_sum',
+            verbose_name: 'V4销售额',
+            expression: 'SUM(sales_amount)',
+          },
+        ],
+        value: [field],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Save calculated field'));
+
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'calc_margin_pct_v4',
+        name: 'V4示例毛利率',
+        ast: {
+          kind: 'pct',
+          numerator: {
+            kind: 'metric_ref',
+            metricId: 'v4_gross_profit_sum',
+          },
+          denominator: {
+            kind: 'metric_ref',
+            metricId: 'v4_sales_amount_sum',
+          },
+        },
+      }),
+    ]);
+  });
+
   it('updates an existing calculated field and metric config without duplicates', () => {
     const onChange = jest.fn();
     const onControlChange = jest.fn();

@@ -225,26 +225,30 @@ function getMetricOptions(
   const fieldMetrics = formData?.crosstabFieldConfig?.metrics ?? [];
   const savedMetricLookup = getSavedMetricLookup(savedMetrics);
 
-  if (fieldMetrics.length > 0) {
-    return fieldMetrics
-      .map(metricConfig =>
-        metricOptionFromMetric(
-          metricConfig.metric,
-          metricConfig.label,
-          savedMetricLookup,
-        ),
-      )
-      .filter((option): option is MetricOption => option !== undefined);
+  const selectedMetricOptions = fieldMetrics
+    .filter(metricConfig => metricConfig.calculatedFieldId === undefined)
+    .map(metricConfig =>
+      metricOptionFromMetric(
+        metricConfig.metric,
+        metricConfig.label,
+        savedMetricLookup,
+      ),
+    )
+    .filter((option): option is MetricOption => option !== undefined);
+
+  if (selectedMetricOptions.length > 0) {
+    return selectedMetricOptions;
   }
 
   const legacyMetrics = ensureIsArray<QueryFormMetric>(formData?.metrics);
+  const legacyMetricOptions = legacyMetrics
+    .map(metric =>
+      metricOptionFromMetric(metric, undefined, savedMetricLookup),
+    )
+    .filter((option): option is MetricOption => option !== undefined);
 
-  if (legacyMetrics.length > 0) {
-    return legacyMetrics
-      .map(metric =>
-        metricOptionFromMetric(metric, undefined, savedMetricLookup),
-      )
-      .filter((option): option is MetricOption => option !== undefined);
+  if (legacyMetricOptions.length > 0) {
+    return legacyMetricOptions;
   }
 
   return savedMetrics
