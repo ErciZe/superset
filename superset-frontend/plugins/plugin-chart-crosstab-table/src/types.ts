@@ -91,7 +91,20 @@ export type CrosstabDynamicMetricConfig = {
   slots: CrosstabDynamicMetricSlot[];
 };
 
-export type CrosstabNumberParameter = {
+export type LegacyCrosstabNumberParameter = {
+  kind: 'number';
+  name: string;
+  label?: string;
+  default: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+};
+
+export type CrosstabNumberParameter = LegacyCrosstabNumberParameter;
+
+export type CrosstabV4NumberParameter = {
   id: string;
   kind: 'number';
   name: string;
@@ -113,7 +126,7 @@ export type CrosstabTextParameter = {
 };
 
 export type CrosstabParameter =
-  | CrosstabNumberParameter
+  | CrosstabV4NumberParameter
   | CrosstabTextParameter;
 
 export type CrosstabExpressionNode =
@@ -145,7 +158,7 @@ export type CrosstabExpressionNode =
       denominator: CrosstabExpressionNode;
     };
 
-export type CrosstabCalculatedField = {
+export type CrosstabV4CalculatedField = {
   id: string;
   name: string;
   description?: string;
@@ -153,6 +166,26 @@ export type CrosstabCalculatedField = {
   formatString?: string;
   ast: CrosstabExpressionNode;
 };
+
+export type CrosstabCalculatedFieldTemplate =
+  | 'ratio'
+  | 'difference'
+  | 'parameterized_ratio';
+
+export type LegacyCrosstabCalculatedField = {
+  id: string;
+  label: string;
+  template: CrosstabCalculatedFieldTemplate;
+  inputs: {
+    leftMetric: QueryFormMetric;
+    rightMetric: QueryFormMetric;
+    parameterName?: string;
+  };
+  semantic: MetricSemantic;
+  formatString?: string;
+};
+
+export type CrosstabCalculatedField = LegacyCrosstabCalculatedField;
 
 export type CrosstabDynamicGroupByInput =
   | CrosstabDynamicGroupByConfig
@@ -166,8 +199,8 @@ export interface CrosstabFormData extends QueryFormData {
   dynamicGroupBy?: CrosstabDynamicGroupByInput | string;
   dynamicMetric?: CrosstabDynamicMetricConfig | string;
   crosstabParameters?: CrosstabParameter[] | string;
-  crosstabCalculatedFields?: CrosstabCalculatedField[] | string;
-  parameters?: CrosstabParameter[] | string;
+  crosstabCalculatedFields?: CrosstabV4CalculatedField[] | string;
+  parameters?: CrosstabNumberParameter[] | string;
   calculatedFields?: CrosstabCalculatedField[] | string;
   showRowTotals?: boolean;
   showColumnTotals?: boolean;
