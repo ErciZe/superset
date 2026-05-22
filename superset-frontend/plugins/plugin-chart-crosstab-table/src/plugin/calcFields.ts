@@ -165,7 +165,7 @@ function assertNoDuplicateFields(
   calculatedFields: CrosstabV4CalculatedField[],
 ): void {
   const labels = new Set<string>();
-  const ids = new Set<string>();
+  const calculatedKeys = new Set<string>();
 
   metricConfigs.forEach(config => {
     labels.add(getMetricLabel(config.metric));
@@ -178,12 +178,17 @@ function assertNoDuplicateFields(
     const id = field.id.trim();
     const name = field.name.trim();
 
-    if (ids.has(id) || labels.has(id) || labels.has(name)) {
+    if (
+      calculatedKeys.has(id) ||
+      calculatedKeys.has(name) ||
+      labels.has(id) ||
+      labels.has(name)
+    ) {
       throw new Error(ERR_CROSSTAB_CALC_FIELD);
     }
 
-    ids.add(id);
-    labels.add(name);
+    calculatedKeys.add(id);
+    calculatedKeys.add(name);
   });
 }
 

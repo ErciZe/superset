@@ -160,6 +160,33 @@ test('rejects duplicate calculated field names', () => {
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
 
+test('rejects cross collisions between calculated field ids and names', () => {
+  expect(() =>
+    expandCalculatedFieldMetricConfigs({
+      dialect: 'doris',
+      formData: {
+        ...formData,
+        crosstabCalculatedFields: [
+          {
+            id: 'calc_a',
+            name: 'calc_b_name',
+            resultType: 'number',
+            ast: { kind: 'metric_ref', metricId: 'profit' },
+          },
+          {
+            id: 'calc_b',
+            name: 'calc_a',
+            resultType: 'number',
+            ast: { kind: 'metric_ref', metricId: 'sales' },
+          },
+        ],
+      },
+      metricConfigs,
+      parameterValues: { number: {}, text: {} },
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
 test('rejects recursive calculated field references', () => {
   const recursiveFields: CrosstabV4CalculatedField[] = [
     {
