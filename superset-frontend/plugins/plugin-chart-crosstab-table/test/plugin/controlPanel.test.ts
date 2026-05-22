@@ -1048,6 +1048,31 @@ describe('crosstab controlPanel', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('renders calculated field metrics as local removable chips', () => {
+    render(
+      createElement(CrosstabFieldConfigControl, {
+        name: 'crosstabFieldConfig',
+        onChange: jest.fn(),
+        savedMetrics: [],
+        value: {
+          metrics: [
+            {
+              calculatedFieldId: 'calc_margin_pct_v4',
+              label: 'V4验收毛利率',
+              metric: 'V4验收毛利率',
+              semantic: 'ratio',
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(
+      screen.getByLabelText('Remove V4验收毛利率'),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('显示信息提示')).not.toBeInTheDocument();
+  });
+
   it('rejects invalid semantic override JSON without emitting changes', () => {
     const onChange = jest.fn();
 

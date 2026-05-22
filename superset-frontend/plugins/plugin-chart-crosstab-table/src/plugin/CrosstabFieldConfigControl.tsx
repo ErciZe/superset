@@ -26,6 +26,7 @@ import {
   type QueryFormColumn,
   type QueryFormMetric,
 } from '@superset-ui/core';
+import { Icons } from '@superset-ui/core/components/Icons';
 import type { ColumnMeta, Metric } from '@superset-ui/chart-controls';
 import { DndColumnSelect } from '../../../../src/explore/components/controls/DndColumnSelectControl/DndColumnSelect';
 import { DndMetricSelect } from '../../../../src/explore/components/controls/DndColumnSelectControl';
@@ -76,6 +77,32 @@ const FieldLabel = styled.span`
 
 const SemanticSelect = styled.select`
   min-width: 120px;
+`;
+
+const CalculatedMetricList = styled.div`
+  display: grid;
+  gap: ${({ theme }) => theme.sizeUnit}px;
+  margin-bottom: ${({ theme }) => theme.sizeUnit}px;
+`;
+
+const CalculatedMetricChip = styled.div`
+  align-items: center;
+  background: ${({ theme }) => theme.colorFillTertiary};
+  border-radius: ${({ theme }) => theme.borderRadius}px;
+  display: flex;
+  gap: ${({ theme }) => theme.sizeUnit}px;
+  min-height: ${({ theme }) => theme.sizeUnit * 6}px;
+  padding: 0 ${({ theme }) => theme.sizeUnit}px;
+`;
+
+const CalculatedMetricRemoveButton = styled.button`
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: ${({ theme }) => theme.colorIcon};
+  cursor: pointer;
+  display: flex;
+  padding: 0;
 `;
 
 const OverrideGrid = styled.div`
@@ -203,6 +230,35 @@ function mergeMetricItems(
   });
 }
 
+function isCalculatedMetricConfig(config: MetricFieldConfig) {
+  return (
+    typeof config.calculatedFieldId === 'string' &&
+    config.calculatedFieldId.trim().length > 0
+  );
+}
+
+function mergeMetricsPreservingCalculatedFields(
+  nextRegularMetrics: MetricFieldConfig[],
+  previousMetrics: MetricFieldConfig[],
+) {
+  const regularMetricQueue = [...nextRegularMetrics];
+  const mergedMetrics: MetricFieldConfig[] = [];
+
+  previousMetrics.forEach(metricConfig => {
+    if (isCalculatedMetricConfig(metricConfig)) {
+      mergedMetrics.push(metricConfig);
+      return;
+    }
+
+    const nextMetric = regularMetricQueue.shift();
+    if (nextMetric !== undefined) {
+      mergedMetrics.push(nextMetric);
+    }
+  });
+
+  return [...mergedMetrics, ...regularMetricQueue];
+}
+
 function formatSemanticOverrides(overrides: MetricSemanticOverride[]) {
   return overrides.length > 0 ? JSON.stringify(overrides, null, 2) : '';
 }
@@ -267,6 +323,14 @@ export default function CrosstabFieldConfigControl({
   const [semanticOverridesError, setSemanticOverridesError] = useState<
     string | undefined
   >();
+  const calculatedMetricConfigs = useMemo(
+    () => config.metrics.filter(isCalculatedMetricConfig),
+    [config.metrics],
+  );
+  const regularMetricConfigs = useMemo(
+    () => config.metrics.filter(item => !isCalculatedMetricConfig(item)),
+    [config.metrics],
+  );
 
   useEffect(() => {
     setSemanticOverridesText(formatSemanticOverrides(config.semanticOverrides));
@@ -305,15 +369,31 @@ export default function CrosstabFieldConfigControl({
   );
   const updateMetrics = useCallback(
     (nextMetrics: QueryFormMetric[] | QueryFormMetric | null | undefined) => {
+      const regularMetrics = mergeMetricItems(
+        ensureIsArray<QueryFormMetric>(nextMetrics),
+        regularMetricConfigs,
+      );
+
       emit({
         ...config,
-        metrics: mergeMetricItems(
-          ensureIsArray<QueryFormMetric>(nextMetrics),
+        metrics: mergeMetricsPreservingCalculatedFields(
+          regularMetrics,
           config.metrics,
         ),
       });
     },
-    [config, emit],
+    [config, emit, regularMetricConfigs],
+  );
+  const removeCalculatedMetric = useCallback(
+    (index: number) => {
+      const target = calculatedMetricConfigs[index];
+
+      emit({
+        ...config,
+        metrics: config.metrics.filter(item => item !== target),
+      });
+    },
+    [calculatedMetricConfigs, config, emit],
   );
   const updateMetricSemantic = useCallback(
     (metric: QueryFormMetric, semantic: MetricSemantic) => {
@@ -408,6 +488,33 @@ export default function CrosstabFieldConfigControl({
     },
     [config, name, toggleSubtotal],
   );
+  const renderCalculatedMetricChips = useCallback(
+    () =>
+      calculatedMetricConfigs.length > 0 ? (
+        <CalculatedMetricList data-test="crosstab-calculated-field-metrics">
+          {calculatedMetricConfigs.map((item, index) => {
+            const metricLabel = item.label ?? getMetricLabel(item.metric);
+
+            return (
+              <CalculatedMetricChip
+                data-test="crosstab-calculated-field-metric"
+                key={`${item.calculatedFieldId}-${index}`}
+              >
+                <CalculatedMetricRemoveButton
+                  aria-label={t('Remove %s', metricLabel)}
+                  type="button"
+                  onClick={() => removeCalculatedMetric(index)}
+                >
+                  <Icons.CloseOutlined iconSize="m" />
+                </CalculatedMetricRemoveButton>
+                <FieldLabel title={metricLabel}>{metricLabel}</FieldLabel>
+              </CalculatedMetricChip>
+            );
+          })}
+        </CalculatedMetricList>
+      ) : null,
+    [calculatedMetricConfigs, removeCalculatedMetric],
+  );
   const renderMetricOptions = useCallback(
     () => (
       <FieldOptions>
@@ -479,6 +586,7 @@ export default function CrosstabFieldConfigControl({
       </Zone>
       <Zone data-test="crosstab-field-zone-metrics">
         <ZoneHeader>{t('Metrics')}</ZoneHeader>
+        {renderCalculatedMetricChips()}
         <DndMetricSelect
           columns={columns}
           datasource={datasource}
@@ -486,7 +594,7 @@ export default function CrosstabFieldConfigControl({
           name={`${name}-metrics`}
           onChange={updateMetrics}
           savedMetrics={savedMetrics}
-          value={metricValues(config.metrics)}
+          value={metricValues(regularMetricConfigs)}
         />
         {renderMetricOptions()}
       </Zone>
