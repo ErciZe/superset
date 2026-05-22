@@ -55,6 +55,22 @@ test('strips crosstab numeric parameter own-state from extra form data', () => {
   ).toEqual({ unrelated: 'kept' });
 });
 
+test('strips crosstab v4 runtime parameter state from extra form data', () => {
+  expect(
+    getFilterOwnState(
+      { viz_type: 'crosstab-table' },
+      {
+        numericParameters: { adjustmentRate: 1.25 },
+        textParameters: { countryFilter: 'DE' },
+        selectedDynamicMetric: { primary_metric: 'sales' },
+        effectiveMetricSignature: 'old-signature',
+        currentColumnPage: 2,
+        keepMe: 'kept',
+      },
+    ),
+  ).toEqual({ keepMe: 'kept' });
+});
+
 test('keeps non-crosstab ownState unchanged', () => {
   const ownState = {
     currentColumnPage: 2,

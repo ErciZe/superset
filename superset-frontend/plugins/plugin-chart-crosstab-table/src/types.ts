@@ -92,32 +92,66 @@ export type CrosstabDynamicMetricConfig = {
 };
 
 export type CrosstabNumberParameter = {
+  id: string;
   kind: 'number';
   name: string;
-  label?: string;
-  default: number;
+  label: string;
+  defaultValue: number;
   min?: number;
   max?: number;
   step?: number;
   unit?: string;
 };
 
-export type CrosstabCalculatedFieldTemplate =
-  | 'ratio'
-  | 'difference'
-  | 'parameterized_ratio';
+export type CrosstabTextParameter = {
+  id: string;
+  kind: 'text';
+  name: string;
+  label: string;
+  defaultValue: string;
+  allowedValues?: string[];
+};
+
+export type CrosstabParameter =
+  | CrosstabNumberParameter
+  | CrosstabTextParameter;
+
+export type CrosstabExpressionNode =
+  | { kind: 'metric_ref'; metricId: string }
+  | { kind: 'number_param'; parameterId: string }
+  | { kind: 'text_param'; parameterId: string }
+  | { kind: 'literal_number'; value: number }
+  | { kind: 'literal_text'; value: string }
+  | {
+      kind: 'binary_op';
+      op: '+' | '-' | '*' | '/';
+      left: CrosstabExpressionNode;
+      right: CrosstabExpressionNode;
+    }
+  | {
+      kind: 'safe_div';
+      numerator: CrosstabExpressionNode;
+      denominator: CrosstabExpressionNode;
+      defaultValue?: number;
+    }
+  | {
+      kind: 'pct';
+      numerator: CrosstabExpressionNode;
+      denominator: CrosstabExpressionNode;
+    }
+  | {
+      kind: 'ratio';
+      numerator: CrosstabExpressionNode;
+      denominator: CrosstabExpressionNode;
+    };
 
 export type CrosstabCalculatedField = {
   id: string;
-  label: string;
-  template: CrosstabCalculatedFieldTemplate;
-  inputs: {
-    leftMetric: QueryFormMetric;
-    rightMetric: QueryFormMetric;
-    parameterName?: string;
-  };
-  semantic: MetricSemantic;
+  name: string;
+  description?: string;
+  resultType: 'number' | 'ratio' | 'percent' | 'text';
   formatString?: string;
+  ast: CrosstabExpressionNode;
 };
 
 export type CrosstabDynamicGroupByInput =
@@ -131,7 +165,9 @@ export interface CrosstabFormData extends QueryFormData {
   crosstabFieldConfig?: CrosstabFieldConfig;
   dynamicGroupBy?: CrosstabDynamicGroupByInput | string;
   dynamicMetric?: CrosstabDynamicMetricConfig | string;
-  parameters?: CrosstabNumberParameter[] | string;
+  crosstabParameters?: CrosstabParameter[] | string;
+  crosstabCalculatedFields?: CrosstabCalculatedField[] | string;
+  parameters?: CrosstabParameter[] | string;
   calculatedFields?: CrosstabCalculatedField[] | string;
   showRowTotals?: boolean;
   showColumnTotals?: boolean;
@@ -268,6 +304,7 @@ export type CrosstabChartProps = ChartProps<CrosstabFormData> &
     isServerColumnLoading?: boolean;
     expandedRowPaths?: string[];
     numericParameters?: Record<string, number>;
+    textParameters?: Record<string, string>;
   };
 
 export type CrosstabOwnState = {
@@ -277,6 +314,7 @@ export type CrosstabOwnState = {
   selectedDynamicMetric?: Record<string, string>;
   selectedDynamicGroupByColumn?: QueryFormColumn;
   numericParameters?: Record<string, number>;
+  textParameters?: Record<string, string>;
   effectiveGroupBySignature?: string;
   effectiveMetricSignature?: string;
   expandedRowPaths?: string[];
