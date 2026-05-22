@@ -19,6 +19,7 @@
 import {
   ERR_CROSSTAB_CALC_FIELD,
   expandCalculatedFieldMetricConfigs,
+  getCalculatedFields,
   getCalculatedFieldsSignature,
 } from '../../src/plugin/calcFields';
 import type {
@@ -93,6 +94,29 @@ test('expands canonical AST calculated fields into SQL metric configs', () => {
     label: '毛利率调整',
     semantic: 'ratio',
     formatString: '.2%',
+  });
+});
+
+test('removes calculated field placeholders that use canonical ids', () => {
+  const result = expandCalculatedFieldMetricConfigs({
+    dialect: 'doris',
+    formData,
+    metricConfigs: [
+      ...metricConfigs,
+      {
+        metric: 'calc_margin_pct',
+        label: 'calc_margin_pct',
+        calculatedFieldId: 'calc_margin_pct',
+      },
+    ],
+    parameterValues: { number: {}, text: {} },
+  });
+
+  expect(result.metricConfigs).toHaveLength(3);
+  expect(result.metricConfigs[2].label).toBe('毛利率调整');
+  expect(result.metricConfigs[2].metric).toMatchObject({
+    expressionType: 'SQL',
+    label: '毛利率调整',
   });
 });
 
@@ -186,6 +210,51 @@ test('rejects malformed canonical field shapes', () => {
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
 
+test('rejects malformed calculated field AST during normalization', () => {
+  const malformedAstFormData = {
+    ...formData,
+    crosstabCalculatedFields: [
+      {
+        ...calculatedField,
+        ast: { kind: 'metric_ref' },
+      },
+    ],
+  } as unknown as CrosstabFormData;
+
+  expect(() => getCalculatedFields(malformedAstFormData)).toThrow(
+    ERR_CROSSTAB_CALC_FIELD,
+  );
+  expect(() =>
+    expandCalculatedFieldMetricConfigs({
+      dialect: 'doris',
+      formData: malformedAstFormData,
+      metricConfigs,
+      parameterValues: { number: {}, text: {} },
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
+test('rejects calculated field ids that collide with base metric labels', () => {
+  expect(() =>
+    expandCalculatedFieldMetricConfigs({
+      dialect: 'doris',
+      formData: {
+        ...formData,
+        crosstabCalculatedFields: [
+          {
+            ...calculatedField,
+            id: 'sales',
+            resultType: 'number',
+            ast: { kind: 'metric_ref', metricId: 'profit' },
+          },
+        ],
+      },
+      metricConfigs,
+      parameterValues: { number: {}, text: {} },
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
 test('changes signature when number or text parameter values change', () => {
   const baseSignature = getCalculatedFieldsSignature([calculatedField], {
     number: { adjustmentRate: 1.25 },
@@ -255,6 +324,21 @@ test('rejects legacy calculatedFields on the strict canonical path', () => {
       },
       metricConfigs,
       parameterValues: { number: { adjustmentRate: 1.25 }, text: {} },
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
+test('rejects V4-shaped data under legacy calculatedFields', () => {
+  expect(() =>
+    expandCalculatedFieldMetricConfigs({
+      dialect: 'doris',
+      formData: {
+        ...formData,
+        crosstabCalculatedFields: undefined,
+        calculatedFields: [calculatedField] as unknown as CrosstabCalculatedField[],
+      },
+      metricConfigs,
+      parameterValues: { number: {}, text: {} },
     }),
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });

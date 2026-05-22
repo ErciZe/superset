@@ -28,6 +28,7 @@ import {
   emitCalculatedFieldAstSql,
   type CalcSqlDialect,
   type EmitCalculatedFieldAstSqlArgs,
+  validateCalculatedFieldAst,
 } from './calc/expr';
 
 export const ERR_CROSSTAB_CALC_FIELD = 'ERR_CROSSTAB_CALC_FIELD';
@@ -83,13 +84,11 @@ function assertCalculatedField(
     throw new Error(ERR_CROSSTAB_CALC_FIELD);
   }
 
-  void ast;
+  validateCalculatedFieldAst(ast as CrosstabExpressionNode);
 }
 
 function parseCalculatedFields(
-  value:
-    | CrosstabFormData['crosstabCalculatedFields']
-    | CrosstabFormData['calculatedFields'],
+  value: CrosstabFormData['crosstabCalculatedFields'],
 ): CrosstabV4CalculatedField[] {
   if (value === undefined || value === '') {
     return [];
@@ -154,7 +153,10 @@ function isCalculatedFieldPlaceholder(
     field !== undefined &&
     typeof config.metric === 'string' &&
     getSqlMetricExpression(config.metric) === undefined &&
-    (config.metric === field.name || config.label === field.name)
+    (config.metric === field.id ||
+      config.metric === field.name ||
+      config.label === field.id ||
+      config.label === field.name)
   );
 }
 
@@ -176,7 +178,7 @@ function assertNoDuplicateFields(
     const id = field.id.trim();
     const name = field.name.trim();
 
-    if (ids.has(id) || labels.has(name)) {
+    if (ids.has(id) || labels.has(id) || labels.has(name)) {
       throw new Error(ERR_CROSSTAB_CALC_FIELD);
     }
 
@@ -252,9 +254,17 @@ export function getCalculatedFields(
   formData: CrosstabFormData,
 ): CrosstabV4CalculatedField[] {
   try {
-    return parseCalculatedFields(
-      formData.crosstabCalculatedFields ?? formData.calculatedFields,
-    );
+    if (
+      formData.crosstabCalculatedFields === undefined &&
+      formData.calculatedFields !== undefined &&
+      formData.calculatedFields !== '' &&
+      (!Array.isArray(formData.calculatedFields) ||
+        formData.calculatedFields.length > 0)
+    ) {
+      throw new Error(ERR_CROSSTAB_CALC_FIELD);
+    }
+
+    return parseCalculatedFields(formData.crosstabCalculatedFields);
   } catch (error) {
     throw new Error(ERR_CROSSTAB_CALC_FIELD);
   }
