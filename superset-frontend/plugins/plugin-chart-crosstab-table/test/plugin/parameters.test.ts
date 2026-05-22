@@ -63,13 +63,12 @@ test('normalizes canonical number and text parameter config', () => {
 });
 
 test('uses default canonical parameter values when own-state is empty', () => {
-  expect(resolveCrosstabParameters(formData, undefined)).toEqual({
-    config: crosstabParameters,
-    values: {
-      number: { param_adjustment: 1 },
-      text: { param_country: 'DE' },
-    },
-  });
+  const resolved = resolveCrosstabParameters(formData, undefined);
+
+  expect(resolved.config).toEqual(crosstabParameters);
+  expect(resolved.values.number).toEqual({ param_adjustment: 1 });
+  expect(resolved.values.text).toEqual({ param_country: 'DE' });
+  expect(resolved.values.param_adjustment).toBe(1);
 });
 
 test('uses runtime canonical parameter values from own-state by id', () => {
@@ -78,10 +77,11 @@ test('uses runtime canonical parameter values from own-state by id', () => {
     textParameters: { param_country: 'FR' },
   };
 
-  expect(resolveCrosstabParameters(formData, ownState).values).toEqual({
-    number: { param_adjustment: 1.25 },
-    text: { param_country: 'FR' },
-  });
+  const values = resolveCrosstabParameters(formData, ownState).values;
+
+  expect(values.number).toEqual({ param_adjustment: 1.25 });
+  expect(values.text).toEqual({ param_country: 'FR' });
+  expect(values.param_adjustment).toBe(1.25);
 });
 
 test('rejects duplicate canonical ids', () => {
@@ -242,6 +242,87 @@ test('creates stable signatures from resolved parameter values', () => {
   expect(getParameterSignature(resolved)).toBe(
     'number:param_adjustment=1|text:param_country=DE',
   );
+});
+
+test('sorts parameter signatures globally by id across number and text kinds', () => {
+  const resolved = resolveCrosstabParameters({
+    ...formData,
+    crosstabParameters: [
+      {
+        id: 'param_z',
+        kind: 'number',
+        name: 'zRate',
+        label: 'Z rate',
+        defaultValue: 2,
+      },
+      {
+        id: 'param_a',
+        kind: 'text',
+        name: 'aFilter',
+        label: 'A filter',
+        defaultValue: 'DE',
+      },
+    ],
+  });
+
+  expect(getParameterSignature(resolved)).toBe(
+    'text:param_a=DE|number:param_z=2',
+  );
+});
+
+test('escapes signature delimiters in ids and text values', () => {
+  const resolved = resolveCrosstabParameters({
+    ...formData,
+    crosstabParameters: [
+      {
+        id: 'param|text=country:%',
+        kind: 'text',
+        name: 'countryFilter',
+        label: 'Country',
+        defaultValue: 'DE|FR=EU:%',
+      },
+    ],
+  });
+
+  expect(getParameterSignature(resolved)).toBe(
+    'text:param%7Ctext%3Dcountry%3A%25=DE%7CFR%3DEU%3A%25',
+  );
+});
+
+test('rejects non-string runtime text values without allowed values', () => {
+  expect(() =>
+    resolveCrosstabParameters(
+      {
+        ...formData,
+        crosstabParameters: [
+          {
+            id: 'param_country',
+            kind: 'text',
+            name: 'countryFilter',
+            label: 'Country',
+            defaultValue: 'DE',
+          },
+        ],
+      },
+      {
+        textParameters: {
+          param_country: 1,
+        } as unknown as Record<string, string>,
+      },
+    ),
+  ).toThrow(ERR_CROSSTAB_PARAMETER_VALUE);
+});
+
+test('keeps nested parameter values non-enumerable while exposing flat numeric values', () => {
+  const resolved = resolveCrosstabParameters(formData, {
+    numericParameters: { param_adjustment: 1.25 },
+    textParameters: { param_country: 'FR' },
+  });
+
+  expect(resolved.values.number).toEqual({ param_adjustment: 1.25 });
+  expect(resolved.values.text).toEqual({ param_country: 'FR' });
+  expect(Object.keys(resolved.values)).toEqual(['param_adjustment']);
+  expect(resolved.values.param_adjustment).toBe(1.25);
 });
 
 test('preserves strict legacy number helper for formData.parameters only', () => {

@@ -28,12 +28,14 @@ import type {
 export const ERR_CROSSTAB_PARAMETER_CONFIG = 'ERR_CROSSTAB_PARAMETER_CONFIG';
 export const ERR_CROSSTAB_PARAMETER_VALUE = 'ERR_CROSSTAB_PARAMETER_VALUE';
 
+export type CrosstabParameterValues = Record<string, number> & {
+  readonly number: Record<string, number>;
+  readonly text: Record<string, string>;
+};
+
 export type ResolvedCrosstabParameters = {
   config: CrosstabParameter[];
-  values: {
-    number: Record<string, number>;
-    text: Record<string, string>;
-  };
+  values: CrosstabParameterValues;
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -68,6 +70,12 @@ function assertOptionalString(
 function assertNonEmptyString(value: unknown): asserts value is string {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error(ERR_CROSSTAB_PARAMETER_CONFIG);
+  }
+}
+
+function assertRuntimeString(value: unknown): asserts value is string {
+  if (typeof value !== 'string') {
+    throw new Error(ERR_CROSSTAB_PARAMETER_VALUE);
   }
 }
 
@@ -359,15 +367,33 @@ function validateParameterValue(
   );
 }
 
+function createParameterValues(
+  numberValues: Record<string, number>,
+  textValues: Record<string, string>,
+): CrosstabParameterValues {
+  const values: Record<string, number> = { ...numberValues };
+
+  Object.defineProperties(values, {
+    number: {
+      value: numberValues,
+      enumerable: false,
+    },
+    text: {
+      value: textValues,
+      enumerable: false,
+    },
+  });
+
+  return values as CrosstabParameterValues;
+}
+
 export function resolveCrosstabParameters(
   formData: CrosstabFormData,
   ownState?: CrosstabOwnState,
 ): ResolvedCrosstabParameters {
   const config = getCrosstabParameters(formData);
-  const values: ResolvedCrosstabParameters['values'] = {
-    number: {},
-    text: {},
-  };
+  const numberValues: Record<string, number> = {};
+  const textValues: Record<string, string> = {};
 
   config.forEach(parameter => {
     if (parameter.kind === 'number') {
@@ -375,13 +401,14 @@ export function resolveCrosstabParameters(
       const value = ownValue === undefined ? parameter.defaultValue : ownValue;
 
       validateParameterValue(parameter, value);
-      values.number[parameter.id] = value;
+      numberValues[parameter.id] = value;
 
       return;
     }
 
-    const ownValue = ownState?.textParameters?.[parameter.id];
+    const ownValue: unknown = ownState?.textParameters?.[parameter.id];
     const value = ownValue === undefined ? parameter.defaultValue : ownValue;
+    assertRuntimeString(value);
 
     if (
       parameter.allowedValues !== undefined &&
@@ -390,21 +417,44 @@ export function resolveCrosstabParameters(
       throw new Error(ERR_CROSSTAB_PARAMETER_VALUE);
     }
 
-    values.text[parameter.id] = value;
+    textValues[parameter.id] = value;
   });
 
-  return { config, values };
+  return { config, values: createParameterValues(numberValues, textValues) };
+}
+
+function encodeSignaturePart(value: string): string {
+  return value.replace(
+    /[%|=:]/g,
+    char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
 }
 
 export function getParameterSignature(
   resolved: ResolvedCrosstabParameters,
 ): string {
-  return [
-    ...Object.keys(resolved.values.number)
-      .sort()
-      .map(id => `number:${id}=${resolved.values.number[id]}`),
-    ...Object.keys(resolved.values.text)
-      .sort()
-      .map(id => `text:${id}=${resolved.values.text[id]}`),
-  ].join('|');
+  return [...resolved.config]
+    .sort((left, right) => {
+      if (left.id < right.id) {
+        return -1;
+      }
+
+      if (left.id > right.id) {
+        return 1;
+      }
+
+      return 0;
+    })
+    .map(parameter => {
+      const id = encodeSignaturePart(parameter.id);
+
+      if (parameter.kind === 'number') {
+        return `number:${id}=${resolved.values.number[parameter.id]}`;
+      }
+
+      return `text:${id}=${encodeSignaturePart(
+        resolved.values.text[parameter.id],
+      )}`;
+    })
+    .join('|');
 }
