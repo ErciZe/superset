@@ -339,6 +339,16 @@ describe('CrosstabTable', () => {
     return input;
   }
 
+  function getTextParameterSelect(id: string) {
+    const select = container.querySelector(
+      `[data-test="crosstab-parameter-control--${id}"] select`,
+    );
+    if (!(select instanceof HTMLSelectElement)) {
+      throw new Error('Unable to find text parameter select');
+    }
+    return select;
+  }
+
   function getInvalidSelectChangeButton() {
     const button = container.querySelector(
       'button[aria-label="Trigger invalid mock select change"]',
@@ -1547,6 +1557,140 @@ describe('CrosstabTable', () => {
         serverColumnPageTuplesPage: 0,
         serverColumnPageTuplesPageSize: 5,
         expandedRowPaths: ['category::A'],
+      }),
+    });
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'effectiveMetricSignature',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnPageColumnSignature',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnTotalCount',
+    );
+  });
+
+  it('renders number and text runtime parameters from canonical config', () => {
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+        crosstabParameters: [
+          {
+            id: 'param_adjustment',
+            kind: 'number',
+            name: 'adjustmentRate',
+            label: 'Adjustment',
+            defaultValue: 1,
+            min: 0,
+            max: 2,
+            step: 0.01,
+          },
+          {
+            id: 'param_country',
+            kind: 'text',
+            name: 'country',
+            label: 'Country',
+            defaultValue: 'DE',
+            allowedValues: ['DE', 'FR'],
+          },
+        ],
+      },
+      numericParameters: { param_adjustment: 1 },
+      textParameters: { param_country: 'DE' },
+      rowData: [],
+      columns: [
+        {
+          key: 'metric_name',
+          label: '指标项',
+          dataType: GenericDataType.String,
+        },
+      ],
+      columnTree: [],
+      generatedColumnIds: [],
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    const numberInput = getNumericParameterInput('param_adjustment');
+    const textSelect = getTextParameterSelect('param_country');
+
+    expect(numberInput).toHaveAccessibleName('Adjustment');
+    expect(numberInput).toHaveValue(1);
+    expect(getByText('Country')).toBeInTheDocument();
+    expect(textSelect).toHaveAccessibleName('Country');
+    expect(textSelect).toHaveValue('DE');
+  });
+
+  it('writes runtime text parameter own-state and resets column pagination', () => {
+    const setDataMask = jest.fn();
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+        generatedColumnWidth: 120,
+        crosstabParameters: [
+          {
+            id: 'param_country',
+            kind: 'text',
+            name: 'country',
+            label: 'Country',
+            defaultValue: 'DE',
+            allowedValues: ['DE', 'FR'],
+          },
+        ],
+      },
+      hooks: {
+        setDataMask,
+      },
+      textParameters: { param_country: 'DE' },
+      ownState: {
+        unrelatedOwnStateField: 'preserved',
+        currentColumnPage: 2,
+        currentColumnPageSize: 8,
+        effectiveMetricSignature: 'stale-metric-signature',
+        expandedRowPaths: ['category::A'],
+        serverColumnPageColumnSignature: 'stale-column-signature',
+        serverColumnPageTuples: [['stale']],
+        serverColumnPageTuplesPage: 2,
+        serverColumnPageTuplesPageSize: 8,
+        serverColumnTotalCount: 100,
+        textParameters: { param_country: 'DE' },
+      },
+      rowData: [],
+      columns: [
+        {
+          key: 'metric_name',
+          label: '指标项',
+          dataType: GenericDataType.String,
+        },
+      ],
+      columnTree: [],
+      generatedColumnIds: [],
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    const select = getTextParameterSelect('param_country');
+
+    act(() => {
+      Simulate.change(select, { target: { value: 'FR' } } as never);
+    });
+
+    expect(setDataMask).toHaveBeenCalledWith({
+      ownState: expect.objectContaining({
+        unrelatedOwnStateField: 'preserved',
+        expandedRowPaths: ['category::A'],
+        textParameters: { param_country: 'FR' },
+        currentColumnPage: 0,
+        currentColumnPageSize: 5,
+        serverColumnPageTuples: [],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: 5,
       }),
     });
     expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(

@@ -48,8 +48,9 @@ import type {
   CrosstabColumnNode,
   CrosstabConditionalRule,
   CrosstabFormData,
-  CrosstabNumberParameter,
   CrosstabOwnState,
+  CrosstabParameter,
+  CrosstabV4NumberParameter,
 } from './types';
 import {
   formatCrosstabValue,
@@ -64,7 +65,7 @@ import {
   decodeCrosstabRowPath,
   encodeCrosstabRowPath,
 } from './crosstab/engine';
-import { getCrosstabNumberParameters } from './plugin/parameters';
+import { getCrosstabParameters } from './plugin/parameters';
 import { getGeneratedColumnWidth } from './plugin/serverColumnPagination';
 
 ModuleRegistry.registerModules([AllCommunityModule, ClientSideRowModelModule]);
@@ -468,7 +469,7 @@ function getPreservedDynamicMetricOwnState(
   return preservedOwnState;
 }
 
-function getPreservedNumericParameterOwnState(
+function getPreservedRuntimeParameterOwnState(
   ownState: CrosstabChartProps['ownState'],
 ) {
   const preservedOwnState = {
@@ -486,7 +487,7 @@ function getPreservedNumericParameterOwnState(
 }
 
 function validateNumericParameterValue(
-  parameter: CrosstabNumberParameter,
+  parameter: CrosstabV4NumberParameter,
   value: number,
 ) {
   if (!Number.isFinite(value)) {
@@ -523,6 +524,7 @@ export default function CrosstabTable({
   rowData,
   expandedRowPaths,
   numericParameters,
+  textParameters,
   selectedDynamicGroupBy,
   selectedDynamicMetric,
   serverColumnCurrentPage,
@@ -670,15 +672,22 @@ export default function CrosstabTable({
         };
       });
   }, [dynamicMetricConfig, selectedDynamicMetric]);
-  const numericParameterControls = useMemo(
+  const parameterControls = useMemo(
     () =>
-      getCrosstabNumberParameters(formData as CrosstabFormData).map(
-        parameter => ({
+      getCrosstabParameters(formData as CrosstabFormData).map(parameter => {
+        if (parameter.kind === 'number') {
+          return {
+            parameter,
+            value: numericParameters?.[parameter.id] ?? parameter.defaultValue,
+          };
+        }
+
+        return {
           parameter,
-          value: numericParameters?.[parameter.name] ?? parameter.default,
-        }),
-      ),
-    [formData, numericParameters],
+          value: textParameters?.[parameter.id] ?? parameter.defaultValue,
+        };
+      }),
+    [formData, numericParameters, textParameters],
   );
   const totalGeneratedColumnCount = serverColumnPagination
     ? (serverColumnTotalCount ?? treeLeafColumnIds.length)
@@ -836,7 +845,7 @@ export default function CrosstabTable({
     ],
   );
   const updateNumericParameter = useCallback(
-    (parameter: CrosstabNumberParameter, value: number) => {
+    (parameter: CrosstabV4NumberParameter, value: number) => {
       validateNumericParameterValue(parameter, value);
 
       if (!serverColumnPagination) {
@@ -845,10 +854,46 @@ export default function CrosstabTable({
 
       setDataMask?.({
         ownState: {
-          ...getPreservedNumericParameterOwnState(ownState),
+          ...getPreservedRuntimeParameterOwnState(ownState),
           numericParameters: {
             ...(ownState?.numericParameters ?? {}),
-            [parameter.name]: value,
+            [parameter.id]: value,
+          },
+          currentColumnPage: 0,
+          currentColumnPageSize: effectiveColumnsPerPage,
+          serverColumnPageTuples: [],
+          serverColumnPageTuplesPage: 0,
+          serverColumnPageTuplesPageSize: effectiveColumnsPerPage,
+        },
+      });
+    },
+    [
+      effectiveColumnsPerPage,
+      ownState,
+      serverColumnPagination,
+      setColumnPage,
+      setDataMask,
+    ],
+  );
+  const updateTextParameter = useCallback(
+    (parameter: Extract<CrosstabParameter, { kind: 'text' }>, value: string) => {
+      if (
+        parameter.allowedValues !== undefined &&
+        !parameter.allowedValues.includes(value)
+      ) {
+        return;
+      }
+
+      if (!serverColumnPagination) {
+        setColumnPage(0);
+      }
+
+      setDataMask?.({
+        ownState: {
+          ...getPreservedRuntimeParameterOwnState(ownState),
+          textParameters: {
+            ...(ownState?.textParameters ?? {}),
+            [parameter.id]: value,
           },
           currentColumnPage: 0,
           currentColumnPageSize: effectiveColumnsPerPage,
@@ -1052,14 +1097,41 @@ export default function CrosstabTable({
       />
     </div>
   ));
-  const numericParameterInputs = numericParameterControls.map(
+  const runtimeParameterControls = parameterControls.map(
     ({ parameter, value }) => {
       const label = parameter.label ?? parameter.name;
 
+      if (parameter.kind === 'number') {
+        return (
+          <div
+            key={parameter.id}
+            data-test={`crosstab-parameter-control--${parameter.id}`}
+            style={{
+              alignItems: 'center',
+              display: 'inline-flex',
+              gap: theme.sizeUnit,
+            }}
+          >
+            <span>{label}</span>
+            <input
+              aria-label={label}
+              max={parameter.max}
+              min={parameter.min}
+              onChange={event =>
+                updateNumericParameter(parameter, Number(event.target.value))
+              }
+              step={parameter.step}
+              type="number"
+              value={value as number}
+            />
+          </div>
+        );
+      }
+
       return (
         <div
-          key={parameter.name}
-          data-test={`crosstab-parameter-control--${parameter.name}`}
+          key={parameter.id}
+          data-test={`crosstab-parameter-control--${parameter.id}`}
           style={{
             alignItems: 'center',
             display: 'inline-flex',
@@ -1067,17 +1139,29 @@ export default function CrosstabTable({
           }}
         >
           <span>{label}</span>
-          <input
-            aria-label={label}
-            max={parameter.max}
-            min={parameter.min}
-            onChange={event =>
-              updateNumericParameter(parameter, Number(event.target.value))
-            }
-            step={parameter.step}
-            type="number"
-            value={value}
-          />
+          {parameter.allowedValues === undefined ? (
+            <input
+              aria-label={label}
+              onChange={event =>
+                updateTextParameter(parameter, event.target.value)
+              }
+              type="text"
+              value={value as string}
+            />
+          ) : (
+            <Select
+              ariaLabel={label}
+              allowSelectAll={false}
+              onChange={(nextValue: string) =>
+                updateTextParameter(parameter, nextValue)
+              }
+              options={parameter.allowedValues.map(option => ({
+                label: option,
+                value: option,
+              }))}
+              value={value as string}
+            />
+          )}
         </div>
       );
     },
@@ -1116,7 +1200,7 @@ export default function CrosstabTable({
         </Button>
         {dynamicGroupBySelects}
         {dynamicMetricSelects}
-        {numericParameterInputs}
+        {runtimeParameterControls}
       </div>
       <div
         data-test="crosstab-grid-container"
