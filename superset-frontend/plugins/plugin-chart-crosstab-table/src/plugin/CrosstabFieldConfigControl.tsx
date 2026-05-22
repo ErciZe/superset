@@ -37,6 +37,7 @@ import type {
   MetricSemantic,
   MetricSemanticOverride,
 } from '../types';
+import { getMetricSemanticLabel } from './metricSemantics';
 
 const Zone = styled.div`
   border: 1px solid ${({ theme }) => theme.colorBorderSecondary};
@@ -427,7 +428,7 @@ export default function CrosstabFieldConfigControl({
               >
                 {SEMANTIC_OPTIONS.map(semantic => (
                   <option key={semantic} value={semantic}>
-                    {semantic}
+                    {getMetricSemanticLabel(semantic)}
                   </option>
                 ))}
               </SemanticSelect>
@@ -454,7 +455,6 @@ export default function CrosstabFieldConfigControl({
         <ZoneHeader>{t('Rows')}</ZoneHeader>
         <DndColumnSelect
           actions={EMPTY_ACTIONS}
-          label={t('Rows')}
           multi
           name={`${name}-rows`}
           onChange={updateRows}
@@ -468,7 +468,6 @@ export default function CrosstabFieldConfigControl({
         <ZoneHeader>{t('Columns')}</ZoneHeader>
         <DndColumnSelect
           actions={EMPTY_ACTIONS}
-          label={t('Columns')}
           multi
           name={`${name}-columns`}
           onChange={updateColumns}
@@ -483,7 +482,6 @@ export default function CrosstabFieldConfigControl({
         <DndMetricSelect
           columns={columns}
           datasource={datasource}
-          label={t('Metrics')}
           multi
           name={`${name}-metrics`}
           onChange={updateMetrics}

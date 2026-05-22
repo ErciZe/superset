@@ -27,13 +27,12 @@ import {
 import { Button, Drawer, Input, Select } from '@superset-ui/core/components';
 import ControlHeader from '../../../../src/explore/components/ControlHeader';
 import type {
-  CrosstabCalculatedField,
-  CrosstabCalculatedFieldTemplate,
   CrosstabFieldConfig,
   CrosstabFormData,
+  CrosstabV4CalculatedField,
   MetricFieldConfig,
-  MetricSemantic,
 } from '../types';
+import { getCalculatedFields } from './calcFields';
 
 const Editor = styled.div`
   display: grid;
@@ -48,10 +47,6 @@ const DrawerBody = styled.div`
 const Field = styled.label`
   display: grid;
   gap: ${({ theme }) => theme.sizeUnit}px;
-`;
-
-const SqlPreview = styled.pre`
-  white-space: pre-wrap;
 `;
 
 type SavedMetric = {
@@ -75,29 +70,11 @@ type CrosstabCalculatedFieldsControlProps = {
   hovered?: boolean;
   label?: string;
   name: string;
-  onChange: (value: CrosstabCalculatedField[]) => void;
+  onChange: (value: CrosstabV4CalculatedField[]) => void;
+  onControlChange?: (control: string, value: unknown) => void;
   savedMetrics?: SavedMetric[];
-  value?: CrosstabCalculatedField[];
+  value?: CrosstabV4CalculatedField[];
 };
-
-const templates: {
-  label: string;
-  value: CrosstabCalculatedFieldTemplate;
-}[] = [
-  { label: '比率', value: 'ratio' },
-  { label: '差值', value: 'difference' },
-  { label: '含参比率', value: 'parameterized_ratio' },
-];
-
-const templateValues: ReadonlySet<string> = new Set(
-  templates.map(template => template.value),
-);
-
-function isCalculatedFieldTemplate(
-  value: unknown,
-): value is CrosstabCalculatedFieldTemplate {
-  return typeof value === 'string' && templateValues.has(value);
-}
 
 function metricOptionFromMetric(
   metric: QueryFormMetric,
@@ -166,31 +143,6 @@ function getMetricOptions(
     .filter((option): option is MetricOption => option !== undefined);
 }
 
-function getSemantic(
-  template: CrosstabCalculatedFieldTemplate,
-): MetricSemantic {
-  return template === 'difference' ? 'additive' : 'ratio';
-}
-
-function getSqlPreview(
-  template: CrosstabCalculatedFieldTemplate,
-  leftMetric?: string,
-  rightMetric?: string,
-) {
-  const left = leftMetric || '<metric_a>';
-  const right = rightMetric || '<metric_b>';
-
-  if (template === 'difference') {
-    return `${left} - ${right}`;
-  }
-
-  if (template === 'parameterized_ratio') {
-    return `(${left} / NULLIF(${right}, 0)) * {{ adjustmentRate }}`;
-  }
-
-  return `${left} / NULLIF(${right}, 0)`;
-}
-
 function getFieldConfig(formData?: CrosstabFormData): CrosstabFieldConfig {
   return formData?.crosstabFieldConfig ?? {};
 }
@@ -210,6 +162,14 @@ function getSelectedMetricValue(
   return metricOptions[fallbackIndex]?.value;
 }
 
+function validateCalculatedFields(nextValue: CrosstabV4CalculatedField[]): void {
+  getCalculatedFields({
+    viz_type: 'crosstab-table',
+    datasource: '0__table',
+    crosstabCalculatedFields: nextValue,
+  } as CrosstabFormData);
+}
+
 export default function CrosstabCalculatedFieldsControl({
   actions,
   formData,
@@ -217,6 +177,7 @@ export default function CrosstabCalculatedFieldsControl({
   label,
   name,
   onChange,
+  onControlChange,
   savedMetrics = [],
   value = [],
 }: CrosstabCalculatedFieldsControlProps) {
@@ -225,36 +186,34 @@ export default function CrosstabCalculatedFieldsControl({
     () => getMetricOptions(formData, savedMetrics),
     [formData, savedMetrics],
   );
-  const [fieldLabel, setFieldLabel] = useState('含参毛利率');
-  const [template, setTemplate] = useState<CrosstabCalculatedFieldTemplate>(
-    'parameterized_ratio',
-  );
-  const [leftMetric, setLeftMetric] = useState<string | undefined>(
+  const [fieldId, setFieldId] = useState('profitRate');
+  const [fieldName, setFieldName] = useState(t('Profit rate'));
+  const [numeratorMetric, setNumeratorMetric] = useState<string | undefined>(
     metricOptions[0]?.value,
   );
-  const [rightMetric, setRightMetric] = useState<string | undefined>(
-    metricOptions[1]?.value,
-  );
-  const resolvedLeftMetric = getSelectedMetricValue(
-    leftMetric,
+  const [denominatorMetric, setDenominatorMetric] = useState<
+    string | undefined
+  >(metricOptions[1]?.value);
+
+  const resolvedNumeratorMetric = getSelectedMetricValue(
+    numeratorMetric,
     metricOptions,
     0,
   );
-  const resolvedRightMetric = getSelectedMetricValue(
-    rightMetric,
+  const resolvedDenominatorMetric = getSelectedMetricValue(
+    denominatorMetric,
     metricOptions,
     1,
   );
-
-  const selectedLeftMetric = metricOptions.find(
-    option => option.value === resolvedLeftMetric,
+  const selectedNumeratorMetric = metricOptions.find(
+    option => option.value === resolvedNumeratorMetric,
   );
-  const selectedRightMetric = metricOptions.find(
-    option => option.value === resolvedRightMetric,
+  const selectedDenominatorMetric = metricOptions.find(
+    option => option.value === resolvedDenominatorMetric,
   );
 
   const saveField = useCallback(() => {
-    const setControlValue = actions?.setControlValue;
+    const setControlValue = onControlChange ?? actions?.setControlValue;
 
     if (!setControlValue) {
       throw new Error(
@@ -262,32 +221,34 @@ export default function CrosstabCalculatedFieldsControl({
       );
     }
 
-    if (!selectedLeftMetric || !selectedRightMetric) {
+    if (!selectedNumeratorMetric || !selectedDenominatorMetric) {
       throw new Error(t('Calculated fields require two saved metrics.'));
     }
 
-    const semantic = getSemantic(template);
-    const field: CrosstabCalculatedField = {
-      id: fieldLabel,
-      label: fieldLabel,
-      template,
-      inputs: {
-        leftMetric: selectedLeftMetric.metric,
-        rightMetric: selectedRightMetric.metric,
-        ...(template === 'parameterized_ratio'
-          ? { parameterName: 'adjustmentRate' }
-          : {}),
+    const field: CrosstabV4CalculatedField = {
+      id: fieldId.trim(),
+      name: fieldName.trim(),
+      resultType: 'percent',
+      formatString: '.2%',
+      ast: {
+        kind: 'pct',
+        numerator: {
+          kind: 'metric_ref',
+          metricId: selectedNumeratorMetric.value,
+        },
+        denominator: {
+          kind: 'metric_ref',
+          metricId: selectedDenominatorMetric.value,
+        },
       },
-      semantic,
-      ...(template === 'difference' ? {} : { formatString: '.2%' }),
     };
     const nextValue = [...value, field];
     const nextMetricConfig: MetricFieldConfig = {
-      metric: field.label as QueryFormMetric,
-      label: field.label,
-      semantic,
+      metric: field.name,
+      label: field.name,
       calculatedFieldId: field.id,
-      ...(field.formatString ? { formatString: field.formatString } : {}),
+      semantic: 'ratio',
+      formatString: field.formatString,
     };
     const currentFieldConfig = getFieldConfig(formData);
     const nextFieldConfig: CrosstabFieldConfig = {
@@ -295,17 +256,19 @@ export default function CrosstabCalculatedFieldsControl({
       metrics: [...(currentFieldConfig.metrics ?? []), nextMetricConfig],
     };
 
+    validateCalculatedFields(nextValue);
     onChange(nextValue);
     setControlValue('crosstabFieldConfig', nextFieldConfig);
     setIsOpen(false);
   }, [
     actions,
-    fieldLabel,
+    fieldId,
+    fieldName,
     formData,
     onChange,
-    selectedLeftMetric,
-    selectedRightMetric,
-    template,
+    onControlChange,
+    selectedDenominatorMetric,
+    selectedNumeratorMetric,
     value,
   ]);
 
@@ -332,54 +295,43 @@ export default function CrosstabCalculatedFieldsControl({
       >
         <DrawerBody>
           <Field>
+            {t('Id')}
+            <Input
+              aria-label={t('Calculated field id')}
+              value={fieldId}
+              onChange={event => setFieldId(event.target.value)}
+            />
+          </Field>
+          <Field>
             {t('Name')}
             <Input
               aria-label={t('Calculated field name')}
-              value={fieldLabel}
-              onChange={event => setFieldLabel(event.target.value)}
+              value={fieldName}
+              onChange={event => setFieldName(event.target.value)}
             />
           </Field>
           <Field>
-            {t('Template')}
+            {t('Numerator metric')}
             <Select
-              ariaLabel={t('Calculated field template')}
-              allowSelectAll={false}
-              options={templates}
-              value={template}
-              onChange={nextTemplate => {
-                if (!isCalculatedFieldTemplate(nextTemplate)) {
-                  throw new Error(t('Unsupported calculated field template.'));
-                }
-
-                setTemplate(nextTemplate);
-              }}
-            />
-          </Field>
-          <Field>
-            {t('Metric A')}
-            <Select
-              ariaLabel={t('Metric A')}
+              ariaLabel={t('Numerator metric')}
               allowSelectAll={false}
               options={metricOptions}
-              value={resolvedLeftMetric}
-              onChange={nextMetric => setLeftMetric(String(nextMetric))}
+              value={resolvedNumeratorMetric}
+              onChange={nextMetric => setNumeratorMetric(String(nextMetric))}
             />
           </Field>
           <Field>
-            {t('Metric B')}
+            {t('Denominator metric')}
             <Select
-              ariaLabel={t('Metric B')}
+              ariaLabel={t('Denominator metric')}
               allowSelectAll={false}
               options={metricOptions}
-              value={resolvedRightMetric}
-              onChange={nextMetric => setRightMetric(String(nextMetric))}
+              value={resolvedDenominatorMetric}
+              onChange={nextMetric => setDenominatorMetric(String(nextMetric))}
             />
           </Field>
-          <SqlPreview data-test="crosstab-calculated-field-sql-preview">
-            {getSqlPreview(template, resolvedLeftMetric, resolvedRightMetric)}
-          </SqlPreview>
           <Button buttonSize="small" buttonStyle="primary" onClick={saveField}>
-            {t('Save')}
+            {t('Save calculated field')}
           </Button>
         </DrawerBody>
       </Drawer>

@@ -16,11 +16,12 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { useCallback, useMemo } from 'react';
+import { useCallback, useState } from 'react';
 import { styled, t } from '@superset-ui/core';
-import { Input } from '@superset-ui/core/components';
+import { Button, Input } from '@superset-ui/core/components';
 import ControlHeader from '../../../../src/explore/components/ControlHeader';
-import type { CrosstabNumberParameter } from '../types';
+import type { CrosstabFormData, CrosstabParameter } from '../types';
+import { getCrosstabParameters } from './parameters';
 
 const Editor = styled.div`
   display: grid;
@@ -38,77 +39,153 @@ const Field = styled.label`
   gap: ${({ theme }) => theme.sizeUnit}px;
 `;
 
-type NumericParameterField = 'default' | 'min' | 'max' | 'step';
+const ActionRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: ${({ theme }) => theme.sizeUnit}px;
+`;
 
 type CrosstabParametersControlProps = {
   hovered?: boolean;
   label?: string;
   name: string;
-  onChange: (value: CrosstabNumberParameter[]) => void;
-  value?: CrosstabNumberParameter[];
+  onChange: (value: CrosstabParameter[]) => void;
+  value?: CrosstabParameter[];
 };
 
-const defaultParameter: CrosstabNumberParameter = {
-  kind: 'number',
-  name: 'adjustmentRate',
-  label: '调整系数',
-  default: 1,
-  min: 0,
-  max: 2,
-  step: 0.01,
+type NumberParameterDraft = {
+  id: string;
+  kind: 'number';
+  name: string;
+  label: string;
+  defaultValue: string;
 };
+
+type TextParameterDraft = {
+  id: string;
+  kind: 'text';
+  name: string;
+  label: string;
+  defaultValue: string;
+};
+
+type ParameterDraft = NumberParameterDraft | TextParameterDraft;
+
+function numberDraft(): NumberParameterDraft {
+  return {
+    id: 'adjustmentRate',
+    kind: 'number',
+    name: 'adjustmentRate',
+    label: t('Adjustment rate'),
+    defaultValue: '1',
+  };
+}
+
+function textDraft(): TextParameterDraft {
+  return {
+    id: 'market',
+    kind: 'text',
+    name: 'market',
+    label: t('Market'),
+    defaultValue: '',
+  };
+}
+
+function draftFromParameter(parameter: CrosstabParameter): ParameterDraft {
+  return {
+    ...parameter,
+    defaultValue: String(parameter.defaultValue),
+  };
+}
+
+function parameterFromDraft(draft: ParameterDraft): CrosstabParameter {
+  if (draft.kind === 'number') {
+    if (draft.defaultValue.trim().length === 0) {
+      throw new Error(
+        t('Crosstab parameter numeric fields require finite numbers.'),
+      );
+    }
+
+    const defaultValue = Number(draft.defaultValue);
+
+    if (!Number.isFinite(defaultValue)) {
+      throw new Error(
+        t('Crosstab parameter numeric fields require finite numbers.'),
+      );
+    }
+
+    return {
+      id: draft.id.trim(),
+      kind: 'number',
+      name: draft.name.trim(),
+      label: draft.label.trim(),
+      defaultValue,
+    };
+  }
+
+  return {
+    id: draft.id.trim(),
+    kind: 'text',
+    name: draft.name.trim(),
+    label: draft.label.trim(),
+    defaultValue: draft.defaultValue,
+  };
+}
+
+function validateParameters(nextValue: CrosstabParameter[]): void {
+  getCrosstabParameters({
+    viz_type: 'crosstab-table',
+    datasource: '0__table',
+    crosstabParameters: nextValue,
+  } as CrosstabFormData);
+}
 
 export default function CrosstabParametersControl({
   hovered,
   label,
   name,
   onChange,
-  value,
+  value = [],
 }: CrosstabParametersControlProps) {
-  const parameter = useMemo(
-    () => ({ ...defaultParameter, ...(value?.[0] ?? {}) }),
-    [value],
+  const [draft, setDraft] = useState<ParameterDraft | undefined>();
+  const [editingIndex, setEditingIndex] = useState<number | undefined>();
+
+  const saveDraft = useCallback(() => {
+    if (!draft) {
+      return;
+    }
+
+    const parameter = parameterFromDraft(draft);
+    const nextValue =
+      editingIndex === undefined
+        ? [...value, parameter]
+        : value.map((existingParameter, index) =>
+            index === editingIndex ? parameter : existingParameter,
+          );
+
+    validateParameters(nextValue);
+    onChange(nextValue);
+    setDraft(undefined);
+    setEditingIndex(undefined);
+  }, [draft, editingIndex, onChange, value]);
+
+  const deleteParameter = useCallback(
+    (indexToDelete: number) => {
+      const nextValue = value.filter((_, index) => index !== indexToDelete);
+
+      validateParameters(nextValue);
+      onChange(nextValue);
+    },
+    [onChange, value],
   );
 
-  const updateParameter = useCallback(
-    (nextParameter: CrosstabNumberParameter) => {
-      onChange([nextParameter]);
+  const updateDraft = useCallback(
+    (field: 'id' | 'name' | 'label' | 'defaultValue', nextValue: string) => {
+      setDraft(currentDraft =>
+        currentDraft ? { ...currentDraft, [field]: nextValue } : currentDraft,
+      );
     },
-    [onChange],
-  );
-
-  const updateTextField = useCallback(
-    (field: 'name' | 'label', nextValue: string) => {
-      updateParameter({
-        ...parameter,
-        [field]: nextValue,
-      });
-    },
-    [parameter, updateParameter],
-  );
-
-  const updateNumericField = useCallback(
-    (field: NumericParameterField, nextValue: string) => {
-      if (nextValue.trim().length === 0) {
-        throw new Error(
-          t('Crosstab parameter numeric fields require finite numbers.'),
-        );
-      }
-
-      const numericValue = Number(nextValue);
-
-      if (!Number.isFinite(numericValue)) {
-        throw new Error(
-          t('Crosstab parameter numeric fields require finite numbers.'),
-        );
-      }
-
-      updateParameter({
-        ...parameter,
-        [field]: numericValue,
-      });
-    },
-    [parameter, updateParameter],
+    [],
   );
 
   return (
@@ -119,63 +196,87 @@ export default function CrosstabParametersControl({
         name={name}
         renderTrigger
       />
-      <strong>{t('Number parameter')}</strong>
-      <FieldGrid>
-        <Field>
-          {t('Name')}
-          <Input
-            aria-label={t('Parameter name')}
-            value={parameter.name}
-            onChange={event => updateTextField('name', event.target.value)}
-          />
-        </Field>
-        <Field>
-          {t('Label')}
-          <Input
-            aria-label={t('Parameter label')}
-            value={parameter.label ?? ''}
-            onChange={event => updateTextField('label', event.target.value)}
-          />
-        </Field>
-        <Field>
-          {t('Default')}
-          <Input
-            aria-label={t('Parameter default')}
-            type="number"
-            value={parameter.default}
-            onChange={event =>
-              updateNumericField('default', event.target.value)
-            }
-          />
-        </Field>
-        <Field>
-          {t('Min')}
-          <Input
-            aria-label={t('Parameter min')}
-            type="number"
-            value={parameter.min}
-            onChange={event => updateNumericField('min', event.target.value)}
-          />
-        </Field>
-        <Field>
-          {t('Max')}
-          <Input
-            aria-label={t('Parameter max')}
-            type="number"
-            value={parameter.max}
-            onChange={event => updateNumericField('max', event.target.value)}
-          />
-        </Field>
-        <Field>
-          {t('Step')}
-          <Input
-            aria-label={t('Parameter step')}
-            type="number"
-            value={parameter.step}
-            onChange={event => updateNumericField('step', event.target.value)}
-          />
-        </Field>
-      </FieldGrid>
+      <ActionRow>
+        <Button
+          buttonSize="small"
+          buttonStyle="secondary"
+          onClick={() => {
+            setDraft(numberDraft());
+            setEditingIndex(undefined);
+          }}
+        >
+          {t('Add number parameter')}
+        </Button>
+        <Button
+          buttonSize="small"
+          buttonStyle="secondary"
+          onClick={() => {
+            setDraft(textDraft());
+            setEditingIndex(undefined);
+          }}
+        >
+          {t('Add text parameter')}
+        </Button>
+      </ActionRow>
+      {value.map((parameter, index) => (
+        <ActionRow key={parameter.id}>
+          <span>{parameter.label}</span>
+          <Button
+            buttonSize="small"
+            onClick={() => {
+              setDraft(draftFromParameter(parameter));
+              setEditingIndex(index);
+            }}
+          >
+            {t('Edit')}
+          </Button>
+          <Button buttonSize="small" onClick={() => deleteParameter(index)}>
+            {t('Delete')}
+          </Button>
+        </ActionRow>
+      ))}
+      {draft && (
+        <FieldGrid>
+          <Field>
+            {t('Id')}
+            <Input
+              aria-label={t('Parameter id')}
+              value={draft.id}
+              onChange={event => updateDraft('id', event.target.value)}
+            />
+          </Field>
+          <Field>
+            {t('Name')}
+            <Input
+              aria-label={t('Parameter name')}
+              value={draft.name}
+              onChange={event => updateDraft('name', event.target.value)}
+            />
+          </Field>
+          <Field>
+            {t('Label')}
+            <Input
+              aria-label={t('Parameter label')}
+              value={draft.label}
+              onChange={event => updateDraft('label', event.target.value)}
+            />
+          </Field>
+          <Field>
+            {t('Default')}
+            <Input
+              aria-label={t('Parameter default')}
+              type={draft.kind === 'number' ? 'number' : 'text'}
+              value={draft.defaultValue}
+              onChange={event =>
+                updateDraft('defaultValue', event.target.value)
+              }
+            />
+          </Field>
+          <Button buttonSize="small" buttonStyle="primary" onClick={saveDraft}>
+            {t('Save parameter')}
+          </Button>
+        </FieldGrid>
+      )}
     </Editor>
   );
 }

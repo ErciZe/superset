@@ -33,16 +33,26 @@ import CrosstabParametersControl from '../../src/plugin/CrosstabParametersContro
 
 jest.mock(
   '../../../../src/explore/components/controls/DndColumnSelectControl/DndColumnSelect',
-  () => ({
-    DndColumnSelect: () => null,
-  }),
+  () => {
+    const { createElement } = jest.requireActual('react');
+
+    return {
+      DndColumnSelect: ({ label }: { label?: string }) =>
+        label ? createElement('div', null, label) : null,
+    };
+  },
 );
 
 jest.mock(
   '../../../../src/explore/components/controls/DndColumnSelectControl',
-  () => ({
-    DndMetricSelect: () => null,
-  }),
+  () => {
+    const { createElement } = jest.requireActual('react');
+
+    return {
+      DndMetricSelect: ({ label }: { label?: string }) =>
+        label ? createElement('div', null, label) : null,
+    };
+  },
 );
 
 function getControlNames() {
@@ -137,8 +147,8 @@ describe('crosstab controlPanel', () => {
         'crosstabFieldConfig',
         'dynamicGroupBy',
         'dynamicMetric',
-        'parameters',
-        'calculatedFields',
+        'crosstabParameters',
+        'crosstabCalculatedFields',
         'showRowTotals',
         'showColumnTotals',
         'showRowSubtotals',
@@ -158,9 +168,9 @@ describe('crosstab controlPanel', () => {
     const crosstabControlNames = getControlNamesForSection('Crosstab');
     const dynamicGroupByIndex = crosstabControlNames.indexOf('dynamicGroupBy');
     const dynamicMetricIndex = crosstabControlNames.indexOf('dynamicMetric');
-    const parametersIndex = crosstabControlNames.indexOf('parameters');
+    const parametersIndex = crosstabControlNames.indexOf('crosstabParameters');
     const calculatedFieldsIndex =
-      crosstabControlNames.indexOf('calculatedFields');
+      crosstabControlNames.indexOf('crosstabCalculatedFields');
 
     expect(dynamicGroupByIndex).toBeGreaterThanOrEqual(0);
     expect(dynamicMetricIndex).toBeGreaterThan(dynamicGroupByIndex);
@@ -189,8 +199,10 @@ describe('crosstab controlPanel', () => {
     );
     const dynamicGroupByIndex = controlNames.indexOf('dynamicGroupBy');
     const dynamicMetricIndex = controlNames.indexOf('dynamicMetric');
-    const parametersIndex = controlNames.indexOf('parameters');
-    const calculatedFieldsIndex = controlNames.indexOf('calculatedFields');
+    const parametersIndex = controlNames.indexOf('crosstabParameters');
+    const calculatedFieldsIndex = controlNames.indexOf(
+      'crosstabCalculatedFields',
+    );
     const serverColumnPaginationIndex = controlNames.indexOf(
       'serverColumnPagination',
     );
@@ -228,7 +240,7 @@ describe('crosstab controlPanel', () => {
   });
 
   it('exposes crosstab parameters and calculated fields as chart-local controls', () => {
-    expect(getControlConfig('parameters')).toEqual(
+    expect(getControlConfig('crosstabParameters')).toEqual(
       expect.objectContaining({
         type: 'CrosstabParametersControl',
         label: 'Parameters',
@@ -236,7 +248,7 @@ describe('crosstab controlPanel', () => {
         renderTrigger: true,
       }),
     );
-    expect(getControlConfig('calculatedFields')).toEqual(
+    expect(getControlConfig('crosstabCalculatedFields')).toEqual(
       expect.objectContaining({
         type: 'CrosstabCalculatedFieldsControl',
         label: 'Calculated fields',
@@ -264,17 +276,80 @@ describe('crosstab controlPanel', () => {
     ).toBe(CrosstabCalculatedFieldsControl);
   });
 
-  it('renders the crosstab parameters control default number parameter', () => {
-    render(
+  it('creates canonical number and text crosstab parameters', () => {
+    const onChange = jest.fn();
+    const { rerender } = render(
       createElement(CrosstabParametersControl, {
-        name: 'parameters',
-        onChange: jest.fn(),
+        name: 'crosstabParameters',
+        onChange,
         value: [],
       }),
     );
 
-    expect(screen.getByText('Number parameter')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('adjustmentRate')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Add number parameter'));
+    fireEvent.change(screen.getByLabelText('Parameter id'), {
+      target: { value: 'adjustmentRate' },
+    });
+    fireEvent.change(screen.getByLabelText('Parameter name'), {
+      target: { value: 'adjustmentRate' },
+    });
+    fireEvent.change(screen.getByLabelText('Parameter label'), {
+      target: { value: 'Adjustment rate' },
+    });
+    fireEvent.change(screen.getByLabelText('Parameter default'), {
+      target: { value: '1.25' },
+    });
+    fireEvent.click(screen.getByText('Save parameter'));
+
+    expect(onChange).toHaveBeenLastCalledWith([
+      {
+        id: 'adjustmentRate',
+        kind: 'number',
+        name: 'adjustmentRate',
+        label: 'Adjustment rate',
+        defaultValue: 1.25,
+      },
+    ]);
+
+    rerender(
+      createElement(CrosstabParametersControl, {
+        name: 'crosstabParameters',
+        onChange,
+        value: onChange.mock.calls[0][0],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('Add text parameter'));
+    fireEvent.change(screen.getByLabelText('Parameter id'), {
+      target: { value: 'market' },
+    });
+    fireEvent.change(screen.getByLabelText('Parameter name'), {
+      target: { value: 'market' },
+    });
+    fireEvent.change(screen.getByLabelText('Parameter label'), {
+      target: { value: 'Market' },
+    });
+    fireEvent.change(screen.getByLabelText('Parameter default'), {
+      target: { value: 'US' },
+    });
+    fireEvent.click(screen.getByText('Save parameter'));
+
+    expect(onChange).toHaveBeenLastCalledWith([
+      {
+        id: 'adjustmentRate',
+        kind: 'number',
+        name: 'adjustmentRate',
+        label: 'Adjustment rate',
+        defaultValue: 1.25,
+      },
+      {
+        id: 'market',
+        kind: 'text',
+        name: 'market',
+        label: 'Market',
+        defaultValue: 'US',
+      },
+    ]);
   });
 
   it('rejects invalid crosstab parameter numeric input', () => {
@@ -282,16 +357,18 @@ describe('crosstab controlPanel', () => {
 
     render(
       createElement(CrosstabParametersControl, {
-        name: 'parameters',
+        name: 'crosstabParameters',
         onChange,
         value: [],
       }),
     );
 
+    fireEvent.click(screen.getByText('Add number parameter'));
+    fireEvent.change(screen.getByLabelText('Parameter default'), {
+      target: { value: '' },
+    });
     const errors = catchWindowErrors(() =>
-      fireEvent.change(screen.getByLabelText('Parameter default'), {
-        target: { value: '' },
-      }),
+      fireEvent.click(screen.getByText('Save parameter')),
     );
 
     expect(errors).toEqual(
@@ -304,15 +381,14 @@ describe('crosstab controlPanel', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('saves calculated fields from selected crosstab metrics', () => {
+  it('saves a pct calculated field and appends crosstab metric config', () => {
     const onChange = jest.fn();
-    const setControlValue = jest.fn();
+    const onControlChange = jest.fn();
     const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
     const profitMetric = sqlMetric('profit', 'SUM(gross_profit)');
 
     render(
       createElement(CrosstabCalculatedFieldsControl, {
-        actions: { setControlValue },
         formData: {
           datasource: '7__table',
           viz_type: 'crosstab-table',
@@ -323,7 +399,8 @@ describe('crosstab controlPanel', () => {
             ],
           },
         },
-        name: 'calculatedFields',
+        name: 'crosstabCalculatedFields',
+        onControlChange,
         onChange,
         savedMetrics: [{ metric_name: 'unselected_metric' }],
         value: [],
@@ -331,28 +408,39 @@ describe('crosstab controlPanel', () => {
     );
 
     fireEvent.click(screen.getByText('New calculated field'));
-    fireEvent.click(screen.getByText('Save'));
+    fireEvent.change(screen.getByLabelText('Calculated field id'), {
+      target: { value: 'profitRate' },
+    });
+    fireEvent.change(screen.getByLabelText('Calculated field name'), {
+      target: { value: 'Profit rate' },
+    });
+    expect(screen.getAllByLabelText('Numerator metric')).not.toHaveLength(0);
+    expect(screen.getAllByLabelText('Denominator metric')).not.toHaveLength(0);
+    fireEvent.click(screen.getByText('Save calculated field'));
 
     expect(onChange).toHaveBeenCalledWith([
-      expect.objectContaining({
-        label: '含参毛利率',
-        inputs: expect.objectContaining({
-          leftMetric: salesMetric,
-          rightMetric: profitMetric,
-          parameterName: 'adjustmentRate',
-        }),
-      }),
+      {
+        id: 'profitRate',
+        name: 'Profit rate',
+        resultType: 'percent',
+        formatString: '.2%',
+        ast: {
+          kind: 'pct',
+          numerator: { kind: 'metric_ref', metricId: 'sales' },
+          denominator: { kind: 'metric_ref', metricId: 'profit' },
+        },
+      },
     ]);
-    expect(setControlValue).toHaveBeenCalledWith(
+    expect(onControlChange).toHaveBeenCalledWith(
       'crosstabFieldConfig',
       expect.objectContaining({
         metrics: expect.arrayContaining([
           expect.objectContaining({
-            metric: '含参毛利率',
-            label: '含参毛利率',
+            metric: 'Profit rate',
+            label: 'Profit rate',
             semantic: 'ratio',
             formatString: '.2%',
-            calculatedFieldId: '含参毛利率',
+            calculatedFieldId: 'profitRate',
           }),
         ]),
       }),
@@ -376,7 +464,7 @@ describe('crosstab controlPanel', () => {
             ],
           },
         },
-        name: 'calculatedFields',
+        name: 'crosstabCalculatedFields',
         onChange,
         value: [],
       }),
@@ -385,7 +473,7 @@ describe('crosstab controlPanel', () => {
     fireEvent.click(screen.getByText('New calculated field'));
 
     const errors = catchWindowErrors(() =>
-      fireEvent.click(screen.getByText('Save')),
+      fireEvent.click(screen.getByText('Save calculated field')),
     );
 
     expect(errors).toEqual(
@@ -409,7 +497,7 @@ describe('crosstab controlPanel', () => {
           datasource: '7__table',
           viz_type: 'crosstab-table',
         },
-        name: 'calculatedFields',
+        name: 'crosstabCalculatedFields',
         onChange,
         savedMetrics: [
           { metric_name: 'saved_sales' },
@@ -422,7 +510,7 @@ describe('crosstab controlPanel', () => {
     fireEvent.click(screen.getByText('New calculated field'));
 
     const errors = catchWindowErrors(() =>
-      fireEvent.click(screen.getByText('Save')),
+      fireEvent.click(screen.getByText('Save calculated field')),
     );
 
     expect(errors).toEqual(
@@ -444,7 +532,7 @@ describe('crosstab controlPanel', () => {
     const { rerender } = render(
       createElement(CrosstabCalculatedFieldsControl, {
         actions: { setControlValue },
-        name: 'calculatedFields',
+        name: 'crosstabCalculatedFields',
         onChange,
         savedMetrics: [{ metric_name: 'unselected_metric' }],
         value: [],
@@ -464,7 +552,7 @@ describe('crosstab controlPanel', () => {
             ],
           },
         },
-        name: 'calculatedFields',
+        name: 'crosstabCalculatedFields',
         onChange,
         savedMetrics: [{ metric_name: 'unselected_metric' }],
         value: [],
@@ -472,13 +560,13 @@ describe('crosstab controlPanel', () => {
     );
 
     fireEvent.click(screen.getByText('New calculated field'));
-    fireEvent.click(screen.getByText('Save'));
+    fireEvent.click(screen.getByText('Save calculated field'));
 
     expect(onChange).toHaveBeenCalledWith([
       expect.objectContaining({
-        inputs: expect.objectContaining({
-          leftMetric: salesMetric,
-          rightMetric: profitMetric,
+        ast: expect.objectContaining({
+          numerator: { kind: 'metric_ref', metricId: 'sales' },
+          denominator: { kind: 'metric_ref', metricId: 'profit' },
         }),
       }),
     ]);
@@ -539,6 +627,24 @@ describe('crosstab controlPanel', () => {
     expect(screen.getByLabelText('Subtotal')).toBeInTheDocument();
     expect(screen.queryByText('To columns')).not.toBeInTheDocument();
     expect(screen.queryByText('To rows')).not.toBeInTheDocument();
+  });
+
+  it('renders one visible field-zone heading per zone', () => {
+    render(
+      createElement(CrosstabFieldConfigControl, {
+        name: 'crosstabFieldConfig',
+        onChange: jest.fn(),
+        value: {
+          rows: [{ field: 'country' }],
+          columns: [{ field: 'biz_date' }],
+          metrics: [{ metric: 'amount', label: 'Amount' }],
+        },
+      }),
+    );
+
+    expect(screen.getAllByText('Rows')).toHaveLength(1);
+    expect(screen.getAllByText('Columns')).toHaveLength(1);
+    expect(screen.getAllByText('Metrics')).toHaveLength(1);
   });
 
   it('updates only the selected metric semantic', () => {

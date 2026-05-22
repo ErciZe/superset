@@ -149,25 +149,25 @@ const config: ControlPanelConfig = {
         ],
         [
           {
-            name: 'parameters',
+            name: 'crosstabParameters',
             config: {
               type: 'CrosstabParametersControl',
               label: t('Parameters'),
               default: [],
               renderTrigger: true,
-              description: t('Configure chart-local numeric parameters.'),
+              description: t('Configure chart-local parameters.'),
             },
           },
         ],
         [
           {
-            name: 'calculatedFields',
+            name: 'crosstabCalculatedFields',
             config: {
               type: 'CrosstabCalculatedFieldsControl',
               label: t('Calculated fields'),
               default: [],
               renderTrigger: true,
-              description: t('Create SQL-backed crosstab calculated fields.'),
+              description: t('Create safe primitive calculated fields.'),
               mapStateToProps: ({ datasource, form_data }) => ({
                 formData: form_data,
                 savedMetrics:
