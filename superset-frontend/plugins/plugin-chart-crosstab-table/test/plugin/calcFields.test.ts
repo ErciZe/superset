@@ -120,6 +120,67 @@ test('removes calculated field placeholders that use canonical ids', () => {
   });
 });
 
+test('expands calculated fields that reference selected saved metric names', () => {
+  const result = expandCalculatedFieldMetricConfigs({
+    dialect: 'doris',
+    formData: {
+      ...formData,
+      datasource: {
+        metrics: [
+          { metric_name: 'saved_sales', expression: 'SUM(sales_amount)' },
+          { metric_name: 'saved_profit', expression: 'SUM(gross_profit)' },
+        ],
+      },
+      crosstabCalculatedFields: [
+        {
+          ...calculatedField,
+          ast: {
+            kind: 'pct',
+            numerator: { kind: 'metric_ref', metricId: 'saved_profit' },
+            denominator: { kind: 'metric_ref', metricId: 'saved_sales' },
+          },
+        },
+      ],
+    } as unknown as CrosstabFormData,
+    metricConfigs: [
+      { metric: 'saved_sales', label: 'Saved sales' },
+      { metric: 'saved_profit', label: 'Saved profit' },
+      {
+        metric: '毛利率调整',
+        label: '毛利率调整',
+        calculatedFieldId: 'calc_margin_pct',
+      },
+    ],
+    parameterValues: { number: {}, text: {} },
+  });
+
+  expect(result.metricConfigs[2].metric).toEqual({
+    expressionType: 'SQL',
+    label: '毛利率调整',
+    sqlExpression:
+      '((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 100)',
+  });
+});
+
+test('fails fast when saved metric SQL cannot be resolved', () => {
+  expect(() =>
+    expandCalculatedFieldMetricConfigs({
+      dialect: 'doris',
+      formData,
+      metricConfigs: [
+        { metric: 'saved_sales' },
+        { metric: 'saved_profit' },
+        {
+          metric: '毛利率调整',
+          label: '毛利率调整',
+          calculatedFieldId: 'calc_margin_pct',
+        },
+      ],
+      parameterValues: { number: {}, text: {} },
+    }),
+  ).toThrow('ERR_CROSSTAB_CALC_METRIC');
+});
+
 test('rejects duplicate calculated field ids', () => {
   expect(() =>
     expandCalculatedFieldMetricConfigs({
@@ -362,7 +423,9 @@ test('rejects V4-shaped data under legacy calculatedFields', () => {
       formData: {
         ...formData,
         crosstabCalculatedFields: undefined,
-        calculatedFields: [calculatedField] as unknown as CrosstabCalculatedField[],
+        calculatedFields: [
+          calculatedField,
+        ] as unknown as CrosstabCalculatedField[],
       },
       metricConfigs,
       parameterValues: { number: {}, text: {} },

@@ -113,7 +113,9 @@ function getSavedMetricExpression(metric: SavedMetric): string | undefined {
   );
 }
 
-function metricFromSavedMetric(metric: SavedMetric): QueryFormMetric | undefined {
+function metricFromSavedMetric(
+  metric: SavedMetric,
+): QueryFormMetric | undefined {
   if (metric.metric) {
     return metric.metric;
   }
@@ -239,7 +241,9 @@ function getMetricOptions(
 
   if (legacyMetrics.length > 0) {
     return legacyMetrics
-      .map(metric => metricOptionFromMetric(metric, undefined, savedMetricLookup))
+      .map(metric =>
+        metricOptionFromMetric(metric, undefined, savedMetricLookup),
+      )
       .filter((option): option is MetricOption => option !== undefined);
   }
 
@@ -267,7 +271,9 @@ function getSelectedMetricValue(
   return metricOptions[fallbackIndex]?.value;
 }
 
-function validateCalculatedFields(nextValue: CrosstabV4CalculatedField[]): void {
+function validateCalculatedFields(
+  nextValue: CrosstabV4CalculatedField[],
+): void {
   getCalculatedFields({
     viz_type: 'crosstab-table',
     datasource: '0__table',
@@ -309,8 +315,13 @@ function getNextCalculatedFields(
   field: CrosstabV4CalculatedField,
   editingFieldId?: string,
 ): CrosstabV4CalculatedField[] {
-  const targetId = editingFieldId ?? field.id;
-  const existingIndex = value.findIndex(existingField => existingField.id === targetId);
+  if (editingFieldId === undefined) {
+    return [...value, field];
+  }
+
+  const existingIndex = value.findIndex(
+    existingField => existingField.id === editingFieldId,
+  );
 
   if (existingIndex >= 0) {
     return value.map((existingField, index) =>
@@ -327,10 +338,9 @@ function assertUniqueCalculatedField(
   fieldConfig: CrosstabFieldConfig,
   editingFieldId?: string,
 ): void {
-  const targetId = editingFieldId ?? field.id;
   const hasCalculatedFieldConflict = value.some(
     existingField =>
-      existingField.id !== targetId &&
+      existingField.id !== editingFieldId &&
       (existingField.id === field.id ||
         existingField.id === field.name ||
         existingField.name === field.id ||
@@ -355,22 +365,23 @@ function syncCalculatedMetricConfig(
   const targetId = editingFieldId ?? field.id;
   const metrics = fieldConfig.metrics ?? [];
   const nextMetricConfig = calculatedMetricConfig(field);
-  const existingIndex = metrics.findIndex(
-    metricConfig => metricConfig.calculatedFieldId === targetId,
-  );
+  let didInsert = false;
+  const nextMetrics = metrics.flatMap(metricConfig => {
+    if (metricConfig.calculatedFieldId !== targetId) {
+      return [metricConfig];
+    }
 
-  if (existingIndex >= 0) {
-    return {
-      ...fieldConfig,
-      metrics: metrics.map((metricConfig, index) =>
-        index === existingIndex ? nextMetricConfig : metricConfig,
-      ),
-    };
-  }
+    if (didInsert) {
+      return [];
+    }
+
+    didInsert = true;
+    return [nextMetricConfig];
+  });
 
   return {
     ...fieldConfig,
-    metrics: [...metrics, nextMetricConfig],
+    metrics: didInsert ? nextMetrics : [...nextMetrics, nextMetricConfig],
   };
 }
 

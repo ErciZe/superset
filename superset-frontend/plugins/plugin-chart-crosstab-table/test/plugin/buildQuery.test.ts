@@ -200,6 +200,56 @@ describe('crosstab buildQuery', () => {
     );
   });
 
+  it('includes calculated SQL metrics from selected saved metric names', () => {
+    const queryContext = buildQuery({
+      datasource: '7__table',
+      datasourceMetrics: [
+        { metric_name: 'saved_sales', expression: 'SUM(sales_amount)' },
+        { metric_name: 'saved_profit', expression: 'SUM(gross_profit)' },
+      ],
+      viz_type: 'crosstab-table',
+      groupbyRows: ['category'],
+      groupbyColumns: ['biz_date'],
+      crosstabFieldConfig: {
+        rows: [{ field: 'category' }],
+        columns: [{ field: 'biz_date' }],
+        metrics: [
+          { metric: 'saved_sales', label: 'Saved sales' },
+          { metric: 'saved_profit', label: 'Saved profit' },
+          {
+            metric: 'Profit rate',
+            label: 'Profit rate',
+            calculatedFieldId: 'profitRate',
+          },
+        ],
+      },
+      crosstabCalculatedFields: [
+        {
+          id: 'profitRate',
+          name: 'Profit rate',
+          resultType: 'percent',
+          formatString: '.2%',
+          ast: {
+            kind: 'pct',
+            numerator: { kind: 'metric_ref', metricId: 'saved_profit' },
+            denominator: { kind: 'metric_ref', metricId: 'saved_sales' },
+          },
+        },
+      ],
+    } as never);
+
+    expect(queryContext.queries[0].metrics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          expressionType: 'SQL',
+          label: 'Profit rate',
+          sqlExpression:
+            '((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 100)',
+        }),
+      ]),
+    );
+  });
+
   it('uses the default dynamic group-by column in query dimensions', () => {
     const queryContext = buildQuery({
       datasource: '11__table',

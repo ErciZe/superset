@@ -181,8 +181,9 @@ describe('crosstab controlPanel', () => {
     const dynamicGroupByIndex = crosstabControlNames.indexOf('dynamicGroupBy');
     const dynamicMetricIndex = crosstabControlNames.indexOf('dynamicMetric');
     const parametersIndex = crosstabControlNames.indexOf('crosstabParameters');
-    const calculatedFieldsIndex =
-      crosstabControlNames.indexOf('crosstabCalculatedFields');
+    const calculatedFieldsIndex = crosstabControlNames.indexOf(
+      'crosstabCalculatedFields',
+    );
 
     expect(dynamicGroupByIndex).toBeGreaterThanOrEqual(0);
     expect(dynamicMetricIndex).toBeGreaterThan(dynamicGroupByIndex);
@@ -576,6 +577,19 @@ describe('crosstab controlPanel', () => {
                 formatString: '.2%',
                 calculatedFieldId: 'profitRate',
               },
+              {
+                metric: 'Profit rate duplicate',
+                label: 'Profit rate duplicate',
+                semantic: 'ratio',
+                formatString: '.2%',
+                calculatedFieldId: 'profitRate',
+              },
+              {
+                metric: 'Other calc',
+                label: 'Other calc',
+                semantic: 'ratio',
+                calculatedFieldId: 'otherCalc',
+              },
             ],
           },
         },
@@ -611,9 +625,63 @@ describe('crosstab controlPanel', () => {
             semantic: 'ratio',
             formatString: '.2%',
           },
+          {
+            metric: 'Other calc',
+            label: 'Other calc',
+            semantic: 'ratio',
+            calculatedFieldId: 'otherCalc',
+          },
         ],
       }),
     );
+  });
+
+  it('rejects new calculated fields that duplicate an existing id', () => {
+    const onChange = jest.fn();
+    const onControlChange = jest.fn();
+    const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
+    const profitMetric = sqlMetric('profit', 'SUM(gross_profit)');
+
+    render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+          crosstabFieldConfig: {
+            metrics: [
+              { metric: salesMetric, label: 'Sales', semantic: 'additive' },
+              { metric: profitMetric, label: 'Profit', semantic: 'additive' },
+            ],
+          },
+        },
+        name: 'crosstabCalculatedFields',
+        onControlChange,
+        onChange,
+        value: [existingProfitRateField],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('New calculated field'));
+    fireEvent.change(screen.getByLabelText('Calculated field id'), {
+      target: { value: 'profitRate' },
+    });
+    fireEvent.change(screen.getByLabelText('Calculated field name'), {
+      target: { value: 'Another profit rate' },
+    });
+
+    const errors = catchWindowErrors(() =>
+      fireEvent.click(screen.getByText('Save calculated field')),
+    );
+
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Calculated field ids and names must be unique.',
+        }),
+      ]),
+    );
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onControlChange).not.toHaveBeenCalled();
   });
 
   it('rejects new calculated fields that duplicate ids or metric labels', () => {
