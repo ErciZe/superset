@@ -34,16 +34,16 @@ export type CalcSqlDialect = 'doris';
 export type EmitCalculatedFieldSqlArgs = {
   dialect: CalcSqlDialect | string;
   metricSql: Record<string, string>;
+  parameterValues: Record<string, number>;
+};
+
+export type EmitCalculatedFieldAstSqlArgs = {
+  dialect: CalcSqlDialect | string;
+  metricSql: Record<string, string>;
   parameterValues: {
     number: Record<string, number>;
     text: Record<string, string>;
   };
-};
-
-export type LegacyEmitCalculatedFieldSqlArgs = {
-  dialect: CalcSqlDialect | string;
-  metricSql: Record<string, string>;
-  parameterValues: Record<string, number>;
 };
 
 const unsafeSqlTokenPattern = /(;|--|\/\*|\*\/|'|\{\{|\}\}|\$\{)/;
@@ -261,7 +261,7 @@ function getLegacyFiniteParameter(
 
 function getNumberParameter(
   parameterId: string,
-  parameterValues: EmitCalculatedFieldSqlArgs['parameterValues'],
+  parameterValues: EmitCalculatedFieldAstSqlArgs['parameterValues'],
 ): number {
   const value = parameterValues.number[parameterId];
 
@@ -277,7 +277,7 @@ function getNumberParameter(
 
 function getTextParameter(
   parameterId: string,
-  parameterValues: EmitCalculatedFieldSqlArgs['parameterValues'],
+  parameterValues: EmitCalculatedFieldAstSqlArgs['parameterValues'],
 ): string {
   const value = parameterValues.text[parameterId];
 
@@ -297,7 +297,7 @@ function safeDivSql(numeratorSql: string, denominatorSql: string): string {
 
 function emitNodeSql(
   node: CrosstabExpressionNode,
-  args: EmitCalculatedFieldSqlArgs,
+  args: EmitCalculatedFieldAstSqlArgs,
 ): string {
   switch (node.kind) {
     case 'metric_ref':
@@ -335,7 +335,7 @@ function emitNodeSql(
 
 export function emitCalculatedFieldSql(
   field: CrosstabCalculatedField,
-  args: LegacyEmitCalculatedFieldSqlArgs,
+  args: EmitCalculatedFieldSqlArgs,
 ): string {
   assertDialect(args.dialect);
 
@@ -366,7 +366,7 @@ export function emitCalculatedFieldSql(
 
 export function emitCalculatedFieldAstSql(
   field: CrosstabV4CalculatedField,
-  args: EmitCalculatedFieldSqlArgs,
+  args: EmitCalculatedFieldAstSqlArgs,
 ): string {
   assertDialect(args.dialect);
 
