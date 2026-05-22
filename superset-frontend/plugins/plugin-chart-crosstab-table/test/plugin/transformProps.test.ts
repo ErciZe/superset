@@ -285,6 +285,50 @@ describe('crosstab transformProps', () => {
     expect(signatureA).not.toBe(signatureB);
   });
 
+  it('passes resolved runtime parameter values to renderer props', () => {
+    const props = transformProps(
+      createProps({
+        formData: {
+          ...canonicalParameterizedCalculatedFormData,
+          crosstabParameters: [
+            {
+              id: 'param_adjustment',
+              kind: 'number',
+              name: 'adjustmentRate',
+              label: '调整系数',
+              defaultValue: 1,
+              min: 0,
+              max: 2,
+              step: 0.01,
+            },
+            {
+              id: 'param_country',
+              kind: 'text',
+              name: 'country',
+              label: '国家',
+              defaultValue: 'US',
+              allowedValues: ['US', 'DE'],
+            },
+          ],
+        },
+        ownState: {
+          numericParameters: { param_adjustment: 1.25 },
+          textParameters: { param_country: 'DE' },
+        },
+        queriesData: [
+          {
+            data: [],
+            colnames: [],
+            coltypes: [],
+          },
+        ],
+      }),
+    );
+
+    expect(props.numericParameters).toEqual({ param_adjustment: 1.25 });
+    expect(props.textParameters).toEqual({ param_country: 'DE' });
+  });
+
   it('converts query data into renderer props', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,

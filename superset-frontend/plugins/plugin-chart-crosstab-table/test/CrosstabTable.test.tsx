@@ -1553,9 +1553,6 @@ describe('CrosstabTable', () => {
         numericParameters: { adjustmentRate: 1.25 },
         currentColumnPage: 0,
         currentColumnPageSize: 5,
-        serverColumnPageTuples: [],
-        serverColumnPageTuplesPage: 0,
-        serverColumnPageTuplesPageSize: 5,
         expandedRowPaths: ['category::A'],
       }),
     });
@@ -1567,6 +1564,15 @@ describe('CrosstabTable', () => {
     );
     expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
       'serverColumnTotalCount',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnPageTuples',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnPageTuplesPage',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnPageTuplesPageSize',
     );
   });
 
@@ -1688,9 +1694,6 @@ describe('CrosstabTable', () => {
         textParameters: { param_country: 'FR' },
         currentColumnPage: 0,
         currentColumnPageSize: 5,
-        serverColumnPageTuples: [],
-        serverColumnPageTuplesPage: 0,
-        serverColumnPageTuplesPageSize: 5,
       }),
     });
     expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
@@ -1701,6 +1704,15 @@ describe('CrosstabTable', () => {
     );
     expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
       'serverColumnTotalCount',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnPageTuples',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnPageTuplesPage',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'serverColumnPageTuplesPageSize',
     );
   });
 

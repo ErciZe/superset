@@ -676,7 +676,8 @@ export default function transformProps(
     serverColumnCurrentPage: currentPage,
     serverColumnPageSize: columnPageSize,
     serverColumnTotalCount: totalCount,
-    numericParameters: resolvedParameters.values,
+    numericParameters: resolvedParameters.values.number,
+    textParameters: resolvedParameters.values.text,
     isServerColumnLoading:
       serverColumnPagination &&
       (resetDynamicGroupByOwnState ||

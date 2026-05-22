@@ -861,9 +861,6 @@ export default function CrosstabTable({
           },
           currentColumnPage: 0,
           currentColumnPageSize: effectiveColumnsPerPage,
-          serverColumnPageTuples: [],
-          serverColumnPageTuplesPage: 0,
-          serverColumnPageTuplesPageSize: effectiveColumnsPerPage,
         },
       });
     },
@@ -876,7 +873,10 @@ export default function CrosstabTable({
     ],
   );
   const updateTextParameter = useCallback(
-    (parameter: Extract<CrosstabParameter, { kind: 'text' }>, value: string) => {
+    (
+      parameter: Extract<CrosstabParameter, { kind: 'text' }>,
+      value: string,
+    ) => {
       if (
         parameter.allowedValues !== undefined &&
         !parameter.allowedValues.includes(value)
@@ -897,9 +897,6 @@ export default function CrosstabTable({
           },
           currentColumnPage: 0,
           currentColumnPageSize: effectiveColumnsPerPage,
-          serverColumnPageTuples: [],
-          serverColumnPageTuplesPage: 0,
-          serverColumnPageTuplesPageSize: effectiveColumnsPerPage,
         },
       });
     },
