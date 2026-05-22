@@ -16,10 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { getMetricLabel } from '@superset-ui/core';
-import type { QueryFormMetric } from '@superset-ui/core';
-
-import type { CrosstabCalculatedField } from '../../types';
+import type {
+  CrosstabExpressionNode,
+  CrosstabV4CalculatedField,
+} from '../../types';
 
 export const ERR_CROSSTAB_CALC_DIALECT = 'ERR_CROSSTAB_CALC_DIALECT';
 export const ERR_CROSSTAB_CALC_FIELD = 'ERR_CROSSTAB_CALC_FIELD';
@@ -30,10 +30,14 @@ export type CalcSqlDialect = 'doris';
 export type EmitCalculatedFieldSqlArgs = {
   dialect: CalcSqlDialect | string;
   metricSql: Record<string, string>;
-  parameterValues: Record<string, number>;
+  parameterValues: {
+    number: Record<string, number>;
+    text: Record<string, string>;
+  };
 };
 
 const unsafeSqlTokenPattern = /(;|--|\/\*|\*\/|'|\{\{|\}\}|\$\{)/;
+const binaryOperators: ReadonlySet<unknown> = new Set(['+', '-', '*', '/']);
 
 function assertDialect(
   dialect: CalcSqlDialect | string,
@@ -43,22 +47,93 @@ function assertDialect(
   }
 }
 
-function getMetricKey(metric: QueryFormMetric): string {
-  const key = getMetricLabel(metric).trim();
-
-  if (key.length === 0) {
-    throw new Error(ERR_CROSSTAB_CALC_METRIC);
+function assertNonEmptyString(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(ERR_CROSSTAB_CALC_FIELD);
   }
+}
 
-  return key;
+function assertFiniteNumber(value: unknown): asserts value is number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(ERR_CROSSTAB_CALC_FIELD);
+  }
+}
+
+function assertNumericNode(node: CrosstabExpressionNode): void {
+  switch (node.kind) {
+    case 'metric_ref':
+    case 'number_param':
+    case 'literal_number':
+      return;
+    case 'binary_op':
+      assertNumericNode(node.left);
+      assertNumericNode(node.right);
+      return;
+    case 'safe_div':
+    case 'pct':
+    case 'ratio':
+      assertNumericNode(node.numerator);
+      assertNumericNode(node.denominator);
+      return;
+    case 'text_param':
+    case 'literal_text':
+      throw new Error(ERR_CROSSTAB_CALC_FIELD);
+    default:
+      throw new Error(ERR_CROSSTAB_CALC_FIELD);
+  }
+}
+
+function assertNonZeroLiteralDenominator(node: CrosstabExpressionNode): void {
+  if (node.kind === 'literal_number' && node.value === 0) {
+    throw new Error(ERR_CROSSTAB_CALC_FIELD);
+  }
+}
+
+export function validateCalculatedFieldAst(node: CrosstabExpressionNode): void {
+  switch (node.kind) {
+    case 'metric_ref':
+      assertNonEmptyString(node.metricId);
+      return;
+    case 'number_param':
+    case 'text_param':
+      assertNonEmptyString(node.parameterId);
+      return;
+    case 'literal_number':
+      assertFiniteNumber(node.value);
+      return;
+    case 'literal_text':
+      if (typeof node.value !== 'string') {
+        throw new Error(ERR_CROSSTAB_CALC_FIELD);
+      }
+      return;
+    case 'binary_op':
+      if (!binaryOperators.has(node.op)) {
+        throw new Error(ERR_CROSSTAB_CALC_FIELD);
+      }
+      assertNumericNode(node.left);
+      assertNumericNode(node.right);
+      validateCalculatedFieldAst(node.left);
+      validateCalculatedFieldAst(node.right);
+      return;
+    case 'safe_div':
+    case 'pct':
+    case 'ratio':
+      assertNumericNode(node.numerator);
+      assertNumericNode(node.denominator);
+      assertNonZeroLiteralDenominator(node.denominator);
+      validateCalculatedFieldAst(node.numerator);
+      validateCalculatedFieldAst(node.denominator);
+      return;
+    default:
+      throw new Error(ERR_CROSSTAB_CALC_FIELD);
+  }
 }
 
 function getMetricSql(
-  metric: QueryFormMetric,
+  metricId: string,
   metricSql: Record<string, string>,
 ): string {
-  const key = getMetricKey(metric);
-  const sql = metricSql[key];
+  const sql = metricSql[metricId];
 
   if (
     typeof sql !== 'string' ||
@@ -71,63 +146,91 @@ function getMetricSql(
   return sql;
 }
 
-function safeDiv(
-  leftSql: string,
-  rightSql: string,
-  dialect: CalcSqlDialect | string,
-): string {
-  assertDialect(dialect);
-
-  return `(CASE WHEN ${rightSql} = 0 THEN NULL ELSE ${leftSql} / ${rightSql} END)`;
-}
-
-function getFiniteParameter(
-  parameterName: string | undefined,
-  parameterValues: Record<string, number>,
+function getNumberParameter(
+  parameterId: string,
+  parameterValues: EmitCalculatedFieldSqlArgs['parameterValues'],
 ): number {
-  if (parameterName === undefined || parameterName.trim().length === 0) {
-    throw new Error(ERR_CROSSTAB_CALC_FIELD);
-  }
-
-  const parameterValue = parameterValues[parameterName];
+  const value = parameterValues.number[parameterId];
 
   if (
-    !Object.prototype.hasOwnProperty.call(parameterValues, parameterName) ||
-    !Number.isFinite(parameterValue)
+    !Object.prototype.hasOwnProperty.call(parameterValues.number, parameterId) ||
+    !Number.isFinite(value)
   ) {
     throw new Error(ERR_CROSSTAB_CALC_FIELD);
   }
 
-  return parameterValue;
+  return value;
+}
+
+function getTextParameter(
+  parameterId: string,
+  parameterValues: EmitCalculatedFieldSqlArgs['parameterValues'],
+): string {
+  const value = parameterValues.text[parameterId];
+
+  if (
+    !Object.prototype.hasOwnProperty.call(parameterValues.text, parameterId) ||
+    typeof value !== 'string'
+  ) {
+    throw new Error(ERR_CROSSTAB_CALC_FIELD);
+  }
+
+  return value;
+}
+
+function safeDivSql(numeratorSql: string, denominatorSql: string): string {
+  return `(CASE WHEN ${denominatorSql} = 0 THEN NULL ELSE ${numeratorSql} / ${denominatorSql} END)`;
+}
+
+function emitNodeSql(
+  node: CrosstabExpressionNode,
+  args: EmitCalculatedFieldSqlArgs,
+): string {
+  switch (node.kind) {
+    case 'metric_ref':
+      return getMetricSql(node.metricId, args.metricSql);
+    case 'number_param':
+      return String(getNumberParameter(node.parameterId, args.parameterValues));
+    case 'text_param':
+      return JSON.stringify(
+        getTextParameter(node.parameterId, args.parameterValues),
+      );
+    case 'literal_number':
+      return String(node.value);
+    case 'literal_text':
+      return JSON.stringify(node.value);
+    case 'binary_op':
+      return `(${emitNodeSql(node.left, args)} ${node.op} ${emitNodeSql(
+        node.right,
+        args,
+      )})`;
+    case 'safe_div':
+    case 'ratio':
+      return safeDivSql(
+        emitNodeSql(node.numerator, args),
+        emitNodeSql(node.denominator, args),
+      );
+    case 'pct':
+      return `(${safeDivSql(
+        emitNodeSql(node.numerator, args),
+        emitNodeSql(node.denominator, args),
+      )} * 100)`;
+    default:
+      throw new Error(ERR_CROSSTAB_CALC_FIELD);
+  }
 }
 
 export function emitCalculatedFieldSql(
-  field: CrosstabCalculatedField,
+  field: CrosstabV4CalculatedField,
   args: EmitCalculatedFieldSqlArgs,
 ): string {
   assertDialect(args.dialect);
 
-  if (field.id.trim().length === 0 || field.label.trim().length === 0) {
+  if (field.id.trim().length === 0 || field.name.trim().length === 0) {
     throw new Error(ERR_CROSSTAB_CALC_FIELD);
   }
 
-  const leftSql = getMetricSql(field.inputs.leftMetric, args.metricSql);
-  const rightSql = getMetricSql(field.inputs.rightMetric, args.metricSql);
+  validateCalculatedFieldAst(field.ast);
 
-  switch (field.template) {
-    case 'ratio':
-      return safeDiv(leftSql, rightSql, args.dialect);
-    case 'difference':
-      return `(${leftSql} - ${rightSql})`;
-    case 'parameterized_ratio': {
-      const parameterValue = getFiniteParameter(
-        field.inputs.parameterName,
-        args.parameterValues,
-      );
-
-      return `(${safeDiv(leftSql, rightSql, args.dialect)} * ${parameterValue})`;
-    }
-    default:
-      throw new Error(ERR_CROSSTAB_CALC_FIELD);
-  }
+  return emitNodeSql(field.ast, args);
 }

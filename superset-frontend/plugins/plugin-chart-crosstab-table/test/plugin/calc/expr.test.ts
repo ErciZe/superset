@@ -21,217 +21,167 @@ import {
   ERR_CROSSTAB_CALC_FIELD,
   ERR_CROSSTAB_CALC_METRIC,
   emitCalculatedFieldSql,
+  validateCalculatedFieldAst,
 } from '../../../src/plugin/calc/expr';
-import type { CrosstabCalculatedField } from '../../../src/types';
+import type {
+  CrosstabExpressionNode,
+  CrosstabV4CalculatedField,
+} from '../../../src/types';
 
 const metricSql = {
   sales: 'SUM(sales_amount)',
   profit: 'SUM(gross_profit)',
+  orders: 'COUNT(order_id)',
 };
 
-const ratioField: CrosstabCalculatedField = {
-  id: 'gross_margin_rate',
-  label: '毛利率',
-  template: 'ratio',
-  inputs: { leftMetric: 'profit', rightMetric: 'sales' },
-  semantic: 'ratio',
-  formatString: '.2%',
+const parameterValues = {
+  number: {
+    multiplier: 1.25,
+    offset: 10,
+  },
+  text: {
+    region: 'west',
+  },
 };
 
-test('emits Doris safe division for ratio', () => {
+function field(ast: CrosstabExpressionNode): CrosstabV4CalculatedField {
+  return {
+    id: 'gross_margin_rate',
+    name: '毛利率',
+    resultType: 'number',
+    ast,
+  };
+}
+
+function emit(ast: CrosstabExpressionNode): string {
+  return emitCalculatedFieldSql(field(ast), {
+    dialect: 'doris',
+    metricSql,
+    parameterValues,
+  });
+}
+
+test('safe_div metric refs emits Doris safe division', () => {
   expect(
-    emitCalculatedFieldSql(ratioField, {
-      dialect: 'doris',
-      metricSql,
-      parameterValues: {},
+    emit({
+      kind: 'safe_div',
+      numerator: { kind: 'metric_ref', metricId: 'profit' },
+      denominator: { kind: 'metric_ref', metricId: 'sales' },
     }),
   ).toBe(
     '(CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END)',
   );
 });
 
-test.each([
-  ['blank id', { id: ' ' }],
-  ['blank label', { label: ' ' }],
-  ['blank id and label', { id: ' ', label: ' ' }],
-])('rejects calculated fields with %s', (_label, fieldPatch) => {
-  expect(() =>
-    emitCalculatedFieldSql(
-      {
-        ...ratioField,
-        ...fieldPatch,
-      },
-      {
-        dialect: 'doris',
-        metricSql,
-        parameterValues: {},
-      },
-    ),
-  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
-});
-
-test('rejects quoted string literals in metric SQL', () => {
-  expect(() =>
-    emitCalculatedFieldSql(ratioField, {
-      dialect: 'doris',
-      metricSql: {
-        sales: metricSql.sales,
-        profit: "SUM(CASE WHEN state = 'CA' THEN gross_profit ELSE 0 END)",
-      },
-      parameterValues: {},
+test('pct emits safe division times 100', () => {
+  expect(
+    emit({
+      kind: 'pct',
+      numerator: { kind: 'metric_ref', metricId: 'profit' },
+      denominator: { kind: 'metric_ref', metricId: 'sales' },
     }),
-  ).toThrow(ERR_CROSSTAB_CALC_METRIC);
-});
-
-test('emits difference', () => {
-  expect(
-    emitCalculatedFieldSql(
-      {
-        ...ratioField,
-        id: 'gross_profit_delta',
-        label: '毛利差',
-        template: 'difference',
-        semantic: 'additive',
-      },
-      {
-        dialect: 'doris',
-        metricSql,
-        parameterValues: {},
-      },
-    ),
-  ).toBe('(SUM(gross_profit) - SUM(sales_amount))');
-});
-
-test('emits parameterized ratio', () => {
-  expect(
-    emitCalculatedFieldSql(
-      {
-        ...ratioField,
-        template: 'parameterized_ratio',
-        inputs: {
-          ...ratioField.inputs,
-          parameterName: 'adjustmentRate',
-        },
-      },
-      {
-        dialect: 'doris',
-        metricSql,
-        parameterValues: { adjustmentRate: 1.25 },
-      },
-    ),
   ).toBe(
-    '((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 1.25)',
+    '((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 100)',
   );
 });
 
-test('rejects unsupported dialects', () => {
-  expect(() =>
-    emitCalculatedFieldSql(ratioField, {
-      dialect: 'postgresql',
-      metricSql,
-      parameterValues: {},
+test('ratio behaves as safe division', () => {
+  expect(
+    emit({
+      kind: 'ratio',
+      numerator: { kind: 'metric_ref', metricId: 'profit' },
+      denominator: { kind: 'metric_ref', metricId: 'orders' },
     }),
-  ).toThrow(ERR_CROSSTAB_CALC_DIALECT);
+  ).toBe(
+    '(CASE WHEN COUNT(order_id) = 0 THEN NULL ELSE SUM(gross_profit) / COUNT(order_id) END)',
+  );
 });
 
-test('rejects missing metric references', () => {
-  expect(() =>
-    emitCalculatedFieldSql(ratioField, {
-      dialect: 'doris',
-      metricSql: { sales: metricSql.sales },
-      parameterValues: {},
+test('emits binary arithmetic with number params', () => {
+  expect(
+    emit({
+      kind: 'binary_op',
+      op: '+',
+      left: {
+        kind: 'binary_op',
+        op: '*',
+        left: { kind: 'metric_ref', metricId: 'profit' },
+        right: { kind: 'number_param', parameterId: 'multiplier' },
+      },
+      right: { kind: 'number_param', parameterId: 'offset' },
     }),
-  ).toThrow(ERR_CROSSTAB_CALC_METRIC);
+  ).toBe('((SUM(gross_profit) * 1.25) + 10)');
 });
 
-test('rejects parameterized ratio without parameter name', () => {
+test('rejects missing metrics', () => {
   expect(() =>
-    emitCalculatedFieldSql(
-      {
-        ...ratioField,
-        template: 'parameterized_ratio',
-      },
-      {
-        dialect: 'doris',
-        metricSql,
-        parameterValues: { adjustmentRate: 1.25 },
-      },
-    ),
-  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
-});
-
-test('rejects parameterized ratio when parameter value is missing', () => {
-  expect(() =>
-    emitCalculatedFieldSql(
-      {
-        ...ratioField,
-        template: 'parameterized_ratio',
-        inputs: {
-          ...ratioField.inputs,
-          parameterName: 'adjustmentRate',
-        },
-      },
-      {
-        dialect: 'doris',
-        metricSql,
-        parameterValues: {},
-      },
-    ),
-  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
-});
-
-test('rejects parameterized ratio when parameter value is non-finite', () => {
-  expect(() =>
-    emitCalculatedFieldSql(
-      {
-        ...ratioField,
-        template: 'parameterized_ratio',
-        inputs: {
-          ...ratioField.inputs,
-          parameterName: 'adjustmentRate',
-        },
-      },
-      {
-        dialect: 'doris',
-        metricSql,
-        parameterValues: { adjustmentRate: Number.NaN },
-      },
-    ),
-  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
-});
-
-test('rejects unsafe SQL metric expressions', () => {
-  expect(() =>
-    emitCalculatedFieldSql(ratioField, {
-      dialect: 'doris',
-      metricSql: {
-        ...metricSql,
-        profit: 'SUM(profit); DROP TABLE chart',
-      },
-      parameterValues: {},
+    emit({
+      kind: 'safe_div',
+      numerator: { kind: 'metric_ref', metricId: 'missing_metric' },
+      denominator: { kind: 'metric_ref', metricId: 'sales' },
     }),
   ).toThrow(ERR_CROSSTAB_CALC_METRIC);
 });
 
 test.each([
-  ['line comment', '--', 'SUM(profit) -- comment'],
-  ['block comment start', '/*', 'SUM(/* profit)'],
-  ['block comment end', '*/', 'SUM(profit */)'],
-  ['template start', '{{', 'SUM({{ profit)'],
-  ['template end', '}}', 'SUM(profit }})'],
-  ['template expression', '${', 'SUM(profit ${ adjustmentRate)'],
-])(
-  'rejects unsafe SQL metric expressions containing %s token %s',
-  (_label, _token, profitSql) => {
+  ['semicolon', 'SUM(profit); DROP TABLE chart'],
+  ['line comment', 'SUM(profit) -- comment'],
+  ['block comment start', 'SUM(/* profit)'],
+  ['block comment end', 'SUM(profit */)'],
+  ['single quote', "SUM(CASE WHEN state = 'CA' THEN profit ELSE 0 END)"],
+  ['template start', 'SUM({{ profit)'],
+  ['template end', 'SUM(profit }})'],
+  ['template expression', 'SUM(profit ${ multiplier)'],
+])('rejects unsafe metric SQL containing %s', (_label, profitSql) => {
+  expect(() =>
+    emitCalculatedFieldSql(field({ kind: 'metric_ref', metricId: 'profit' }), {
+      dialect: 'doris',
+      metricSql: {
+        ...metricSql,
+        profit: profitSql,
+      },
+      parameterValues,
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_METRIC);
+});
+
+test('rejects text params inside numeric expressions', () => {
+  expect(() =>
+    emit({
+      kind: 'binary_op',
+      op: '+',
+      left: { kind: 'metric_ref', metricId: 'profit' },
+      right: { kind: 'text_param', parameterId: 'region' },
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
+test.each(['safe_div', 'pct', 'ratio'] as const)(
+  'rejects literal zero denominator in %s during validation',
+  kind => {
     expect(() =>
-      emitCalculatedFieldSql(ratioField, {
-        dialect: 'doris',
-        metricSql: {
-          ...metricSql,
-          profit: profitSql,
-        },
-        parameterValues: {},
+      validateCalculatedFieldAst({
+        kind,
+        numerator: { kind: 'metric_ref', metricId: 'profit' },
+        denominator: { kind: 'literal_number', value: 0 },
       }),
-    ).toThrow(ERR_CROSSTAB_CALC_METRIC);
+    ).toThrow(ERR_CROSSTAB_CALC_FIELD);
   },
 );
+
+test('rejects unsupported dialects', () => {
+  expect(() =>
+    emitCalculatedFieldSql(
+      field({
+        kind: 'safe_div',
+        numerator: { kind: 'metric_ref', metricId: 'profit' },
+        denominator: { kind: 'metric_ref', metricId: 'sales' },
+      }),
+      {
+        dialect: 'postgresql',
+        metricSql,
+        parameterValues,
+      },
+    ),
+  ).toThrow(ERR_CROSSTAB_CALC_DIALECT);
+});
