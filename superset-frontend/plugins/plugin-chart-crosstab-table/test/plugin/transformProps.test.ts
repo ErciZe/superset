@@ -52,7 +52,7 @@ const normalizedDynamicColumnGroupBy: CrosstabDynamicGroupByConfig = {
   slots: [
     {
       id: '__legacy__',
-      label: '分组维度',
+      label: 'Group dimension',
       placement: 'columns',
       slotIndex: 1,
       spliceCount: 1,
@@ -135,6 +135,69 @@ const dynamicMetric: CrosstabDynamicMetricConfig = {
   ],
 };
 
+const canonicalParameterizedCalculatedFormData: CrosstabFormData = {
+  datasource: '7__table',
+  viz_type: 'crosstab-table',
+  groupbyRows: ['category'],
+  groupbyColumns: ['biz_date'],
+  crosstabFieldConfig: {
+    rows: [{ field: 'category' }],
+    columns: [{ field: 'biz_date' }],
+    metrics: [
+      {
+        metric: {
+          expressionType: 'SQL',
+          label: 'profit',
+          sqlExpression: 'SUM(gross_profit)',
+        },
+        semantic: 'additive',
+      },
+      {
+        metric: {
+          expressionType: 'SQL',
+          label: 'sales',
+          sqlExpression: 'SUM(sales_amount)',
+        },
+        semantic: 'additive',
+      },
+      {
+        metric: '含参毛利率',
+        label: '含参毛利率',
+        calculatedFieldId: 'calc_adjusted_margin',
+      },
+    ],
+  },
+  crosstabParameters: [
+    {
+      id: 'param_adjustment',
+      kind: 'number',
+      name: 'adjustmentRate',
+      label: '调整系数',
+      defaultValue: 1,
+      min: 0,
+      max: 2,
+      step: 0.01,
+    },
+  ],
+  crosstabCalculatedFields: [
+    {
+      id: 'calc_adjusted_margin',
+      name: '含参毛利率',
+      resultType: 'percent',
+      ast: {
+        kind: 'binary_op',
+        op: '*',
+        left: {
+          kind: 'pct',
+          numerator: { kind: 'metric_ref', metricId: 'profit' },
+          denominator: { kind: 'metric_ref', metricId: 'sales' },
+        },
+        right: { kind: 'number_param', parameterId: 'param_adjustment' },
+      },
+    },
+  ],
+};
+
 type CrosstabChartPropsConfig = Omit<ChartPropsConfig, 'theme'> & {
   formData?: CrosstabFormData;
   theme?: ChartPropsConfig['theme'];
@@ -154,54 +217,50 @@ function createProps(props: CrosstabChartPropsConfig) {
 describe('crosstab transformProps', () => {
   it('includes numeric parameter values in effective metric signature', () => {
     const baseProps = createProps({
-      formData: {
-        datasource: '7__table',
-        viz_type: 'crosstab-table',
-        groupbyRows: ['category'],
-        groupbyColumns: ['biz_date'],
-        crosstabFieldConfig: {
-          rows: [{ field: 'category' }],
-          columns: [{ field: 'biz_date' }],
-          metrics: [
-            {
-              metric: {
-                expressionType: 'SQL',
-                label: 'sales',
-                sqlExpression: 'SUM(sales_amount)',
-              },
-              semantic: 'additive',
-            },
-            {
-              metric: {
-                expressionType: 'SQL',
-                label: 'profit',
-                sqlExpression: 'SUM(gross_profit)',
-              },
-              semantic: 'additive',
-            },
-          ],
+      formData: canonicalParameterizedCalculatedFormData,
+      queriesData: [
+        {
+          data: [],
+          colnames: [],
+          coltypes: [],
         },
-        parameters: [
+      ],
+    });
+
+    const signatureA = transformProps({
+      ...baseProps,
+      ownState: { numericParameters: { param_adjustment: 1 } },
+    }).effectiveMetricSignature;
+    const signatureB = transformProps({
+      ...baseProps,
+      ownState: { numericParameters: { param_adjustment: 1.25 } },
+    }).effectiveMetricSignature;
+
+    expect(signatureA).not.toBe(signatureB);
+  });
+
+  it('includes text parameter values in effective metric signature', () => {
+    const baseProps = createProps({
+      formData: {
+        ...canonicalParameterizedCalculatedFormData,
+        crosstabParameters: [
           {
+            id: 'param_adjustment',
             kind: 'number',
             name: 'adjustmentRate',
-            default: 1,
+            label: '调整系数',
+            defaultValue: 1,
             min: 0,
             max: 2,
             step: 0.01,
           },
-        ],
-        calculatedFields: [
           {
-            id: 'adjusted_margin',
-            label: '含参毛利率',
-            template: 'parameterized_ratio',
-            inputs: {
-              leftMetric: 'profit',
-              rightMetric: 'sales',
-              parameterName: 'adjustmentRate',
-            },
-            semantic: 'ratio',
+            id: 'param_country',
+            kind: 'text',
+            name: 'country',
+            label: '国家',
+            defaultValue: 'US',
+            allowedValues: ['US', 'DE'],
           },
         ],
       },
@@ -216,11 +275,11 @@ describe('crosstab transformProps', () => {
 
     const signatureA = transformProps({
       ...baseProps,
-      ownState: { numericParameters: { adjustmentRate: 1 } },
+      ownState: { textParameters: { param_country: 'US' } },
     }).effectiveMetricSignature;
     const signatureB = transformProps({
       ...baseProps,
-      ownState: { numericParameters: { adjustmentRate: 1.25 } },
+      ownState: { textParameters: { param_country: 'DE' } },
     }).effectiveMetricSignature;
 
     expect(signatureA).not.toBe(signatureB);

@@ -125,6 +125,15 @@ describe('crosstab buildQuery', () => {
             {
               metric: {
                 expressionType: 'SQL',
+                label: 'profit',
+                sqlExpression: 'SUM(gross_profit)',
+              },
+              label: '毛利',
+              semantic: 'additive',
+            },
+            {
+              metric: {
+                expressionType: 'SQL',
                 label: 'sales',
                 sqlExpression: 'SUM(sales_amount)',
               },
@@ -132,44 +141,49 @@ describe('crosstab buildQuery', () => {
               semantic: 'additive',
             },
             {
-              metric: {
-                expressionType: 'SQL',
-                label: 'profit',
-                sqlExpression: 'SUM(gross_profit)',
-              },
-              label: '毛利',
-              semantic: 'additive',
+              metric: '含参毛利率',
+              label: '含参毛利率',
+              calculatedFieldId: 'calc_adjusted_margin',
             },
           ],
         },
-        parameters: [
+        crosstabParameters: [
           {
+            id: 'param_adjustment',
             kind: 'number',
             name: 'adjustmentRate',
-            default: 1,
+            label: '调整系数',
+            defaultValue: 1,
             min: 0,
             max: 2,
             step: 0.01,
           },
         ],
-        calculatedFields: [
+        crosstabCalculatedFields: [
           {
-            id: 'adjusted_margin',
-            label: '含参毛利率',
-            template: 'parameterized_ratio',
-            inputs: {
-              leftMetric: 'profit',
-              rightMetric: 'sales',
-              parameterName: 'adjustmentRate',
-            },
-            semantic: 'ratio',
+            id: 'calc_adjusted_margin',
+            name: '含参毛利率',
+            resultType: 'percent',
             formatString: '.2%',
+            ast: {
+              kind: 'binary_op',
+              op: '*',
+              left: {
+                kind: 'pct',
+                numerator: { kind: 'metric_ref', metricId: 'profit' },
+                denominator: { kind: 'metric_ref', metricId: 'sales' },
+              },
+              right: {
+                kind: 'number_param',
+                parameterId: 'param_adjustment',
+              },
+            },
           },
         ],
       },
       {
         ownState: {
-          numericParameters: { adjustmentRate: 1.25 },
+          numericParameters: { param_adjustment: 1.25 },
         },
       },
     );
@@ -180,7 +194,7 @@ describe('crosstab buildQuery', () => {
           expressionType: 'SQL',
           label: '含参毛利率',
           sqlExpression:
-            '((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 1.25)',
+            '(((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 100) * 1.25)',
         }),
       ]),
     );
