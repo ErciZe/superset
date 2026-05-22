@@ -20,10 +20,12 @@ import {
   ERR_CROSSTAB_CALC_DIALECT,
   ERR_CROSSTAB_CALC_FIELD,
   ERR_CROSSTAB_CALC_METRIC,
+  emitCalculatedFieldAstSql,
   emitCalculatedFieldSql,
   validateCalculatedFieldAst,
 } from '../../../src/plugin/calc/expr';
 import type {
+  CrosstabCalculatedField,
   CrosstabExpressionNode,
   CrosstabV4CalculatedField,
 } from '../../../src/types';
@@ -54,7 +56,7 @@ function field(ast: CrosstabExpressionNode): CrosstabV4CalculatedField {
 }
 
 function emit(ast: CrosstabExpressionNode): string {
-  return emitCalculatedFieldSql(field(ast), {
+  return emitCalculatedFieldAstSql(field(ast), {
     dialect: 'doris',
     metricSql,
     parameterValues,
@@ -134,14 +136,17 @@ test.each([
   ['template expression', 'SUM(profit ${ multiplier)'],
 ])('rejects unsafe metric SQL containing %s', (_label, profitSql) => {
   expect(() =>
-    emitCalculatedFieldSql(field({ kind: 'metric_ref', metricId: 'profit' }), {
-      dialect: 'doris',
-      metricSql: {
-        ...metricSql,
-        profit: profitSql,
+    emitCalculatedFieldAstSql(
+      field({ kind: 'metric_ref', metricId: 'profit' }),
+      {
+        dialect: 'doris',
+        metricSql: {
+          ...metricSql,
+          profit: profitSql,
+        },
+        parameterValues,
       },
-      parameterValues,
-    }),
+    ),
   ).toThrow(ERR_CROSSTAB_CALC_METRIC);
 });
 
@@ -171,7 +176,7 @@ test.each(['safe_div', 'pct', 'ratio'] as const)(
 
 test('rejects unsupported dialects', () => {
   expect(() =>
-    emitCalculatedFieldSql(
+    emitCalculatedFieldAstSql(
       field({
         kind: 'safe_div',
         numerator: { kind: 'metric_ref', metricId: 'profit' },
@@ -184,4 +189,25 @@ test('rejects unsupported dialects', () => {
       },
     ),
   ).toThrow(ERR_CROSSTAB_CALC_DIALECT);
+});
+
+test('preserves legacy ratio compiler API', () => {
+  const legacyField: CrosstabCalculatedField = {
+    id: 'gross_margin_rate',
+    label: '毛利率',
+    template: 'ratio',
+    inputs: { leftMetric: 'profit', rightMetric: 'sales' },
+    semantic: 'ratio',
+    formatString: '.2%',
+  };
+
+  expect(
+    emitCalculatedFieldSql(legacyField, {
+      dialect: 'doris',
+      metricSql,
+      parameterValues: {},
+    }),
+  ).toBe(
+    '(CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END)',
+  );
 });
