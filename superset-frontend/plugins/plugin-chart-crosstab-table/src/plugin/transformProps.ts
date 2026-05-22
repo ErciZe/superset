@@ -416,9 +416,7 @@ export default function transformProps(
           ? { selectedDynamicMetric: dynamicMetricResult.selectedDynamicMetric }
           : {}),
         effectiveGroupBySignature: dynamicGroupBy.signature,
-        ...(hasEffectiveMetricSignature
-          ? { effectiveMetricSignature }
-          : {}),
+        ...(hasEffectiveMetricSignature ? { effectiveMetricSignature } : {}),
         currentColumnPage: 0,
         currentColumnPageSize: columnPageSize,
         serverColumnPageTuples: [],
