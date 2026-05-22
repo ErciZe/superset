@@ -105,6 +105,14 @@ function getSavedMetricName(metric: SavedMetric): string | undefined {
   );
 }
 
+function getSavedMetricNames(metric: SavedMetric): string[] {
+  return [
+    nonEmptyString(metric.metric_name),
+    nonEmptyString(metric.label),
+    nonEmptyString(metric.verbose_name),
+  ].filter((name): name is string => name !== undefined);
+}
+
 function getSavedMetricExpression(metric: SavedMetric): string | undefined {
   return (
     nonEmptyString(metric.expression) ??
@@ -113,10 +121,18 @@ function getSavedMetricExpression(metric: SavedMetric): string | undefined {
   );
 }
 
+function isSqlMetric(metric: QueryFormMetric): boolean {
+  return (
+    isRecord(metric) &&
+    metric.expressionType === 'SQL' &&
+    nonEmptyString(metric.sqlExpression) !== undefined
+  );
+}
+
 function metricFromSavedMetric(
   metric: SavedMetric,
 ): QueryFormMetric | undefined {
-  if (metric.metric) {
+  if (metric.metric && isSqlMetric(metric.metric)) {
     return metric.metric;
   }
 
@@ -141,10 +157,14 @@ function metricFromSavedMetric(
 function getSavedMetricLookup(savedMetrics: SavedMetric[]) {
   return new Map(
     savedMetrics.flatMap(metric => {
-      const metricName = getSavedMetricName(metric);
       const metricValue = metricFromSavedMetric(metric);
 
-      return metricName && metricValue ? [[metricName, metricValue]] : [];
+      return metricValue
+        ? getSavedMetricNames(metric).map(metricName => [
+            metricName,
+            metricValue,
+          ])
+        : [];
     }),
   );
 }
@@ -256,6 +276,34 @@ function getMetricOptions(
     .filter((option): option is MetricOption => option !== undefined);
 }
 
+function getSavedMetricOptionLookup(
+  metricOptions: MetricOption[],
+  savedMetrics: SavedMetric[],
+): Map<string, MetricOption> {
+  const optionByValue = new Map(
+    metricOptions.map(option => [option.value, option] as const),
+  );
+  const optionLookup = new Map(optionByValue);
+
+  savedMetrics.forEach(metric => {
+    const option = getSavedMetricNames(metric)
+      .map(alias => optionByValue.get(alias))
+      .find(
+        (metricOption): metricOption is MetricOption => metricOption !== undefined,
+      );
+
+    if (!option) {
+      return;
+    }
+
+    getSavedMetricNames(metric).forEach(alias => {
+      optionLookup.set(alias, option);
+    });
+  });
+
+  return optionLookup;
+}
+
 function getFieldConfig(formData?: CrosstabFormData): CrosstabFieldConfig {
   return formData?.crosstabFieldConfig ?? {};
 }
@@ -264,12 +312,16 @@ function getSelectedMetricValue(
   selectedValue: string | undefined,
   metricOptions: MetricOption[],
   fallbackIndex: number,
+  metricOptionLookup?: Map<string, MetricOption>,
 ): string | undefined {
-  if (
-    selectedValue !== undefined &&
-    metricOptions.some(option => option.value === selectedValue)
-  ) {
-    return selectedValue;
+  if (selectedValue !== undefined) {
+    const option =
+      metricOptionLookup?.get(selectedValue) ??
+      metricOptions.find(metricOption => metricOption.value === selectedValue);
+
+    if (option) {
+      return option.value;
+    }
   }
 
   return metricOptions[fallbackIndex]?.value;
@@ -417,6 +469,10 @@ export default function CrosstabCalculatedFieldsControl({
     () => getMetricOptions(formData, savedMetrics),
     [formData, savedMetrics],
   );
+  const savedMetricOptionLookup = useMemo(
+    () => getSavedMetricOptionLookup(metricOptions, savedMetrics),
+    [metricOptions, savedMetrics],
+  );
   const [draft, setDraft] = useState<CalculatedFieldDraft>({
     fieldId: 'profitRate',
     fieldName: t('Profit rate'),
@@ -426,11 +482,13 @@ export default function CrosstabCalculatedFieldsControl({
     draft.numeratorMetric,
     metricOptions,
     0,
+    savedMetricOptionLookup,
   );
   const resolvedDenominatorMetric = getSelectedMetricValue(
     draft.denominatorMetric,
     metricOptions,
     1,
+    savedMetricOptionLookup,
   );
   const selectedNumeratorMetric = metricOptions.find(
     option => option.value === resolvedNumeratorMetric,

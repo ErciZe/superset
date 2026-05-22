@@ -657,6 +657,166 @@ describe('crosstab controlPanel', () => {
     ]);
   });
 
+  it('resolves verbose-name metric refs to the correct saved metrics when editing', () => {
+    const onChange = jest.fn();
+    const onControlChange = jest.fn();
+    const field = {
+      id: 'calc_margin_pct_v4',
+      name: 'V4示例毛利率',
+      resultType: 'percent' as const,
+      formatString: '.2%',
+      ast: {
+        kind: 'pct' as const,
+        numerator: {
+          kind: 'metric_ref' as const,
+          metricId: 'V4毛利',
+        },
+        denominator: {
+          kind: 'metric_ref' as const,
+          metricId: 'V4销售额',
+        },
+      },
+    };
+
+    render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+          crosstabFieldConfig: {
+            metrics: [
+              {
+                metric: 'V4示例毛利率',
+                label: 'V4示例毛利率',
+                calculatedFieldId: 'calc_margin_pct_v4',
+                semantic: 'ratio',
+                formatString: '.2%',
+              },
+            ],
+          },
+        },
+        name: 'crosstabCalculatedFields',
+        onControlChange,
+        onChange,
+        savedMetrics: [
+          {
+            metric_name: 'v4_sales_amount_sum',
+            verbose_name: 'V4销售额',
+            expression: 'SUM(sales_amount)',
+          },
+          {
+            metric_name: 'v4_gross_profit_sum',
+            verbose_name: 'V4毛利',
+            expression: 'SUM(gross_profit)',
+          },
+        ],
+        value: [field],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Save calculated field'));
+
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'calc_margin_pct_v4',
+        name: 'V4示例毛利率',
+        ast: {
+          kind: 'pct',
+          numerator: {
+            kind: 'metric_ref',
+            metricId: 'v4_gross_profit_sum',
+          },
+          denominator: {
+            kind: 'metric_ref',
+            metricId: 'v4_sales_amount_sum',
+          },
+        },
+      }),
+    ]);
+  });
+
+  it('preserves alias-based visible metric selections when editing calculated fields', () => {
+    const onChange = jest.fn();
+    const onControlChange = jest.fn();
+    const field = {
+      id: 'calc_margin_pct_v4',
+      name: 'V4示例毛利率',
+      resultType: 'percent' as const,
+      formatString: '.2%',
+      ast: {
+        kind: 'pct' as const,
+        numerator: {
+          kind: 'metric_ref' as const,
+          metricId: 'v4_gross_profit_sum',
+        },
+        denominator: {
+          kind: 'metric_ref' as const,
+          metricId: 'v4_sales_amount_sum',
+        },
+      },
+    };
+
+    render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+          crosstabFieldConfig: {
+            metrics: [
+              { metric: 'V4销售额', label: '销售额', semantic: 'additive' },
+              { metric: 'V4毛利', label: '毛利', semantic: 'additive' },
+              {
+                metric: 'V4示例毛利率',
+                label: 'V4示例毛利率',
+                calculatedFieldId: 'calc_margin_pct_v4',
+                semantic: 'ratio',
+                formatString: '.2%',
+              },
+            ],
+          },
+        },
+        name: 'crosstabCalculatedFields',
+        onControlChange,
+        onChange,
+        savedMetrics: [
+          {
+            metric_name: 'v4_sales_amount_sum',
+            verbose_name: 'V4销售额',
+            expression: 'SUM(sales_amount)',
+          },
+          {
+            metric_name: 'v4_gross_profit_sum',
+            verbose_name: 'V4毛利',
+            expression: 'SUM(gross_profit)',
+          },
+        ],
+        value: [field],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Save calculated field'));
+
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'calc_margin_pct_v4',
+        name: 'V4示例毛利率',
+        ast: {
+          kind: 'pct',
+          numerator: {
+            kind: 'metric_ref',
+            metricId: 'V4毛利',
+          },
+          denominator: {
+            kind: 'metric_ref',
+            metricId: 'V4销售额',
+          },
+        },
+      }),
+    ]);
+  });
+
   it('updates an existing calculated field and metric config without duplicates', () => {
     const onChange = jest.fn();
     const onControlChange = jest.fn();
@@ -953,6 +1113,56 @@ describe('crosstab controlPanel', () => {
         savedMetrics: [
           { metric_name: 'saved_sales' },
           { metric_name: 'saved_profit' },
+        ],
+        value: [],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('New calculated field'));
+
+    const errors = catchWindowErrors(() =>
+      fireEvent.click(screen.getByText('Save calculated field')),
+    );
+
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Calculated fields require two saved metrics.',
+        }),
+      ]),
+    );
+    expect(onChange).not.toHaveBeenCalled();
+    expect(setControlValue).not.toHaveBeenCalled();
+  });
+
+  it('rejects saved metric records that only expose non-SQL metric objects', () => {
+    const onChange = jest.fn();
+    const setControlValue = jest.fn();
+
+    render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        actions: { setControlValue },
+        formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+        },
+        name: 'crosstabCalculatedFields',
+        onChange,
+        savedMetrics: [
+          {
+            metric_name: 'saved_sales',
+            metric: {
+              expressionType: 'SIMPLE',
+              label: 'saved_sales',
+            } as QueryFormMetric,
+          },
+          {
+            metric_name: 'saved_profit',
+            metric: {
+              expressionType: 'SIMPLE',
+              label: 'saved_profit',
+            } as QueryFormMetric,
+          },
         ],
         value: [],
       }),
