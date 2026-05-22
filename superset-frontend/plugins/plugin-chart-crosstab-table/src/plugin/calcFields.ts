@@ -207,6 +207,7 @@ function addDatasourceMetricSql(
   key: string,
   sqlExpression: string,
   referencedMetricIds: Set<string>,
+  explicitMetricKeys: Set<string>,
 ): void {
   const existingSqlExpression = metricSql[key];
 
@@ -214,6 +215,10 @@ function addDatasourceMetricSql(
     existingSqlExpression !== undefined &&
     existingSqlExpression !== sqlExpression
   ) {
+    if (explicitMetricKeys.has(key)) {
+      return;
+    }
+
     if (!referencedMetricIds.has(key)) {
       return;
     }
@@ -272,6 +277,39 @@ function addMetricConfigSql(
   return nextMetricSql;
 }
 
+function addExplicitMetricConfigSql(
+  metricSql: Record<string, string>,
+  config: MetricFieldConfig,
+): Record<string, string> {
+  const metricRecord = isObject(config.metric)
+    ? (config.metric as SavedMetricRecord)
+    : undefined;
+  const metricName =
+    typeof config.metric === 'string'
+      ? config.metric
+      : metricRecord === undefined
+        ? undefined
+        : getSavedMetricName(metricRecord);
+  const sqlExpression =
+    getSqlMetricExpression(config.metric) ??
+    (metricRecord === undefined
+      ? undefined
+      : getSavedMetricExpression(metricRecord));
+
+  if (sqlExpression === undefined) {
+    return metricSql;
+  }
+
+  const nextMetricSql = { ...metricSql };
+  const metricLabel = getMetricLabel(config.metric);
+
+  addMetricSql(nextMetricSql, metricLabel, sqlExpression);
+  addMetricSql(nextMetricSql, config.label, sqlExpression);
+  addMetricSql(nextMetricSql, metricName, sqlExpression);
+
+  return nextMetricSql;
+}
+
 function getMetricSqlMap(
   metricConfigs: MetricFieldConfig[],
   formData: CrosstabFormData,
@@ -279,6 +317,15 @@ function getMetricSqlMap(
 ): Record<string, string> {
   const datasourceMetricLookup = getDatasourceMetricLookup(formData);
   const referencedMetricIds = getReferencedMetricIds(calculatedFields);
+  const legacyMetrics = ensureIsArray<QueryFormMetric>(formData.metrics);
+  const explicitMetricSql = [
+    ...legacyMetrics.map(metric => ({ metric })),
+    ...metricConfigs,
+  ].reduce<Record<string, string>>(
+    (metricSql, config) => addExplicitMetricConfigSql(metricSql, config),
+    {},
+  );
+  const explicitMetricKeys = new Set(Object.keys(explicitMetricSql));
   const datasourceMetricSql = getDatasourceSavedMetrics(
     formData,
   ).reduce<Record<string, string>>((metricSql, metric) => {
@@ -296,14 +343,13 @@ function getMetricSqlMap(
         metricName,
         sqlExpression,
         referencedMetricIds,
+        explicitMetricKeys,
       );
     });
 
     return nextMetricSql;
-  }, {});
-  const legacyMetricSql = ensureIsArray<QueryFormMetric>(
-    formData.metrics,
-  ).reduce<Record<string, string>>(
+  }, explicitMetricSql);
+  const legacyMetricSql = legacyMetrics.reduce<Record<string, string>>(
     (metricSql, metric) =>
       addMetricConfigSql(metricSql, { metric }, datasourceMetricLookup),
     datasourceMetricSql,
