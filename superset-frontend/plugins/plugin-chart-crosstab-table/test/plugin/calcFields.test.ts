@@ -24,6 +24,7 @@ import {
 import type {
   CrosstabCalculatedField,
   CrosstabFormData,
+  CrosstabV4CalculatedField,
   MetricFieldConfig,
 } from '../../src/types';
 
@@ -48,185 +49,212 @@ const metricConfigs: MetricFieldConfig[] = [
   },
 ];
 
-const calculatedField: CrosstabCalculatedField = {
-  id: 'adjusted_margin',
-  label: '含参毛利率',
-  template: 'parameterized_ratio',
-  inputs: {
-    leftMetric: 'profit',
-    rightMetric: 'sales',
-    parameterName: 'adjustmentRate',
-  },
-  semantic: 'ratio',
+const calculatedField: CrosstabV4CalculatedField = {
+  id: 'calc_margin_pct',
+  name: '毛利率调整',
+  resultType: 'percent',
   formatString: '.2%',
+  ast: {
+    kind: 'pct',
+    numerator: { kind: 'metric_ref', metricId: 'profit' },
+    denominator: { kind: 'metric_ref', metricId: 'sales' },
+  },
 };
 
 const formData: CrosstabFormData = {
   viz_type: 'crosstab-table',
   datasource: '7__table',
-  calculatedFields: [calculatedField],
+  crosstabCalculatedFields: [calculatedField],
 };
 
-test('expands calculated fields into SQL metric configs', () => {
-  const result = expandCalculatedFieldMetricConfigs({
-    dialect: 'doris',
-    formData,
-    metricConfigs,
-    parameterValues: { adjustmentRate: 1.25 },
-  });
-
-  expect(result.metricConfigs).toHaveLength(3);
-  expect(result.metricConfigs[2]).toEqual({
-    metric: {
-      expressionType: 'SQL',
-      label: '含参毛利率',
-      sqlExpression:
-        '((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 1.25)',
-    },
-    label: '含参毛利率',
-    semantic: 'ratio',
-    formatString: '.2%',
-  });
-});
-
-test('replaces calculated field metric placeholders with generated SQL metrics', () => {
+test('expands canonical AST calculated fields into SQL metric configs', () => {
   const result = expandCalculatedFieldMetricConfigs({
     dialect: 'doris',
     formData,
     metricConfigs: [
       ...metricConfigs,
       {
-        metric: '含参毛利率',
-        label: '含参毛利率',
-        semantic: 'ratio',
-        formatString: '.2%',
-        calculatedFieldId: 'adjusted_margin',
+        metric: '毛利率调整',
+        label: '毛利率调整',
+        calculatedFieldId: 'calc_margin_pct',
       },
     ],
-    parameterValues: { adjustmentRate: 1.25 },
+    parameterValues: { number: {}, text: {} },
   });
 
   expect(result.metricConfigs).toHaveLength(3);
   expect(result.metricConfigs[2]).toEqual({
     metric: {
       expressionType: 'SQL',
-      label: '含参毛利率',
+      label: '毛利率调整',
       sqlExpression:
-        '((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 1.25)',
+        '((CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END) * 100)',
     },
-    label: '含参毛利率',
+    label: '毛利率调整',
     semantic: 'ratio',
     formatString: '.2%',
   });
 });
 
-test('rejects real string metric labels that duplicate calculated fields', () => {
-  expect(() =>
-    expandCalculatedFieldMetricConfigs({
-      dialect: 'doris',
-      formData,
-      metricConfigs: [
-        ...metricConfigs,
-        {
-          metric: '含参毛利率',
-          label: '含参毛利率',
-          semantic: 'ratio',
-          formatString: '.2%',
-        },
-      ],
-      parameterValues: { adjustmentRate: 1.25 },
-    }),
-  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
-});
-
-test('rejects duplicate calculated field ids with different labels', () => {
+test('rejects duplicate calculated field ids', () => {
   expect(() =>
     expandCalculatedFieldMetricConfigs({
       dialect: 'doris',
       formData: {
         ...formData,
-        calculatedFields: [
+        crosstabCalculatedFields: [
           calculatedField,
           {
             ...calculatedField,
-            label: '另一个含参毛利率',
+            name: '另一个毛利率调整',
           },
         ],
       },
       metricConfigs,
-      parameterValues: { adjustmentRate: 1.25 },
+      parameterValues: { number: {}, text: {} },
     }),
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
 
-test('keeps stale calculated field placeholders in duplicate label detection', () => {
-  expect(() =>
-    expandCalculatedFieldMetricConfigs({
-      dialect: 'doris',
-      formData,
-      metricConfigs: [
-        ...metricConfigs,
-        {
-          metric: '含参毛利率',
-          label: '含参毛利率',
-          semantic: 'ratio',
-          formatString: '.2%',
-          calculatedFieldId: 'stale_adjusted_margin',
-        },
-      ],
-      parameterValues: { adjustmentRate: 1.25 },
-    }),
-  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
-});
-
-test('creates stable signatures including parameter value', () => {
-  const signature = getCalculatedFieldsSignature([calculatedField], {
-    adjustmentRate: 1.25,
-  });
-
-  expect(signature).toContain('adjusted_margin');
-  expect(signature).toContain('adjustmentRate=1.25');
-});
-
-test('creates deterministic signatures for reordered field and parameter keys', () => {
-  const reorderedCalculatedField = {
-    semantic: 'ratio',
-    inputs: {
-      parameterName: 'adjustmentRate',
-      rightMetric: 'sales',
-      leftMetric: 'profit',
-    },
-    template: 'parameterized_ratio',
-    formatString: '.2%',
-    label: '含参毛利率',
-    id: 'adjusted_margin',
-  } as CrosstabCalculatedField;
-
-  const signature = getCalculatedFieldsSignature([calculatedField], {
-    secondaryRate: 0.8,
-    adjustmentRate: 1.25,
-  });
-  const reorderedSignature = getCalculatedFieldsSignature(
-    [reorderedCalculatedField],
-    {
-      adjustmentRate: 1.25,
-      secondaryRate: 0.8,
-    },
-  );
-
-  expect(reorderedSignature).toBe(signature);
-});
-
-test('rejects duplicate calculated field labels', () => {
+test('rejects duplicate calculated field names', () => {
   expect(() =>
     expandCalculatedFieldMetricConfigs({
       dialect: 'doris',
       formData: {
         ...formData,
-        calculatedFields: [{ ...calculatedField, label: '销售额' }],
+        crosstabCalculatedFields: [
+          calculatedField,
+          {
+            ...calculatedField,
+            id: 'calc_margin_pct_copy',
+          },
+        ],
       },
       metricConfigs,
-      parameterValues: { adjustmentRate: 1.25 },
+      parameterValues: { number: {}, text: {} },
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
+test('rejects recursive calculated field references', () => {
+  const recursiveFields: CrosstabV4CalculatedField[] = [
+    {
+      id: 'calc_a',
+      name: '计算A',
+      resultType: 'number',
+      ast: { kind: 'metric_ref', metricId: 'calc_b' },
+    },
+    {
+      id: 'calc_b',
+      name: '计算B',
+      resultType: 'number',
+      ast: { kind: 'metric_ref', metricId: 'calc_a' },
+    },
+  ];
+
+  expect(() =>
+    expandCalculatedFieldMetricConfigs({
+      dialect: 'doris',
+      formData: {
+        ...formData,
+        crosstabCalculatedFields: recursiveFields,
+      },
+      metricConfigs,
+      parameterValues: { number: {}, text: {} },
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
+test('rejects malformed canonical field shapes', () => {
+  expect(() =>
+    expandCalculatedFieldMetricConfigs({
+      dialect: 'doris',
+      formData: {
+        ...formData,
+        crosstabCalculatedFields: [
+          {
+            id: 'calc_bad',
+            name: '畸形字段',
+            resultType: 'currency',
+            ast: { kind: 'metric_ref', metricId: 'sales' },
+          },
+        ] as unknown as CrosstabV4CalculatedField[],
+      },
+      metricConfigs,
+      parameterValues: { number: {}, text: {} },
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
+test('changes signature when number or text parameter values change', () => {
+  const baseSignature = getCalculatedFieldsSignature([calculatedField], {
+    number: { adjustmentRate: 1.25 },
+    text: { scenario: 'base' },
+  });
+
+  expect(
+    getCalculatedFieldsSignature([calculatedField], {
+      number: { adjustmentRate: 1.5 },
+      text: { scenario: 'base' },
+    }),
+  ).not.toBe(baseSignature);
+  expect(
+    getCalculatedFieldsSignature([calculatedField], {
+      number: { adjustmentRate: 1.25 },
+      text: { scenario: 'stress' },
+    }),
+  ).not.toBe(baseSignature);
+});
+
+test('creates deterministic signatures for reordered parameter keys', () => {
+  const signature = getCalculatedFieldsSignature([calculatedField], {
+    number: {
+      secondaryRate: 0.8,
+      adjustmentRate: 1.25,
+    },
+    text: {
+      scenario: 'base',
+      region: '华东',
+    },
+  });
+  const reorderedSignature = getCalculatedFieldsSignature([calculatedField], {
+    number: {
+      adjustmentRate: 1.25,
+      secondaryRate: 0.8,
+    },
+    text: {
+      region: '华东',
+      scenario: 'base',
+    },
+  });
+
+  expect(reorderedSignature).toBe(signature);
+});
+
+test('rejects legacy calculatedFields on the strict canonical path', () => {
+  const legacyField: CrosstabCalculatedField = {
+    id: 'adjusted_margin',
+    label: '含参毛利率',
+    template: 'parameterized_ratio',
+    inputs: {
+      leftMetric: 'profit',
+      rightMetric: 'sales',
+      parameterName: 'adjustmentRate',
+    },
+    semantic: 'ratio',
+    formatString: '.2%',
+  };
+
+  expect(() =>
+    expandCalculatedFieldMetricConfigs({
+      dialect: 'doris',
+      formData: {
+        ...formData,
+        crosstabCalculatedFields: undefined,
+        calculatedFields: [legacyField],
+      },
+      metricConfigs,
+      parameterValues: { number: { adjustmentRate: 1.25 }, text: {} },
     }),
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
