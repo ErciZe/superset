@@ -104,6 +104,23 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'datasourceMetrics',
+            config: {
+              type: 'HiddenControl',
+              label: t('Datasource metrics'),
+              hidden: true,
+              default: [],
+              mapStateToProps: ({ datasource }) => ({
+                value:
+                  datasource && 'metrics' in datasource
+                    ? datasource.metrics
+                    : [],
+              }),
+            },
+          },
+        ],
         ['adhoc_filters'],
         ['row_limit'],
       ],

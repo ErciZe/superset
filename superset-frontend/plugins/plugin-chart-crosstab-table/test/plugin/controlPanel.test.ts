@@ -157,6 +157,7 @@ describe('crosstab controlPanel', () => {
     expect(controlNames).toEqual(
       expect.arrayContaining([
         'crosstabFieldConfig',
+        'datasourceMetrics',
         'dynamicGroupBy',
         'dynamicMetric',
         'crosstabParameters',
@@ -174,6 +175,28 @@ describe('crosstab controlPanel', () => {
         'conditionalFormatting',
       ]),
     );
+  });
+
+  it('keeps datasource saved metrics in hidden form data for calculated fields', () => {
+    const config = getControlConfig('datasourceMetrics') as {
+      hidden?: boolean;
+      mapStateToProps?: (state: {
+        datasource?: { metrics?: QueryFormMetric[] };
+      }) => { value: QueryFormMetric[] };
+      type?: string;
+    };
+    const metrics = [sqlMetric('sales', 'SUM(sales_amount)')];
+
+    expect(config).toEqual(
+      expect.objectContaining({
+        type: 'HiddenControl',
+        hidden: true,
+        default: [],
+      }),
+    );
+    expect(
+      config.mapStateToProps?.({ datasource: { metrics } }),
+    ).toEqual({ value: metrics });
   });
 
   it('places dynamic slot controls before crosstab totals controls', () => {
