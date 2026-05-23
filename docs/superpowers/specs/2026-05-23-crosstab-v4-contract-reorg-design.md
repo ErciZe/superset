@@ -15,6 +15,7 @@ The key change is scope posture:
 - treat V4 completion as a contract reorganization, not a narrow patch;
 - directly replace the current V4 template-era contract in development stage 2;
 - remove legacy V4 write paths instead of preserving long-lived compatibility;
+- keep V4 numeric-only and defer text parameters to a later conditional phase;
 - close source validation, saved-slice truth, query generation, and formal
   acceptance as one product boundary.
 
@@ -54,6 +55,7 @@ saved slice.
 - No arbitrary SQL or Jinja editor.
 - No new backend API if the existing chart save and chart data flow are
   sufficient.
+- No text parameters or text-result calculated fields in this phase.
 - No V4.1 or V4.2 features such as conditionals, cumulative calculations,
   year-over-year, or period-over-period logic.
 - No cross-chart abstraction of the Crosstab parameter or AST model in this
@@ -69,7 +71,7 @@ V4 persists exactly three business-facing objects:
 
 Responsibilities:
 
-- `crosstabParameters` defines chart-local number and text parameters.
+- `crosstabParameters` defines chart-local number parameters.
 - `crosstabCalculatedFields` defines chart-local calculated metrics through a
   typed AST.
 - `crosstabFieldConfig.metrics` defines which metrics or calculated fields are
@@ -77,43 +79,35 @@ Responsibilities:
 
 `query_context` is derived cache, not persisted truth.
 
-Top-level `metrics` is not part of the V4 contract.
+Top-level `metrics` is not part of the V4 contract. The implementation must
+remove query-time fallbacks to top-level `metrics` for V4 and must not save a
+non-empty top-level `metrics` value for a V4 Crosstab chart.
 
-The system may still need to read incidental stale metadata while code is being
-replaced during development, but the reorganized implementation must not write
-or preserve a dual-track V4 state. After a save, the chart should have exactly
-one interpretable V4 truth surface.
+Legacy V4 fields such as `parameters` and `calculatedFields` are invalid inputs
+for development stage 2. The implementation should remove their read/write
+paths. If stale metadata reaches the reorganized V4 path before a save, it
+should produce an explicit error instead of being migrated, ignored, or merged.
+After a save, the chart must have exactly one interpretable V4 truth surface.
 
 ## Data Model
 
 ```ts
-type CrosstabParameter =
-  | {
-      id: string;
-      kind: 'number';
-      name: string;
-      label: string;
-      defaultValue: number;
-      min?: number;
-      max?: number;
-      step?: number;
-      unit?: string;
-    }
-  | {
-      id: string;
-      kind: 'text';
-      name: string;
-      label: string;
-      defaultValue: string;
-      allowedValues?: string[];
-    };
+type CrosstabParameter = {
+  id: string;
+  kind: 'number';
+  name: string;
+  label: string;
+  defaultValue: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+};
 
 type CrosstabExpressionNode =
   | { kind: 'metric_ref'; metricId: string }
   | { kind: 'number_param'; parameterId: string }
-  | { kind: 'text_param'; parameterId: string }
   | { kind: 'literal_number'; value: number }
-  | { kind: 'literal_text'; value: string }
   | {
       kind: 'binary_op';
       op: '+' | '-' | '*' | '/';
@@ -141,7 +135,7 @@ type CrosstabCalculatedField = {
   id: string;
   name: string;
   description?: string;
-  resultType: 'number' | 'ratio' | 'percent' | 'text';
+  resultType: 'number' | 'ratio' | 'percent';
   formatString?: string;
   ast: CrosstabExpressionNode;
 };
@@ -188,9 +182,10 @@ Required checks:
 
 - unique parameter IDs and names;
 - unique calculated field IDs and names;
+- no legacy V4 `parameters` or `calculatedFields` input;
 - valid metric references;
 - valid parameter references;
-- no text parameter inside numeric arithmetic;
+- no `text_param` or `literal_text` node in V4;
 - numeric-only arguments for `safe_div`, `pct`, and `ratio`;
 - no empty AST;
 - no unsupported node kinds;
@@ -213,12 +208,15 @@ Responsibilities:
   path;
 - reject unsupported cases explicitly.
 
-It must not infer user intent from malformed state.
+It must not infer user intent from malformed state, and it must not fall back to
+top-level `metrics` when `crosstabFieldConfig.metrics` is missing or stale.
 
 ### Query and Render Layer
 
 - `buildQuery` consumes compiled definitions and produces the request payload.
-- `transformProps` consumes results and display metadata only.
+- `transformProps` consumes results and display metadata only. It may read
+  canonical definitions for labels, signatures, and UI coherence, but it must
+  not compile calculated fields or repair persisted definitions.
 - render code must not reconstruct calculated-field definitions from query data.
 
 This separation keeps query generation, rendering, and state persistence from
@@ -237,7 +235,6 @@ Persisted state:
 Runtime-only state remains in `ownState`, including:
 
 - current number parameter values;
-- current text parameter values;
 - selected dynamic metric;
 - effective metric signature;
 - column pagination state;
@@ -247,6 +244,8 @@ Runtime-only state remains in `ownState`, including:
 Save and reload requirements:
 
 - saving a chart writes only canonical V4 definitions;
+- saving a chart clears or omits top-level `metrics`, legacy `parameters`, and
+  legacy `calculatedFields`;
 - reopening the chart rehydrates controls from the same canonical definitions;
 - selected metrics, visible controls, and generated query inputs stay aligned;
 - `query_context` is regenerated as derived state and must not act as an
@@ -263,6 +262,7 @@ In scope:
 - parameter normalization and runtime resolution utilities;
 - AST validation and compilation utilities;
 - calculated-field normalization and metric resolution;
+- field-config metric source helpers;
 - parameter and calculated-field control components;
 - control panel wiring;
 - `buildQuery`;
@@ -289,6 +289,7 @@ Verify the new contract in isolation:
 - AST validation;
 - calculated-field normalization and cycle detection;
 - controlled query compilation;
+- rejection or removal of legacy V4 fields and top-level metric fallbacks;
 - control-panel editing flows;
 - `ownState` stripping;
 - `transformProps` staying result-driven.
@@ -302,6 +303,8 @@ Verify the persisted chart metadata directly:
 
 - `params` contains only the new V4 truth surface;
 - selected metrics resolve through `crosstabFieldConfig.metrics`;
+- top-level `metrics`, legacy `parameters`, and legacy `calculatedFields` are
+  absent or empty after save;
 - `query_context` is derived state, not an independent source of truth;
 - reopening Explore shows the same definitions that are saved.
 
@@ -312,7 +315,13 @@ Use slice 10 as the formal acceptance chart and keep evidence for:
 - metadata backup;
 - Explore edit and save;
 - reopen and reload;
+- saved `params` evidence showing canonical V4 fields and no split metric truth;
+- request payload or regenerated `query_context` evidence showing the compiled
+  calculated metric used by the query;
+- compiled adhoc metric expression identity for the selected V4 metric;
 - `POST /api/v1/chart/data?form_data={"slice_id":10}` returning HTTP `200`;
+- a response-level assertion for the selected V4 metric value or metric column,
+  so HTTP success cannot hide a wrong expression;
 - screenshot capture;
 - explicit rollback instructions and evidence.
 
@@ -324,6 +333,9 @@ The phase is complete only when all of the following are true:
   calculated fields through the canonical contract only;
 - no split truth remains across `params`, top-level `metrics`, and
   `query_context`;
+- top-level `metrics` and legacy V4 fields are not saved as parallel truth;
+- the formal acceptance evidence proves both HTTP success and calculated metric
+  correctness;
 - runtime-only state does not leak into persisted metadata;
 - `slice 10` proves the formal acceptance loop end-to-end;
 - rollback evidence exists for the production-facing acceptance slice.
@@ -331,6 +343,7 @@ The phase is complete only when all of the following are true:
 ## Open Decisions Resolved In This Design
 
 - Use direct replacement, not legacy V4 compatibility.
+- Keep V4 numeric-only; text parameters move to a later phase with conditionals.
 - Treat `query_context` as derived state only.
 - Keep the phase frontend-scoped unless existing chart contracts are proven
   insufficient.
