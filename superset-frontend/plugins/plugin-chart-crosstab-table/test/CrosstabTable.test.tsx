@@ -66,6 +66,7 @@ jest.mock('@superset-ui/core/components', () => {
     treeData?: boolean;
   };
   type MockSelectOption = {
+    disabled?: boolean;
     label?: string | number;
     value: string | number;
   };
@@ -247,7 +248,11 @@ jest.mock('@superset-ui/core/components', () => {
           value={value ?? ''}
         >
           {options.map(option => (
-            <option key={String(option.value)} value={String(option.value)}>
+            <option
+              disabled={option.disabled}
+              key={String(option.value)}
+              value={String(option.value)}
+            >
               {option.label}
             </option>
           ))}
@@ -317,6 +322,16 @@ describe('CrosstabTable', () => {
       throw new Error('Unable to find dynamic group-by select');
     }
     return select;
+  }
+
+  function getSelectOption(select: HTMLSelectElement, value: string) {
+    const option = Array.from(select.options).find(
+      candidate => candidate.value === value,
+    );
+    if (!(option instanceof HTMLOptionElement)) {
+      throw new Error(`Unable to find select option: ${value}`);
+    }
+    return option;
   }
 
   function getDynamicMetricSelect(slotId: string) {
@@ -1479,6 +1494,107 @@ describe('CrosstabTable', () => {
     expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
       'serverColumnTotalCount',
     );
+  });
+
+  it('makes selected dynamic group-by values mutually exclusive across slots', () => {
+    const setDataMask = jest.fn();
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+      },
+      hooks: {
+        setDataMask,
+      },
+      ownState: {
+        selectedDynamicGroupBy: {
+          dimension1: 'date',
+          dimension2: 'shop',
+          dimension3: 'country',
+        },
+      },
+      selectedDynamicGroupBy: {
+        dimension1: 'date',
+        dimension2: 'shop',
+        dimension3: 'country',
+      },
+      rowData: [],
+      columns: [],
+      columnTree: [],
+      generatedColumnIds: [],
+      dynamicGroupByConfig: {
+        enabled: true,
+        slots: [
+          {
+            id: 'dimension1',
+            label: '维度1',
+            placement: 'columns',
+            slotIndex: 0,
+            spliceCount: 1,
+            defaultOptionId: 'date',
+            options: [
+              { id: 'date', label: '日期', columns: ['biz_date'] },
+              { id: 'shop', label: '店铺', columns: ['shop_name'] },
+              { id: 'country', label: '国家', columns: ['country'] },
+              { id: 'msku', label: 'MSKU', columns: ['msku'] },
+            ],
+          },
+          {
+            id: 'dimension2',
+            label: '维度2',
+            placement: 'columns',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'shop',
+            options: [
+              { id: 'date', label: '日期', columns: ['biz_date'] },
+              { id: 'shop', label: '店铺', columns: ['shop_name'] },
+              { id: 'country', label: '国家', columns: ['country'] },
+              { id: 'msku', label: 'MSKU', columns: ['msku'] },
+            ],
+          },
+          {
+            id: 'dimension3',
+            label: '维度3',
+            placement: 'columns',
+            slotIndex: 2,
+            spliceCount: 1,
+            defaultOptionId: 'country',
+            options: [
+              { id: 'date', label: '日期', columns: ['biz_date'] },
+              { id: 'shop', label: '店铺', columns: ['shop_name'] },
+              { id: 'country', label: '国家', columns: ['country'] },
+              { id: 'msku', label: 'MSKU', columns: ['msku'] },
+            ],
+          },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    const firstSelect = getDynamicGroupBySelect('dimension1');
+    expect(getSelectOption(firstSelect, 'date').disabled).toBe(false);
+    expect(getSelectOption(firstSelect, 'shop').disabled).toBe(true);
+    expect(getSelectOption(firstSelect, 'country').disabled).toBe(true);
+    expect(getSelectOption(firstSelect, 'msku').disabled).toBe(false);
+
+    const secondSelect = getDynamicGroupBySelect('dimension2');
+    expect(getSelectOption(secondSelect, 'date').disabled).toBe(true);
+    expect(getSelectOption(secondSelect, 'shop').disabled).toBe(false);
+    expect(getSelectOption(secondSelect, 'country').disabled).toBe(true);
+    expect(getSelectOption(secondSelect, 'msku').disabled).toBe(false);
+
+    act(() => {
+      getDynamicGroupBySelect('dimension2').value = 'date';
+      getDynamicGroupBySelect('dimension2').dispatchEvent(
+        new Event('change', { bubbles: true }),
+      );
+    });
+
+    expect(setDataMask).not.toHaveBeenCalled();
   });
 
   it('renders a numeric parameter control and writes own-state on change', () => {

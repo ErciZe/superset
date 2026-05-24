@@ -85,6 +85,7 @@ type MeasuredGridWidth = {
 type DynamicGroupBySelector = {
   label: string;
   options: {
+    disabled?: boolean;
     label: string;
     value: string;
   }[];
@@ -618,33 +619,51 @@ export default function CrosstabTable({
       return [];
     }
 
-    return [...dynamicGroupByConfig.slots]
-      .sort(
-        (leftSlot, rightSlot) =>
-          DYNAMIC_GROUP_BY_PLACEMENT_ORDER[leftSlot.placement] -
-            DYNAMIC_GROUP_BY_PLACEMENT_ORDER[rightSlot.placement] ||
-          leftSlot.slotIndex - rightSlot.slotIndex,
-      )
-      .map(slot => {
-        const options = slot.options.map(option => ({
-          label: option.label,
-          value: option.id,
-        }));
-        const valueSet = new Set(options.map(option => option.value));
-        const selectedOptionId = selectedDynamicGroupBy?.[slot.id];
-        const value =
-          selectedOptionId && valueSet.has(selectedOptionId)
-            ? selectedOptionId
-            : slot.defaultOptionId;
+    const sortedSlots = [...dynamicGroupByConfig.slots].sort(
+      (leftSlot, rightSlot) =>
+        DYNAMIC_GROUP_BY_PLACEMENT_ORDER[leftSlot.placement] -
+          DYNAMIC_GROUP_BY_PLACEMENT_ORDER[rightSlot.placement] ||
+        leftSlot.slotIndex - rightSlot.slotIndex,
+    );
+    const selectedOptionIdsBySlot = new Map<string, string>();
 
-        return {
-          label: slot.label ?? t('Group dimension'),
-          options,
-          slotId: slot.id,
-          value,
-          valueSet,
-        };
-      });
+    sortedSlots.forEach(slot => {
+      const valueSet = new Set(slot.options.map(option => option.id));
+      const selectedOptionId = selectedDynamicGroupBy?.[slot.id];
+      const value =
+        selectedOptionId && valueSet.has(selectedOptionId)
+          ? selectedOptionId
+          : slot.defaultOptionId;
+
+      selectedOptionIdsBySlot.set(slot.id, value);
+    });
+
+    return sortedSlots.map(slot => {
+      const value =
+        selectedOptionIdsBySlot.get(slot.id) ?? slot.defaultOptionId;
+      const selectedOptionIdsFromOtherSlots = new Set(
+        [...selectedOptionIdsBySlot]
+          .filter(([selectedSlotId]) => selectedSlotId !== slot.id)
+          .map(([, selectedOptionId]) => selectedOptionId),
+      );
+      const options = slot.options.map(option => ({
+        disabled:
+          option.id !== value && selectedOptionIdsFromOtherSlots.has(option.id),
+        label: option.label,
+        value: option.id,
+      }));
+      const valueSet = new Set(
+        options.filter(option => !option.disabled).map(option => option.value),
+      );
+
+      return {
+        label: slot.label ?? t('Group dimension'),
+        options,
+        slotId: slot.id,
+        value,
+        valueSet,
+      };
+    });
   }, [dynamicGroupByConfig, selectedDynamicGroupBy]);
   const dynamicMetricSelectors = useMemo<DynamicMetricSelector[]>(() => {
     if (!dynamicMetricConfig?.enabled) {
