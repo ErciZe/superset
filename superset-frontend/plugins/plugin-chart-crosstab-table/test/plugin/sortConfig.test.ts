@@ -16,6 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import type { DataRecord } from '@superset-ui/core';
+
 import {
   buildDimensionOrderBy,
   compareDataRecordsByDimensionSort,
@@ -289,11 +291,13 @@ test('throws when a hidden sort field is missing from compared records', () => {
       sort: { by: 'shop_order', direction: 'asc', type: 'number' },
     },
   ];
+  const records: DataRecord[] = [
+    { shop_name: 'A' },
+    { shop_name: 'B', shop_order: 1 },
+  ];
 
   expect(() =>
-    [{ shop_name: 'A' }, { shop_name: 'B', shop_order: 1 }].sort(
-      compareDataRecordsByDimensionSort(hiddenSortConfig),
-    ),
+    records.sort(compareDataRecordsByDimensionSort(hiddenSortConfig)),
   ).toThrow('Crosstab sort field must resolve to a column label.');
 });
 
