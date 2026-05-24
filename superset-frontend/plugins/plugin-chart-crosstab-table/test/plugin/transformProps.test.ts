@@ -1441,18 +1441,7 @@ describe('crosstab transformProps', () => {
 
     expect(props.isServerColumnLoading).toBe(true);
     expect(props.rowData).toEqual([]);
-    expect(setDataMask).toHaveBeenCalledWith({
-      ownState: {
-        currentColumnPage: 0,
-        currentColumnPageSize: 5,
-        serverColumnPageColumnSignature:
-          'biz_date\u001ebiz_date\u001edesc\u001edate\u001elast\u001fshop_name',
-        serverColumnPageTuples: [['2026-05-02', 'Shop B']],
-        serverColumnPageTuplesPage: 0,
-        serverColumnPageTuplesPageSize: 5,
-        serverColumnTotalCount: 1,
-      },
-    });
+    expect(setDataMask).not.toHaveBeenCalled();
   });
 
   it('bootstraps server column pagination without existing own state', () => {

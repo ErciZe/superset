@@ -603,20 +603,22 @@ export default function transformProps(
     !resetDynamicMetricOwnState &&
     !resetDynamicMetricConfigOwnState
   ) {
-    const columnTuples = recordsToColumnTuples(
-      (domainQuery?.data ?? []) as DataRecord[],
-      columnFields,
-    );
+    if (queriesData.length === queryPlan.length) {
+      const columnTuples = recordsToColumnTuples(
+        (domainQuery?.data ?? []) as DataRecord[],
+        columnFields,
+      );
 
-    updateServerColumnOwnState(
-      crosstabOwnState as ServerColumnOwnState,
-      setDataMask,
-      currentPage,
-      columnPageSize,
-      columnSignature,
-      columnTuples,
-      totalCount ?? columnTuples.length,
-    );
+      updateServerColumnOwnState(
+        crosstabOwnState as ServerColumnOwnState,
+        setDataMask,
+        currentPage,
+        columnPageSize,
+        columnSignature,
+        columnTuples,
+        totalCount ?? columnTuples.length,
+      );
+    }
 
     if (dataQuery) {
       assertServerColumnRowLimit(dataQuery.rowcount, formData.row_limit);
