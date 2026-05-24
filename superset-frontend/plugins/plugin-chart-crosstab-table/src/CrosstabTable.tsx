@@ -76,6 +76,7 @@ const DYNAMIC_GROUP_BY_PLACEMENT_ORDER = {
   rows: 0,
   columns: 1,
 };
+const PRESERVE_SELECT_OPTION_ORDER = () => 0;
 
 type MeasuredGridWidth = {
   includesRowColumns: boolean;
@@ -1049,6 +1050,7 @@ export default function CrosstabTable({
           updateDynamicGroupByOption(selector.slotId, nextOptionId)
         }
         options={selector.options}
+        sortComparator={PRESERVE_SELECT_OPTION_ORDER}
         value={selector.value}
       />
     </div>

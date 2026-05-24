@@ -75,6 +75,7 @@ jest.mock('@superset-ui/core/components', () => {
     ariaLabel?: string;
     onChange?: (value: string) => void;
     options: MockSelectOption[];
+    sortComparator?: () => number;
     value?: string | number | null;
   };
   const flattenColumnDefs = (
@@ -238,12 +239,14 @@ jest.mock('@superset-ui/core/components', () => {
       ariaLabel,
       onChange,
       options,
+      sortComparator,
       value,
     }: MockSelectProps) => (
       <>
         <select
           aria-label={ariaLabel}
           data-allow-select-all={allowSelectAll ? 'true' : 'false'}
+          data-has-sort-comparator={sortComparator ? 'true' : 'false'}
           onChange={event => onChange?.(event.target.value)}
           value={value ?? ''}
         >
@@ -1582,6 +1585,7 @@ describe('CrosstabTable', () => {
     expect(getSelectOption(firstSelect, 'msku').disabled).toBe(false);
 
     const secondSelect = getDynamicGroupBySelect('dimension2');
+    expect(secondSelect.dataset.hasSortComparator).toBe('true');
     expect(getSelectOption(secondSelect, 'date').disabled).toBe(true);
     expect(getSelectOption(secondSelect, 'shop').disabled).toBe(false);
     expect(getSelectOption(secondSelect, 'country').disabled).toBe(true);
