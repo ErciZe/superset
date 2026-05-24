@@ -37,8 +37,15 @@ export function buildColumnTuples(
   columnFields: string[],
   maxGeneratedColumns: number,
   generatedColumnsPerTuple = 1,
+  columnComparator?: (
+    left: Record<string, unknown>,
+    right: Record<string, unknown>,
+  ) => number,
 ): unknown[][] {
-  const domains = buildColumnDomains(records, columnFields);
+  const orderedRecords = columnComparator
+    ? [...records].sort(columnComparator)
+    : records;
+  const domains = buildColumnDomains(orderedRecords, columnFields);
   let tupleCount = 1;
   let generatedColumnCount = tupleCount * generatedColumnsPerTuple;
   if (generatedColumnCount > maxGeneratedColumns) {

@@ -1169,6 +1169,172 @@ describe('crosstab transformProps', () => {
     );
   });
 
+  it('renders additive row total from planned SQL summary values', () => {
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }],
+          metrics: [{ metric: '指标值', semantic: 'additive' }],
+          rowValueSummaries: {
+            field: 'metric_name_with_unit',
+            values: [{ value: '销量（件）', semantic: 'additive' }],
+          },
+        },
+        showRowTotals: false,
+        showColumnTotals: true,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              metric_name_with_unit: '销量（件）',
+              biz_date: '2025-01-01',
+              指标值: 10,
+            },
+            {
+              metric_name_with_unit: '销量（件）',
+              biz_date: '2025-01-02',
+              指标值: 20,
+            },
+          ],
+        },
+        {
+          data: [
+            {
+              metric_name_with_unit: '销量（件）',
+              指标值: 100,
+            },
+          ],
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(props.rowData[0]).toEqual(
+      expect.objectContaining({
+        metric_name_with_unit: '销量（件）',
+        [CROSSTAB_TOTAL_COLUMN_ID]: 100,
+      }),
+    );
+  });
+
+  it('sorts business metric rows by configured hidden sort field', () => {
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        crosstabFieldConfig: {
+          rows: [
+            {
+              field: 'metric_name_with_unit',
+              sort: { by: 'metric_order', direction: 'asc', type: 'number' },
+            },
+          ],
+          columns: [{ field: 'biz_date' }],
+          metrics: [{ metric: '指标值', semantic: 'additive' }],
+        },
+        showRowTotals: false,
+        showColumnTotals: false,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              metric_name_with_unit: '利润（元）',
+              metric_order: 2,
+              biz_date: '2025-01-01',
+              指标值: 20,
+            },
+            {
+              metric_name_with_unit: '销量（件）',
+              metric_order: 1,
+              biz_date: '2025-01-01',
+              指标值: 10,
+            },
+          ],
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(props.rowData.map(row => row.metric_name_with_unit)).toEqual([
+      '销量（件）',
+      '利润（元）',
+    ]);
+    expect(props.columns.map(column => column.key)).not.toContain(
+      'metric_order',
+    );
+  });
+
+  it('sorts generated columns by configured column sort when data arrives unsorted', () => {
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [
+            {
+              field: 'biz_date',
+              sort: { by: 'biz_date', direction: 'desc', type: 'date' },
+            },
+          ],
+          metrics: [{ metric: '指标值', semantic: 'additive' }],
+        },
+        showRowTotals: false,
+        showColumnTotals: false,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              metric_name_with_unit: '销量（件）',
+              biz_date: '2025-01-01',
+              指标值: 10,
+            },
+            {
+              metric_name_with_unit: '销量（件）',
+              biz_date: '2025-01-03',
+              指标值: 30,
+            },
+            {
+              metric_name_with_unit: '销量（件）',
+              biz_date: '2025-01-02',
+              指标值: 20,
+            },
+          ],
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(props.columnTree.map(column => column.label)).toEqual([
+      '2025-01-03',
+      '2025-01-02',
+      '2025-01-01',
+    ]);
+    expect(props.generatedColumnIds).toEqual([
+      '__crosstab_col__string:10:2025-01-03__metric__指标值',
+      '__crosstab_col__string:10:2025-01-02__metric__指标值',
+      '__crosstab_col__string:10:2025-01-01__metric__指标值',
+    ]);
+  });
+
   it('clears stale metric server column caches and preserves expanded rows', () => {
     const setDataMask = jest.fn();
     const chartProps = new ChartProps<CrosstabFormData>({

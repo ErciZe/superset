@@ -173,6 +173,8 @@ export type CrosstabBuildOptions = {
   columnFields: string[];
   metricFields: string[];
   fieldLabels?: Record<string, string>;
+  rowComparator?: (left: DataRecord, right: DataRecord) => number;
+  columnComparator?: (left: DataRecord, right: DataRecord) => number;
   rowSubtotalDepths?: number[];
   totalLabel?: string;
   showRowSubtotals: boolean;

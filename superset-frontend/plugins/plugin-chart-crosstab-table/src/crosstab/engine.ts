@@ -523,21 +523,21 @@ function getRowSqlSummaryValue({
   options: CrosstabBuildOptions;
   map?: Map<string, number | null>;
 }): number | null | undefined {
+  if (map) {
+    return getRequiredSummaryValue(map, {
+      rowValues: rowLookupFields.map(field => row[field]),
+      columnValues: columnValues as DataRecordValue[],
+      metric,
+    });
+  }
+
   const semantic = options.resolveSemantic?.({ row, metric }) ?? 'additive';
 
   if (!isSqlSemantic(semantic)) {
     return undefined;
   }
 
-  if (!map) {
-    throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
-  }
-
-  return getRequiredSummaryValue(map, {
-    rowValues: rowLookupFields.map(field => row[field]),
-    columnValues: columnValues as DataRecordValue[],
-    metric,
-  });
+  throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
 }
 
 function getColumnSqlSemantic(
@@ -579,56 +579,70 @@ function getColumnSqlSummaryValue({
   options: CrosstabBuildOptions;
   map?: Map<string, number | null>;
 }): number | null | undefined {
-  if (!getColumnSqlSemantic(leafRows, metric, options)) {
-    return undefined;
+  if (map) {
+    return getRequiredSummaryValue(map, {
+      rowValues: [],
+      columnValues: columnValues as DataRecordValue[],
+      metric,
+    });
   }
 
-  if (!map) {
+  if (getColumnSqlSemantic(leafRows, metric, options)) {
     throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   }
 
-  return getRequiredSummaryValue(map, {
-    rowValues: [],
-    columnValues: columnValues as DataRecordValue[],
-    metric,
-  });
+  return undefined;
 }
 
 function getSqlRowTotal(
   row: DataRecord,
   options: CrosstabBuildOptions,
 ): number | null | undefined {
-  if (options.metricFields.length !== 1 || !options.resolveSemantic) {
+  if (options.metricFields.length !== 1) {
     return undefined;
   }
 
   const [metric] = options.metricFields;
-  const semantic = options.resolveSemantic({ row, metric });
+
+  if (options.summaryValues?.rowTotal) {
+    return getRequiredSummaryValue(options.summaryValues.rowTotal, {
+      rowValues: options.rowFields.map(field => row[field]),
+      columnValues: [],
+      metric,
+    });
+  }
+
+  const semantic = options.resolveSemantic?.({ row, metric }) ?? 'additive';
 
   if (!isSqlSemantic(semantic)) {
     return undefined;
   }
 
-  if (!options.summaryValues?.rowTotal) {
-    throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
-  }
-
-  return getRequiredSummaryValue(options.summaryValues.rowTotal, {
-    rowValues: options.rowFields.map(field => row[field]),
-    columnValues: [],
-    metric,
-  });
+  throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
 }
 
 function getSqlGrandTotal(
   leafRows: DataRecord[],
   options: CrosstabBuildOptions,
 ): number | null | undefined {
-  if (options.metricFields.length !== 1 || !options.resolveSemantic) {
+  if (options.metricFields.length !== 1) {
     return undefined;
   }
 
   const [metric] = options.metricFields;
+
+  if (options.summaryValues?.grandTotal) {
+    return getRequiredSummaryValue(options.summaryValues.grandTotal, {
+      rowValues: [],
+      columnValues: [],
+      metric,
+    });
+  }
+
+  if (!options.resolveSemantic) {
+    return undefined;
+  }
+
   const { resolveSemantic } = options;
   const semantics = new Set(
     leafRows.map(row =>
@@ -646,15 +660,7 @@ function getSqlGrandTotal(
     return undefined;
   }
 
-  if (!options.summaryValues?.grandTotal) {
-    throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
-  }
-
-  return getRequiredSummaryValue(options.summaryValues.grandTotal, {
-    rowValues: [],
-    columnValues: [],
-    metric,
-  });
+  throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
 }
 
 function buildSubtotalRows(
@@ -974,11 +980,18 @@ export function buildCrosstab(
   } = options;
   assertBuildOptions(options);
 
+  const orderedRecords = options.rowComparator
+    ? [...records].sort(options.rowComparator)
+    : [...records];
+  const columnRecords = options.columnComparator
+    ? [...records].sort(options.columnComparator)
+    : orderedRecords;
   const columnTuples = buildColumnTuples(
-    records,
+    columnRecords,
     columnFields,
     options.maxGeneratedColumns,
     metricFields.length,
+    options.columnComparator,
   );
   const generatedColumnIds = columnTuples.flatMap(tuple =>
     metricFields.map(metric => metricColumnId(tuple, metric)),
@@ -998,7 +1011,7 @@ export function buildCrosstab(
   const valueColumnIds = [...generatedColumnIds, ...subtotalColumnIds];
   const rows = new Map<string, DataRecord>();
 
-  records.forEach(record => {
+  orderedRecords.forEach(record => {
     const rowKey = buildRowKey(record, rowFields);
     const row = rows.get(rowKey) ?? buildRow(record, rowFields, rowKey);
     const columnTuple = columnFields.map(field => record[field]);

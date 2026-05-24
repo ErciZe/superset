@@ -236,6 +236,132 @@ describe('buildCrosstab', () => {
     });
   });
 
+  it('uses SQL row total summary for additive totals instead of summing visible columns', () => {
+    const rowTotal = buildSummaryResultMap({
+      records: [{ metric_name_with_unit: '销量（件）', 指标值: 100 }],
+      rowFields: ['metric_name_with_unit'],
+      columnFields: [],
+      metricFields: ['指标值'],
+    });
+    const result = buildCrosstab(
+      [
+        {
+          metric_name_with_unit: '销量（件）',
+          biz_date: '2025-01-01',
+          指标值: 10,
+        },
+        {
+          metric_name_with_unit: '销量（件）',
+          biz_date: '2025-01-02',
+          指标值: 20,
+        },
+      ],
+      {
+        rowFields: ['metric_name_with_unit'],
+        columnFields: ['biz_date'],
+        metricFields: ['指标值'],
+        showColumnTotals: true,
+        showRowTotals: false,
+        showRowSubtotals: false,
+        showColumnSubtotals: false,
+        maxGeneratedColumns: 100,
+        defaultRowExpandedDepth: 0,
+        summaryValues: { rowTotal },
+        resolveSemantic: () => 'additive',
+      },
+    );
+
+    expect(result.rowData[0]).toMatchObject({
+      [CROSSTAB_TOTAL_COLUMN_ID]: 100,
+    });
+  });
+
+  it('orders rows by optional row comparator without exposing hidden sort fields', () => {
+    const result = buildCrosstab(
+      [
+        {
+          metric_name_with_unit: '利润（元）',
+          metric_order: 2,
+          biz_date: '2025-01-01',
+          指标值: 20,
+        },
+        {
+          metric_name_with_unit: '销量（件）',
+          metric_order: 1,
+          biz_date: '2025-01-01',
+          指标值: 10,
+        },
+      ],
+      {
+        rowFields: ['metric_name_with_unit'],
+        columnFields: ['biz_date'],
+        metricFields: ['指标值'],
+        showColumnTotals: false,
+        showRowTotals: false,
+        showRowSubtotals: false,
+        showColumnSubtotals: false,
+        maxGeneratedColumns: 100,
+        defaultRowExpandedDepth: 0,
+        rowComparator: (left, right) =>
+          Number(left.metric_order) - Number(right.metric_order),
+      },
+    );
+
+    expect(result.rowData.map(row => row.metric_name_with_unit)).toEqual([
+      '销量（件）',
+      '利润（元）',
+    ]);
+    expect(result.columns.map(column => column.key)).not.toContain(
+      'metric_order',
+    );
+  });
+
+  it('orders generated columns by optional column comparator', () => {
+    const result = buildCrosstab(
+      [
+        {
+          metric_name_with_unit: '销量（件）',
+          biz_date: '2025-01-01',
+          指标值: 10,
+        },
+        {
+          metric_name_with_unit: '销量（件）',
+          biz_date: '2025-01-03',
+          指标值: 30,
+        },
+        {
+          metric_name_with_unit: '销量（件）',
+          biz_date: '2025-01-02',
+          指标值: 20,
+        },
+      ],
+      {
+        rowFields: ['metric_name_with_unit'],
+        columnFields: ['biz_date'],
+        metricFields: ['指标值'],
+        showColumnTotals: false,
+        showRowTotals: false,
+        showRowSubtotals: false,
+        showColumnSubtotals: false,
+        maxGeneratedColumns: 100,
+        defaultRowExpandedDepth: 0,
+        columnComparator: (left, right) =>
+          String(right.biz_date).localeCompare(String(left.biz_date)),
+      },
+    );
+
+    expect(result.columnTree.map(column => column.label)).toEqual([
+      '2025-01-03',
+      '2025-01-02',
+      '2025-01-01',
+    ]);
+    expect(result.generatedColumnIds).toEqual([
+      '__crosstab_col__string:10:2025-01-03__metric__指标值',
+      '__crosstab_col__string:10:2025-01-02__metric__指标值',
+      '__crosstab_col__string:10:2025-01-01__metric__指标值',
+    ]);
+  });
+
   it('uses injected SQL values for non-additive row and grand totals', () => {
     const rowTotal = buildSummaryResultMap({
       records: [{ metric_name_with_unit: '毛利率（%）', 指标值: -9.5145 }],
@@ -515,7 +641,10 @@ describe('buildCrosstab', () => {
 
   it('fails fast for mixed grand total semantics', () => {
     const rowTotal = buildSummaryResultMap({
-      records: [{ metric_name_with_unit: '毛利率（%）', 指标值: -9.5145 }],
+      records: [
+        { metric_name_with_unit: '毛利率（%）', 指标值: -9.5145 },
+        { metric_name_with_unit: '销售额', 指标值: 100 },
+      ],
       rowFields: ['metric_name_with_unit'],
       columnFields: [],
       metricFields: ['指标值'],

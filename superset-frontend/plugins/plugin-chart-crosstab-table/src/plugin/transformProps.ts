@@ -71,6 +71,7 @@ import { buildCrosstabQueryPlan } from './summaryQueryPlan';
 import { buildSummaryResultMap } from './summaryResults';
 import { resolveDynamicGroupByDimensionConfigs } from './dynamicGroupBy';
 import { resolveDynamicMetricConfigs } from './dynamicMetric';
+import { compareDataRecordsByDimensionSort } from './sortConfig';
 import {
   expandCalculatedFieldMetricConfigs,
   getCalculatedFields,
@@ -469,6 +470,14 @@ export default function transformProps(
         validServerColumnPageTuples.length > 0
       : undefined,
   });
+  const rowComparator = dynamicGroupBy.rowConfigs.some(config => config.sort)
+    ? compareDataRecordsByDimensionSort(dynamicGroupBy.rowConfigs)
+    : undefined;
+  const columnComparator = dynamicGroupBy.columnConfigs.some(
+    config => config.sort,
+  )
+    ? compareDataRecordsByDimensionSort(dynamicGroupBy.columnConfigs)
+    : undefined;
   const queriesByPlan = queryDataByPlan(queryPlan, queriesData);
   const domainQuery = serverColumnPagination
     ? findPlannedQuery(
@@ -642,6 +651,8 @@ export default function transformProps(
     maxGeneratedColumns: formData.maxGeneratedColumns ?? 300,
     defaultRowExpandedDepth: formData.defaultRowExpandedDepth ?? 1,
     summaryValues,
+    rowComparator,
+    columnComparator,
     resolveSemantic: ({ row, metric }) =>
       resolveMetricSemantic({
         metric,
