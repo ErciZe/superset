@@ -1346,6 +1346,59 @@ describe('crosstab transformProps', () => {
     });
   });
 
+  it('bootstraps server column pagination for multiple metrics', () => {
+    const setDataMask = jest.fn();
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        groupbyRows: ['msku'],
+        groupbyColumns: ['biz_date', 'shop_name'],
+        metrics: ['amount', 'profit'],
+        serverColumnPagination: true,
+        columnPageSize: 98,
+      },
+      hooks: {
+        setDataMask,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              biz_date: '2026-05-02',
+              shop_name: 'Shop B',
+            },
+          ],
+        },
+        {
+          data: [{ rowcount: 406 }],
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(props.isServerColumnLoading).toBe(true);
+    expect(props.serverColumnCurrentPage).toBe(0);
+    expect(props.serverColumnPageSize).toBe(98);
+    expect(props.serverColumnTotalCount).toBe(406);
+    expect(props.rowData).toEqual([]);
+    expect(setDataMask).toHaveBeenCalledWith({
+      ownState: {
+        currentColumnPage: 0,
+        currentColumnPageSize: 98,
+        serverColumnPageColumnSignature: 'biz_date\u001fshop_name',
+        serverColumnPageTuples: [['2026-05-02', 'Shop B']],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: 98,
+        serverColumnTotalCount: 406,
+      },
+    });
+  });
+
   it('uses server page data and full row totals for server column pagination', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
@@ -1431,6 +1484,84 @@ describe('crosstab transformProps', () => {
         }),
       ]),
     );
+  });
+
+  it('uses server page data for multiple metrics', () => {
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        groupbyRows: ['msku'],
+        groupbyColumns: ['biz_date', 'shop_name'],
+        metrics: ['amount', 'profit'],
+        serverColumnPagination: true,
+        columnPageSize: 98,
+        showRowTotals: false,
+        showRowSubtotals: false,
+        showColumnTotals: false,
+        showColumnSubtotals: false,
+      },
+      ownState: {
+        currentColumnPage: 0,
+        currentColumnPageSize: 98,
+        serverColumnPageTuples: [['2026-05-01', 'Shop A']],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: 98,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              biz_date: '2026-05-01',
+              shop_name: 'Shop A',
+            },
+          ],
+        },
+        {
+          data: [{ rowcount: 406 }],
+        },
+        {
+          data: [
+            {
+              msku: 'MSKU-1',
+              biz_date: '2026-05-01',
+              shop_name: 'Shop A',
+              amount: 10,
+              profit: 2,
+            },
+          ],
+          rowcount: 1,
+        },
+      ],
+      datasource: {
+        verboseMap: {
+          msku: 'MSKU',
+          biz_date: '日期',
+          shop_name: '店铺',
+          amount: '销售额',
+          profit: '利润',
+        },
+      },
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(props.isServerColumnLoading).toBe(false);
+    expect(props.serverColumnTotalCount).toBe(406);
+    expect(props.generatedColumnIds).toEqual([
+      '__crosstab_col__string:10:2026-05-01|string:6:Shop A__metric__amount',
+      '__crosstab_col__string:10:2026-05-01|string:6:Shop A__metric__profit',
+    ]);
+    expect(props.rowData).toEqual([
+      expect.objectContaining({
+        msku: 'MSKU-1',
+        '__crosstab_col__string:10:2026-05-01|string:6:Shop A__metric__amount': 10,
+        '__crosstab_col__string:10:2026-05-01|string:6:Shop A__metric__profit': 2,
+      }),
+    ]);
   });
 
   it('uses SQL row and grand totals for ratio rows resolved by row-value semantic overrides', () => {

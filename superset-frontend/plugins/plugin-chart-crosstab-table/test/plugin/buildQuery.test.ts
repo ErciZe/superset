@@ -1187,26 +1187,67 @@ describe('crosstab buildQuery', () => {
     ).toThrow(ERR_SERVER_COLUMN_PAGINATION_SHAPE);
   });
 
-  it('rejects server column pagination when dynamic metric expands to multiple effective metrics', () => {
-    expect(() =>
-      buildQuery(
-        {
-          datasource: '7__table',
-          viz_type: 'crosstab-table',
-          groupbyRows: ['metric_name_with_unit'],
-          groupbyColumns: ['biz_date', 'shop_name', 'country'],
-          metrics: ['amount', 'profit'],
-          dynamicMetric: dynamicMetricPair,
-          serverColumnPagination: true,
-        } as never,
-        {
-          ownState: {
-            selectedDynamicMetric: {
-              metric_pair: 'amount_and_rate',
-            },
+  it('uses server column pagination when dynamic metric expands to multiple effective metrics', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name', 'country'],
+        metrics: ['amount', 'profit'],
+        dynamicMetric: dynamicMetricPair,
+        serverColumnPagination: true,
+        showRowTotals: false,
+        showColumnTotals: false,
+      } as never,
+      {
+        ownState: {
+          selectedDynamicMetric: {
+            metric_pair: 'amount_and_rate',
           },
-        } as never,
-      ),
+          currentColumnPage: 0,
+          serverColumnPageTuplesPage: 0,
+          serverColumnPageTuples: [['2026-05-01', 'Shop A', 'US']],
+          serverColumnPageColumnSignature:
+            'biz_date\u001fshop_name\u001fcountry',
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries).toHaveLength(3);
+    expect(queryContext.queries[0]).toEqual(
+      expect.objectContaining({
+        columns: ['biz_date', 'shop_name', 'country'],
+        metrics: [],
+      }),
+    );
+    expect(queryContext.queries[1]).toEqual(
+      expect.objectContaining({
+        columns: ['biz_date', 'shop_name', 'country'],
+        is_rowcount: true,
+      }),
+    );
+    expect(queryContext.queries[2]).toEqual(
+      expect.objectContaining({
+        columns: ['metric_name_with_unit', 'biz_date', 'shop_name', 'country'],
+        metrics: ['amount', 'margin_rate'],
+      }),
+    );
+    expect(queryContext.queries[2].extras?.where).toBe(
+      "(biz_date = '2026-05-01' AND shop_name = 'Shop A' AND country = 'US')",
+    );
+  });
+
+  it('rejects server column pagination without effective metrics', () => {
+    expect(() =>
+      buildQuery({
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        groupbyRows: ['metric_name_with_unit'],
+        groupbyColumns: ['biz_date', 'shop_name', 'country'],
+        metrics: [],
+        serverColumnPagination: true,
+      } as never),
     ).toThrow(ERR_SERVER_COLUMN_PAGINATION_SHAPE);
   });
 
