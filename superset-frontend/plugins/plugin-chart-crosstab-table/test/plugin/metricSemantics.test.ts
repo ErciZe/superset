@@ -19,6 +19,7 @@
 import {
   ERR_CROSSTAB_UNKNOWN_METRIC_SEMANTIC,
   hasConfiguredSummarySemantics,
+  hasSqlSummarySemanticConfig,
   resolveMetricSemantic,
   validateSummarySemantics,
 } from '../../src/plugin/metricSemantics';
@@ -73,7 +74,7 @@ describe('crosstab metric semantics', () => {
     expect(semantic).toBe('ratio');
   });
 
-  it('treats row value summaries as requiring SQL summaries even when additive', () => {
+  it('treats row value summaries as configured summary semantics even when additive', () => {
     expect(
       hasConfiguredSummarySemantics(
         [{ metric: '指标值' }],
@@ -84,6 +85,33 @@ describe('crosstab metric semantics', () => {
         },
       ),
     ).toBe(true);
+  });
+
+  it('keeps legacy SQL summary semantic config behavior for ratio metric configs', () => {
+    expect(
+      hasSqlSummarySemanticConfig(
+        [{ metric: '指标值', semantic: 'ratio' }],
+        [],
+      ),
+    ).toBe(true);
+  });
+
+  it('treats ratio row value summaries as SQL summary semantic config', () => {
+    expect(
+      hasSqlSummarySemanticConfig([], [], {
+        field: 'metric_name_with_unit',
+        values: [{ value: '毛利率（%）', semantic: 'ratio' }],
+      }),
+    ).toBe(true);
+  });
+
+  it('does not treat additive row value summaries as SQL summary semantic config', () => {
+    expect(
+      hasSqlSummarySemanticConfig([], [], {
+        field: 'metric_name_with_unit',
+        values: [{ value: '销量（件）', semantic: 'additive' }],
+      }),
+    ).toBe(false);
   });
 
   it('fails fast when summaries include an unknown semantic', () => {
