@@ -114,6 +114,55 @@ test('sorts nulls first or last per config with last as the default', () => {
   ]);
 });
 
+test('keeps nulls last by default when sorting descending', () => {
+  const nullsLastDescConfig: DimensionFieldConfig[] = [
+    {
+      field: 'shop_name',
+      sort: { by: 'shop_order', direction: 'desc', type: 'number' },
+    },
+  ];
+  const records = [
+    { shop_name: 'B', shop_order: 2 },
+    { shop_name: 'A', shop_order: null },
+    { shop_name: 'C', shop_order: 1 },
+  ];
+
+  expect(
+    [...records].sort(compareDataRecordsByDimensionSort(nullsLastDescConfig)),
+  ).toEqual([
+    { shop_name: 'B', shop_order: 2 },
+    { shop_name: 'C', shop_order: 1 },
+    { shop_name: 'A', shop_order: null },
+  ]);
+});
+
+test('keeps nulls first when sorting descending', () => {
+  const nullsFirstDescConfig: DimensionFieldConfig[] = [
+    {
+      field: 'shop_name',
+      sort: {
+        by: 'shop_order',
+        direction: 'desc',
+        type: 'number',
+        nulls: 'first',
+      },
+    },
+  ];
+  const records = [
+    { shop_name: 'B', shop_order: 2 },
+    { shop_name: 'A', shop_order: null },
+    { shop_name: 'C', shop_order: 1 },
+  ];
+
+  expect(
+    [...records].sort(compareDataRecordsByDimensionSort(nullsFirstDescConfig)),
+  ).toEqual([
+    { shop_name: 'A', shop_order: null },
+    { shop_name: 'B', shop_order: 2 },
+    { shop_name: 'C', shop_order: 1 },
+  ]);
+});
+
 test('throws when a configured number sort value is invalid', () => {
   const numberConfig: DimensionFieldConfig[] = [
     {

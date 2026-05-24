@@ -201,14 +201,18 @@ export function compareDataRecordsByDimensionSort(
         throw new Error(ERR_CROSSTAB_SORT_FIELD);
       }
 
+      const leftValue = normalizeValue(left[field], config);
+      const rightValue = normalizeValue(right[field], config);
       const compareResult = compareNullableValues(
-        normalizeValue(left[field], config),
-        normalizeValue(right[field], config),
+        leftValue,
+        rightValue,
         config,
       );
 
       if (compareResult !== 0) {
-        return config.sort?.direction === 'desc'
+        return leftValue !== null &&
+          rightValue !== null &&
+          config.sort?.direction === 'desc'
           ? -compareResult
           : compareResult;
       }
