@@ -18,6 +18,7 @@
  */
 import {
   ERR_CROSSTAB_UNKNOWN_METRIC_SEMANTIC,
+  hasConfiguredSummarySemantics,
   resolveMetricSemantic,
   validateSummarySemantics,
 } from '../../src/plugin/metricSemantics';
@@ -54,6 +55,35 @@ describe('crosstab metric semantics', () => {
         ],
       }),
     ).toBe('ratio');
+  });
+
+  it('resolves row value summaries before legacy semantic overrides', () => {
+    const semantic = resolveMetricSemantic({
+      metric: '指标值',
+      row: { metric_name_with_unit: '毛利率（%）' },
+      metricConfigs: [{ metric: '指标值', semantic: 'additive' }],
+      rowValueSummaries: {
+        field: 'metric_name_with_unit',
+        values: [{ value: '毛利率（%）', semantic: 'ratio' }],
+      },
+      semanticOverrideField: 'metric_name_with_unit',
+      semanticOverrides: [{ value: '毛利率（%）', semantic: 'additive' }],
+    });
+
+    expect(semantic).toBe('ratio');
+  });
+
+  it('treats row value summaries as requiring SQL summaries even when additive', () => {
+    expect(
+      hasConfiguredSummarySemantics(
+        [{ metric: '指标值', semantic: 'additive' }],
+        [],
+        {
+          field: 'metric_name_with_unit',
+          values: [{ value: '销量（件）', semantic: 'additive' }],
+        },
+      ),
+    ).toBe(true);
   });
 
   it('fails fast when summaries include an unknown semantic', () => {

@@ -25,6 +25,7 @@ import {
   type QueryFormMetric,
 } from '@superset-ui/core';
 import type {
+  CrosstabRowValueSummaryConfig,
   MetricFieldConfig,
   MetricSemantic,
   MetricSemanticOverride,
@@ -37,6 +38,7 @@ type ResolveMetricSemanticArgs = {
   metric: QueryFormMetric;
   row?: DataRecord;
   metricConfigs?: MetricFieldConfig[];
+  rowValueSummaries?: CrosstabRowValueSummaryConfig;
   semanticOverrideField?: QueryFormColumn;
   semanticOverrides?: MetricSemanticOverride[];
 };
@@ -47,13 +49,38 @@ type SummarySemanticRequirement = {
   summaryLabel?: string;
 };
 
+function getConfiguredSummarySemantics(
+  metricConfigs: MetricFieldConfig[],
+  semanticOverrides: MetricSemanticOverride[],
+  rowValueSummaries?: CrosstabRowValueSummaryConfig,
+) {
+  return [
+    ...metricConfigs.map(config => config.semantic),
+    ...semanticOverrides.map(override => override.semantic),
+    ...(rowValueSummaries?.values.map(value => value.semantic) ?? []),
+  ];
+}
+
 export function resolveMetricSemantic({
   metric,
   row,
   metricConfigs = [],
+  rowValueSummaries,
   semanticOverrideField,
   semanticOverrides = [],
 }: ResolveMetricSemanticArgs): MetricSemantic {
+  if (rowValueSummaries && row) {
+    const summaryField = getColumnLabel(rowValueSummaries.field);
+    const rowValue = summaryField ? row[summaryField] : undefined;
+    const summary = rowValueSummaries.values.find(item =>
+      Object.is(item.value, rowValue),
+    );
+
+    if (summary) {
+      return summary.semantic;
+    }
+  }
+
   if (semanticOverrideField && row) {
     const overrideField = getColumnLabel(semanticOverrideField);
     const rowValue = overrideField ? row[overrideField] : undefined;
@@ -97,18 +124,28 @@ export function getMetricSemanticLabel(semantic: MetricSemantic) {
   }
 }
 
+export function hasConfiguredSummarySemantics(
+  metricConfigs: MetricFieldConfig[],
+  semanticOverrides: MetricSemanticOverride[],
+  rowValueSummaries?: CrosstabRowValueSummaryConfig,
+) {
+  return getConfiguredSummarySemantics(
+    metricConfigs,
+    semanticOverrides,
+    rowValueSummaries,
+  ).some(semantic => semantic !== undefined);
+}
+
 export function hasSqlSummarySemanticConfig(
   metricConfigs: MetricFieldConfig[],
   semanticOverrides: MetricSemanticOverride[],
+  rowValueSummaries?: CrosstabRowValueSummaryConfig,
 ) {
-  const configuredSemantics: (MetricSemantic | undefined)[] = [
-    ...metricConfigs.map(config => config.semantic),
-    ...semanticOverrides.map(override => override.semantic),
-  ];
-
-  return configuredSemantics.some(
-    semantic => semantic !== undefined && isSqlSummarySemantic(semantic),
-  );
+  return getConfiguredSummarySemantics(
+    metricConfigs,
+    semanticOverrides,
+    rowValueSummaries,
+  ).some(semantic => semantic !== undefined && isSqlSummarySemantic(semantic));
 }
 
 export function validateSummarySemantics(
