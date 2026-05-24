@@ -21,7 +21,7 @@ import type { CrosstabQueryPlanItem, CrosstabSummaryKind } from '../types';
 type BuildCrosstabQueryPlanArgs = {
   rowFields: string[];
   columnFields: string[];
-  hasNonAdditiveSummary: boolean;
+  requiresSqlSummary: boolean;
   showRowTotals: boolean;
   showRowSubtotals: boolean;
   showColumnTotals: boolean;
@@ -77,7 +77,7 @@ export function buildCrosstabQueryPlan(
     ? [serverColumnDomainQuery, serverColumnCountQuery, leafQuery]
     : [leafQuery];
 
-  if (!args.hasNonAdditiveSummary) {
+  if (!args.requiresSqlSummary) {
     return plan;
   }
 
