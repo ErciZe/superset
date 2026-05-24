@@ -445,7 +445,7 @@ export default function transformProps(
   const queryPlan = buildCrosstabQueryPlan({
     rowFields,
     columnFields,
-    hasNonAdditiveSummary,
+    requiresSqlSummary: hasNonAdditiveSummary,
     showRowTotals: formData.showRowTotals ?? true,
     showRowSubtotals: formData.showRowSubtotals ?? true,
     showColumnTotals: formData.showColumnTotals ?? true,

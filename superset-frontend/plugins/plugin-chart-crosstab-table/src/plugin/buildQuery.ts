@@ -249,7 +249,7 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
           const queryPlan = buildCrosstabQueryPlan({
             rowFields: rowDimensions as string[],
             columnFields: columnDimensions as string[],
-            hasNonAdditiveSummary,
+            requiresSqlSummary: hasNonAdditiveSummary,
             showRowTotals: formData.showRowTotals ?? true,
             showRowSubtotals: formData.showRowSubtotals ?? true,
             showColumnTotals: formData.showColumnTotals ?? true,
@@ -312,7 +312,7 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
           const queryPlan = buildCrosstabQueryPlan({
             rowFields: rowDimensions as string[],
             columnFields: columnDimensions as string[],
-            hasNonAdditiveSummary,
+            requiresSqlSummary: hasNonAdditiveSummary,
             showRowTotals: formData.showRowTotals ?? true,
             showRowSubtotals: formData.showRowSubtotals ?? true,
             showColumnTotals: formData.showColumnTotals ?? true,
