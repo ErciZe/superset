@@ -193,3 +193,113 @@ test('throws when a configured date sort value is invalid', () => {
     ),
   ).toThrow('Crosstab sort value must match its configured type.');
 });
+
+test('throws when sort direction has an invalid runtime value', () => {
+  const invalidDirectionConfig = [
+    {
+      field: 'shop_name',
+      sort: { by: 'self', direction: 'sideways' },
+    },
+  ] as unknown as DimensionFieldConfig[];
+
+  expect(() => buildDimensionOrderBy(invalidDirectionConfig)).toThrow(
+    'Crosstab sort direction must be "asc" or "desc".',
+  );
+});
+
+test('throws when null placement has an invalid runtime value', () => {
+  const invalidNullsConfig = [
+    {
+      field: 'shop_name',
+      sort: {
+        by: 'shop_order',
+        direction: 'asc',
+        type: 'number',
+        nulls: 'middle',
+      },
+    },
+  ] as unknown as DimensionFieldConfig[];
+
+  expect(() =>
+    [
+      { shop_name: 'A', shop_order: null },
+      { shop_name: 'B', shop_order: 1 },
+    ].sort(compareDataRecordsByDimensionSort(invalidNullsConfig)),
+  ).toThrow('Crosstab null placement must be "first" or "last".');
+});
+
+test('throws when sort type has an invalid runtime value', () => {
+  const invalidTypeConfig = [
+    {
+      field: 'shop_name',
+      sort: { by: 'shop_order', direction: 'asc', type: 'boolean' },
+    },
+  ] as unknown as DimensionFieldConfig[];
+
+  expect(() =>
+    [
+      { shop_name: 'A', shop_order: true },
+      { shop_name: 'B', shop_order: false },
+    ].sort(compareDataRecordsByDimensionSort(invalidTypeConfig)),
+  ).toThrow('Crosstab sort type must be "string", "number", or "date".');
+});
+
+test('throws when a hidden sort field is missing from compared records', () => {
+  const hiddenSortConfig: DimensionFieldConfig[] = [
+    {
+      field: 'shop_name',
+      sort: { by: 'shop_order', direction: 'asc', type: 'number' },
+    },
+  ];
+
+  expect(() =>
+    [{ shop_name: 'A' }, { shop_name: 'B', shop_order: 1 }].sort(
+      compareDataRecordsByDimensionSort(hiddenSortConfig),
+    ),
+  ).toThrow('Crosstab sort field must resolve to a column label.');
+});
+
+test('throws when dimension or sort fields cannot resolve to labels', () => {
+  const invalidFieldConfig = [
+    {
+      field: { expressionType: 'SQL', sqlExpression: '' },
+    },
+  ] as unknown as DimensionFieldConfig[];
+  const invalidSortFieldConfig = [
+    {
+      field: 'shop_name',
+      sort: {
+        by: { expressionType: 'SQL', sqlExpression: '' },
+        direction: 'asc',
+      },
+    },
+  ] as unknown as DimensionFieldConfig[];
+
+  expect(() => buildDimensionOrderBy(invalidFieldConfig)).toThrow(
+    'Crosstab sort field must resolve to a column label.',
+  );
+  expect(() => getDimensionSortFields(invalidSortFieldConfig)).toThrow(
+    'Crosstab sort field must resolve to a column label.',
+  );
+});
+
+test('sorts strings deterministically by code unit order', () => {
+  const stringConfig: DimensionFieldConfig[] = [
+    { field: 'shop_name', sort: { by: 'self', direction: 'asc' } },
+  ];
+  const records = [
+    { shop_name: 'a' },
+    { shop_name: 'B' },
+    { shop_name: '2' },
+    { shop_name: '10' },
+  ];
+
+  expect(
+    [...records].sort(compareDataRecordsByDimensionSort(stringConfig)),
+  ).toEqual([
+    { shop_name: '10' },
+    { shop_name: '2' },
+    { shop_name: 'B' },
+    { shop_name: 'a' },
+  ]);
+});
