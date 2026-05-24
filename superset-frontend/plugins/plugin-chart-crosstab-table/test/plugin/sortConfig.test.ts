@@ -179,6 +179,44 @@ test('throws when a configured number sort value is invalid', () => {
   ).toThrow('Crosstab sort value must match its configured type.');
 });
 
+test('sorts large bigint number values without losing precision', () => {
+  const numberConfig: DimensionFieldConfig[] = [
+    {
+      field: 'shop_name',
+      sort: { by: 'shop_order', direction: 'asc', type: 'number' },
+    },
+  ];
+  const lowerValue = BigInt('9007199254740992');
+  const higherValue = BigInt('9007199254740993');
+  const records = [
+    { shop_name: 'B', shop_order: higherValue },
+    { shop_name: 'A', shop_order: lowerValue },
+  ];
+
+  expect(
+    [...records].sort(compareDataRecordsByDimensionSort(numberConfig)),
+  ).toEqual([
+    { shop_name: 'A', shop_order: lowerValue },
+    { shop_name: 'B', shop_order: higherValue },
+  ]);
+});
+
+test('throws when number sort compares bigint with number values', () => {
+  const numberConfig: DimensionFieldConfig[] = [
+    {
+      field: 'shop_name',
+      sort: { by: 'shop_order', direction: 'asc', type: 'number' },
+    },
+  ];
+
+  expect(() =>
+    [
+      { shop_name: 'A', shop_order: BigInt('9007199254740993') },
+      { shop_name: 'B', shop_order: 1 },
+    ].sort(compareDataRecordsByDimensionSort(numberConfig)),
+  ).toThrow('Crosstab sort value must match its configured type.');
+});
+
 test('throws when a configured date sort value is invalid', () => {
   const dateConfig: DimensionFieldConfig[] = [
     {

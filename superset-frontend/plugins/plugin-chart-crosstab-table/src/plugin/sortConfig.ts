@@ -39,7 +39,7 @@ const ERR_CROSSTAB_SORT_NULLS =
 const ERR_CROSSTAB_SORT_TYPE =
   'Crosstab sort type must be "string", "number", or "date".';
 
-type NormalizedSortValue = string | number;
+type NormalizedSortValue = bigint | string | number;
 type NormalizedSortConfig = {
   direction: CrosstabSortDirection;
   field: string;
@@ -110,7 +110,7 @@ function getNormalizedSortConfig(
   };
 }
 
-function normalizeNumber(value: DataRecordValue): number {
+function normalizeNumber(value: DataRecordValue): bigint | number {
   if (typeof value === 'number') {
     if (Number.isFinite(value)) {
       return value;
@@ -119,11 +119,7 @@ function normalizeNumber(value: DataRecordValue): number {
   }
 
   if (typeof value === 'bigint') {
-    const numericValue = Number(value);
-    if (Number.isFinite(numericValue)) {
-      return numericValue;
-    }
-    throw new Error(ERR_CROSSTAB_SORT_VALUE);
+    return value;
   }
 
   if (typeof value === 'string' && value.trim() !== '') {
@@ -196,6 +192,18 @@ function compareNormalizedValues(
 ): number {
   if (typeof left === 'number' && typeof right === 'number') {
     return left - right;
+  }
+
+  if (typeof left === 'bigint' && typeof right === 'bigint') {
+    if (left === right) {
+      return 0;
+    }
+
+    return left < right ? -1 : 1;
+  }
+
+  if (typeof left === 'bigint' || typeof right === 'bigint') {
+    throw new Error(ERR_CROSSTAB_SORT_VALUE);
   }
 
   const leftString = left.toString();
