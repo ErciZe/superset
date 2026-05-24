@@ -84,6 +84,7 @@ type MeasuredGridWidth = {
 };
 
 type DynamicGroupBySelector = {
+  clearOptionId?: string;
   label: string;
   options: {
     disabled?: boolean;
@@ -626,6 +627,12 @@ export default function CrosstabTable({
           DYNAMIC_GROUP_BY_PLACEMENT_ORDER[rightSlot.placement] ||
         leftSlot.slotIndex - rightSlot.slotIndex,
     );
+    const clearOptionIdsBySlot = new Map(
+      sortedSlots.map(slot => [
+        slot.id,
+        slot.options.find(option => option.columns.length === 0)?.id,
+      ]),
+    );
     const selectedOptionIdsBySlot = new Map<string, string>();
 
     sortedSlots.forEach(slot => {
@@ -640,16 +647,23 @@ export default function CrosstabTable({
     });
 
     return sortedSlots.map(slot => {
+      const clearOptionId = clearOptionIdsBySlot.get(slot.id);
       const value =
         selectedOptionIdsBySlot.get(slot.id) ?? slot.defaultOptionId;
       const selectedOptionIdsFromOtherSlots = new Set(
         [...selectedOptionIdsBySlot]
           .filter(([selectedSlotId]) => selectedSlotId !== slot.id)
+          .filter(
+            ([selectedSlotId, selectedOptionId]) =>
+              selectedOptionId !== clearOptionIdsBySlot.get(selectedSlotId),
+          )
           .map(([, selectedOptionId]) => selectedOptionId),
       );
       const options = slot.options.map(option => ({
         disabled:
-          option.id !== value && selectedOptionIdsFromOtherSlots.has(option.id),
+          option.id !== clearOptionId &&
+          option.id !== value &&
+          selectedOptionIdsFromOtherSlots.has(option.id),
         label: option.label,
         value: option.id,
       }));
@@ -658,6 +672,7 @@ export default function CrosstabTable({
       );
 
       return {
+        clearOptionId,
         label: slot.label ?? t('Group dimension'),
         options,
         slotId: slot.id,
@@ -1032,29 +1047,39 @@ export default function CrosstabTable({
         </Button>
       </div>
     ) : null;
-  const dynamicGroupBySelects = dynamicGroupBySelectors.map(selector => (
-    <div
-      key={selector.slotId}
-      data-test={`crosstab-dynamic-groupby-control--${selector.slotId}`}
-      style={{
-        alignItems: 'center',
-        display: 'inline-flex',
-        gap: theme.sizeUnit,
-      }}
-    >
-      <span>{selector.label}</span>
-      <Select
-        ariaLabel={t('Select crosstab group by dimension %s', selector.label)}
-        allowSelectAll={false}
-        onChange={(nextOptionId: string) =>
-          updateDynamicGroupByOption(selector.slotId, nextOptionId)
-        }
-        options={selector.options}
-        sortComparator={PRESERVE_SELECT_OPTION_ORDER}
-        value={selector.value}
-      />
-    </div>
-  ));
+  const dynamicGroupBySelects = dynamicGroupBySelectors.map(selector => {
+    const { clearOptionId } = selector;
+
+    return (
+      <div
+        key={selector.slotId}
+        data-test={`crosstab-dynamic-groupby-control--${selector.slotId}`}
+        style={{
+          alignItems: 'center',
+          display: 'inline-flex',
+          gap: theme.sizeUnit,
+        }}
+      >
+        <span>{selector.label}</span>
+        <Select
+          ariaLabel={t('Select crosstab group by dimension %s', selector.label)}
+          allowSelectAll={false}
+          onChange={(nextOptionId: string) =>
+            updateDynamicGroupByOption(selector.slotId, nextOptionId)
+          }
+          onClear={
+            clearOptionId === undefined
+              ? undefined
+              : () => updateDynamicGroupByOption(selector.slotId, clearOptionId)
+          }
+          options={selector.options}
+          allowClear={clearOptionId !== undefined}
+          sortComparator={PRESERVE_SELECT_OPTION_ORDER}
+          value={selector.value}
+        />
+      </div>
+    );
+  });
   const dynamicMetricSelects = dynamicMetricSelectors.map(selector => (
     <div
       key={selector.slotId}

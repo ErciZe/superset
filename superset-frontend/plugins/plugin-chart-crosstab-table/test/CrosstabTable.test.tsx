@@ -71,9 +71,11 @@ jest.mock('@superset-ui/core/components', () => {
     value: string | number;
   };
   type MockSelectProps = {
+    allowClear?: boolean;
     allowSelectAll?: boolean;
     ariaLabel?: string;
     onChange?: (value: string) => void;
+    onClear?: () => void;
     options: MockSelectOption[];
     sortComparator?: () => number;
     value?: string | number | null;
@@ -235,9 +237,11 @@ jest.mock('@superset-ui/core/components', () => {
       );
     },
     Select: ({
+      allowClear,
       allowSelectAll,
       ariaLabel,
       onChange,
+      onClear,
       options,
       sortComparator,
       value,
@@ -265,6 +269,13 @@ jest.mock('@superset-ui/core/components', () => {
           onClick={() => onChange?.('__invalid_groupby_column__')}
           type="button"
         />
+        {allowClear && (
+          <button
+            aria-label={`${ariaLabel} clear`}
+            onClick={() => onClear?.()}
+            type="button"
+          />
+        )}
       </>
     ),
     ThemedAgGridReact: MockAgGridReact,
@@ -325,6 +336,19 @@ describe('CrosstabTable', () => {
       throw new Error('Unable to find dynamic group-by select');
     }
     return select;
+  }
+
+  function getDynamicGroupByClearButton(slotId: string) {
+    const control = container.querySelector(
+      `[data-test="crosstab-dynamic-groupby-control--${slotId}"]`,
+    );
+    const button = control?.querySelector('button[aria-label$=" clear"]');
+
+    if (!(button instanceof HTMLButtonElement)) {
+      throw new Error('Unable to find dynamic group-by clear button');
+    }
+
+    return button;
   }
 
   function getSelectOption(select: HTMLSelectElement, value: string) {
@@ -1541,6 +1565,7 @@ describe('CrosstabTable', () => {
               { id: 'date', label: '日期', columns: ['biz_date'] },
               { id: 'shop', label: '店铺', columns: ['shop_name'] },
               { id: 'country', label: '国家', columns: ['country'] },
+              { id: 'none', label: '无', columns: [] },
               { id: 'msku', label: 'MSKU', columns: ['msku'] },
             ],
           },
@@ -1555,6 +1580,7 @@ describe('CrosstabTable', () => {
               { id: 'date', label: '日期', columns: ['biz_date'] },
               { id: 'shop', label: '店铺', columns: ['shop_name'] },
               { id: 'country', label: '国家', columns: ['country'] },
+              { id: 'none', label: '无', columns: [] },
               { id: 'msku', label: 'MSKU', columns: ['msku'] },
             ],
           },
@@ -1569,6 +1595,7 @@ describe('CrosstabTable', () => {
               { id: 'date', label: '日期', columns: ['biz_date'] },
               { id: 'shop', label: '店铺', columns: ['shop_name'] },
               { id: 'country', label: '国家', columns: ['country'] },
+              { id: 'none', label: '无', columns: [] },
               { id: 'msku', label: 'MSKU', columns: ['msku'] },
             ],
           },
@@ -1582,6 +1609,7 @@ describe('CrosstabTable', () => {
     expect(getSelectOption(firstSelect, 'date').disabled).toBe(false);
     expect(getSelectOption(firstSelect, 'shop').disabled).toBe(true);
     expect(getSelectOption(firstSelect, 'country').disabled).toBe(true);
+    expect(getSelectOption(firstSelect, 'none').disabled).toBe(false);
     expect(getSelectOption(firstSelect, 'msku').disabled).toBe(false);
 
     const secondSelect = getDynamicGroupBySelect('dimension2');
@@ -1589,6 +1617,7 @@ describe('CrosstabTable', () => {
     expect(getSelectOption(secondSelect, 'date').disabled).toBe(true);
     expect(getSelectOption(secondSelect, 'shop').disabled).toBe(false);
     expect(getSelectOption(secondSelect, 'country').disabled).toBe(true);
+    expect(getSelectOption(secondSelect, 'none').disabled).toBe(false);
     expect(getSelectOption(secondSelect, 'msku').disabled).toBe(false);
 
     act(() => {
@@ -1599,6 +1628,106 @@ describe('CrosstabTable', () => {
     });
 
     expect(setDataMask).not.toHaveBeenCalled();
+  });
+
+  it('clears a dynamic group-by slot to its empty option', () => {
+    const setDataMask = jest.fn();
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        generatedColumnWidth: 120,
+        viz_type: 'crosstab_table',
+      },
+      hooks: {
+        setDataMask,
+      },
+      ownState: {
+        selectedDynamicGroupBy: {
+          dimension1: 'date',
+          dimension2: 'shop',
+          dimension3: 'country',
+        },
+      },
+      selectedDynamicGroupBy: {
+        dimension1: 'date',
+        dimension2: 'shop',
+        dimension3: 'country',
+      },
+      rowData: [],
+      columns: [],
+      columnTree: [],
+      generatedColumnIds: [],
+      dynamicGroupByConfig: {
+        enabled: true,
+        slots: [
+          {
+            id: 'dimension1',
+            label: '维度1',
+            placement: 'columns',
+            slotIndex: 0,
+            spliceCount: 1,
+            defaultOptionId: 'date',
+            options: [
+              { id: 'none', label: '无', columns: [] },
+              { id: 'date', label: '日期', columns: ['biz_date'] },
+              { id: 'shop', label: '店铺', columns: ['shop_name'] },
+              { id: 'country', label: '国家', columns: ['country'] },
+            ],
+          },
+          {
+            id: 'dimension2',
+            label: '维度2',
+            placement: 'columns',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'shop',
+            options: [
+              { id: 'none', label: '无', columns: [] },
+              { id: 'date', label: '日期', columns: ['biz_date'] },
+              { id: 'shop', label: '店铺', columns: ['shop_name'] },
+              { id: 'country', label: '国家', columns: ['country'] },
+            ],
+          },
+          {
+            id: 'dimension3',
+            label: '维度3',
+            placement: 'columns',
+            slotIndex: 2,
+            spliceCount: 1,
+            defaultOptionId: 'country',
+            options: [
+              { id: 'none', label: '无', columns: [] },
+              { id: 'date', label: '日期', columns: ['biz_date'] },
+              { id: 'shop', label: '店铺', columns: ['shop_name'] },
+              { id: 'country', label: '国家', columns: ['country'] },
+            ],
+          },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    act(() => {
+      getDynamicGroupByClearButton('dimension2').click();
+    });
+
+    expect(setDataMask).toHaveBeenCalledWith({
+      ownState: {
+        selectedDynamicGroupBy: {
+          dimension1: 'date',
+          dimension2: 'none',
+          dimension3: 'country',
+        },
+        currentColumnPage: 0,
+        currentColumnPageSize: 7,
+        serverColumnPageTuples: [],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: 7,
+      },
+    });
   });
 
   it('renders a numeric parameter control and writes own-state on change', () => {
