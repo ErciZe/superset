@@ -1,6 +1,7 @@
 import buildQuery, {
   ERR_CROSSTAB_BUSINESS_MATRIX_CALCULATED_FIELD,
 } from '../../src/plugin/buildQuery';
+import type { CrosstabFormData } from '../../src/types';
 import {
   ERR_SERVER_COLUMN_PAGINATION_COLUMNS,
   ERR_SERVER_COLUMN_PAGINATION_SHAPE,
@@ -522,6 +523,52 @@ describe('crosstab buildQuery', () => {
     );
   });
 
+  it('preserves configured sort metadata on dynamic server column dimensions', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '11__table',
+        viz_type: 'crosstab-table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [
+            {
+              field: 'biz_date',
+              sort: { by: 'biz_date', direction: 'desc', type: 'date' },
+            },
+            {
+              field: 'shop_name',
+              sort: { by: 'shop_order', direction: 'desc', type: 'number' },
+            },
+          ],
+          metrics: [{ metric: '指标值', semantic: 'ratio' }],
+        },
+        dynamicGroupBy: canonicalMultiSlotGroupBy,
+        serverColumnPagination: true,
+        row_limit: 10000,
+      } as never,
+      {
+        ownState: {
+          currentColumnPage: 0,
+          currentColumnPageSize: 5,
+          selectedDynamicGroupBy: {
+            level2: 'country',
+            level3: 'none',
+          },
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries[0].columns).toEqual([
+      'biz_date',
+      'country',
+      'shop_order',
+    ]);
+    expect(queryContext.queries[0].orderby).toEqual([
+      ['biz_date', false],
+      ['shop_order', false],
+    ]);
+  });
+
   it('uses canonical multi-slot dimensions for cached-tuples server leaf and summary queries', () => {
     const queryContext = buildQuery(
       {
@@ -700,8 +747,11 @@ describe('crosstab buildQuery', () => {
       } as never,
     );
 
-    expect(queryContext.queries).toHaveLength(1);
+    expect(queryContext.queries).toHaveLength(4);
     expect(queryContext.queries[0].metrics).toEqual(['profit']);
+    queryContext.queries.forEach(query => {
+      expect(query.metrics).toEqual(['profit']);
+    });
   });
 
   it('emits SQL summary queries for configured non-additive metric semantics', () => {
@@ -932,7 +982,7 @@ describe('crosstab buildQuery', () => {
     );
   });
 
-  it('builds current page data and row total queries after server column page tuples are loaded', () => {
+  it('builds current page data without a legacy row total query after server column page tuples are loaded', () => {
     const queryContext = buildQuery(
       {
         datasource: '7__table',
@@ -967,7 +1017,7 @@ describe('crosstab buildQuery', () => {
       } as never,
     );
 
-    expect(queryContext.queries).toHaveLength(4);
+    expect(queryContext.queries).toHaveLength(3);
     queryContext.queries.forEach(query => {
       expect(query.filters).toEqual(
         expect.arrayContaining([
@@ -985,15 +1035,85 @@ describe('crosstab buildQuery', () => {
       "(biz_date = '2026-05-01' AND shop_name = 'Shop A''s' AND country = 'US') OR " +
         "(biz_date = '2026-05-01' AND shop_name = 'Shop B' AND country IS NULL)",
     );
-    expect(queryContext.queries[3]).toEqual(
-      expect.objectContaining({
-        columns: ['metric_name_with_unit'],
-        metrics: ['指标值'],
+  });
+
+  it('uses configured column sort in server column domain queries', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '1__table',
+        viz_type: 'crosstab-table',
+        serverColumnPagination: true,
+        columnPageSize: 12,
         row_limit: 10000,
-        row_offset: 0,
-      }),
+        showColumnTotals: true,
+        crosstabFieldConfig: {
+          rows: [
+            {
+              field: 'metric_name_with_unit',
+              sort: { by: 'metric_order', direction: 'asc', type: 'number' },
+            },
+          ],
+          columns: [
+            {
+              field: 'biz_date',
+              sort: { by: 'biz_date', direction: 'desc', type: 'date' },
+            },
+          ],
+          metrics: [{ metric: '指标值', semantic: 'additive' }],
+          rowValueSummaries: {
+            field: 'metric_name_with_unit',
+            values: [{ value: '销量（件）', semantic: 'additive' }],
+          },
+        },
+      } as CrosstabFormData,
+      { ownState: { currentColumnPage: 0 } },
     );
-    expect(queryContext.queries[3].extras?.where ?? '').not.toContain('Shop A');
+
+    expect(queryContext.queries[0].orderby).toEqual([['biz_date', false]]);
+  });
+
+  it('keeps server row total summary full range while leaf query is page filtered', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '1__table',
+        viz_type: 'crosstab-table',
+        serverColumnPagination: true,
+        columnPageSize: 2,
+        row_limit: 10000,
+        showColumnTotals: true,
+        crosstabFieldConfig: {
+          rows: [
+            {
+              field: 'metric_name_with_unit',
+              sort: { by: 'metric_order', direction: 'asc', type: 'number' },
+            },
+          ],
+          columns: [{ field: 'biz_date' }],
+          metrics: [{ metric: '指标值', semantic: 'additive' }],
+          rowValueSummaries: {
+            field: 'metric_name_with_unit',
+            values: [{ value: '销量（件）', semantic: 'additive' }],
+          },
+        },
+      } as CrosstabFormData,
+      {
+        ownState: {
+          currentColumnPage: 0,
+          currentColumnPageSize: 2,
+          serverColumnPageTuplesPage: 0,
+          serverColumnPageTuplesPageSize: 2,
+          serverColumnPageTuples: [['2025-01-01'], ['2025-01-02']],
+        },
+      },
+    );
+
+    const leafQuery = queryContext.queries[2];
+    const rowTotalQuery = queryContext.queries[3];
+
+    expect(leafQuery.columns).toContain('metric_order');
+    expect(leafQuery.extras?.where).toContain('biz_date');
+    expect(rowTotalQuery.columns).toEqual(['metric_name_with_unit']);
+    expect(rowTotalQuery.extras?.where ?? '').not.toContain('biz_date');
   });
 
   it('uses planned SQL summaries instead of the legacy row total query for non-additive server column pages', () => {

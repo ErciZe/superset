@@ -24,6 +24,7 @@ import type {
   CrosstabDynamicGroupBySlot,
   CrosstabFormData,
   CrosstabOwnState,
+  DimensionFieldConfig,
   DynamicGroupByPlacement,
 } from '../types';
 import {
@@ -70,6 +71,13 @@ type ResolveDynamicGroupByDimensionsArgs = {
   columnDimensions: QueryFormColumn[];
 };
 
+type ResolveDynamicGroupByDimensionConfigsArgs = {
+  formData: CrosstabFormData;
+  ownState?: CrosstabOwnState;
+  rowConfigs: DimensionFieldConfig[];
+  columnConfigs: DimensionFieldConfig[];
+};
+
 type ResolveDynamicGroupByDimensionsResult = {
   rowDimensions: QueryFormColumn[];
   columnDimensions: QueryFormColumn[];
@@ -79,8 +87,22 @@ type ResolveDynamicGroupByDimensionsResult = {
   signature: string;
 };
 
+type ResolveDynamicGroupByDimensionConfigsResult = {
+  rowConfigs: DimensionFieldConfig[];
+  columnConfigs: DimensionFieldConfig[];
+  config?: CrosstabDynamicGroupByConfig;
+  selectedColumn?: QueryFormColumn;
+  selectedDynamicGroupBy?: Record<string, string>;
+  signature: string;
+};
+
 type ApplySlotsToDimensionsResult = {
   dimensions: QueryFormColumn[];
+  selectedDynamicGroupBy: Record<string, string>;
+};
+
+type ApplySlotsToDimensionConfigsResult = {
+  configs: DimensionFieldConfig[];
   selectedDynamicGroupBy: Record<string, string>;
 };
 
@@ -93,6 +115,17 @@ type SelectedDynamicGroupBySlotOption = SelectedDynamicSlotOption<
   DynamicGroupBySlotPayload,
   DynamicGroupByDynamicSlot
 >;
+
+type DimensionConfigSlotPayload = readonly DimensionFieldConfig[];
+
+type DynamicGroupByDimensionConfigSlot =
+  DynamicSlot<DimensionConfigSlotPayload>;
+
+type SelectedDynamicGroupByDimensionConfigSlotOption =
+  SelectedDynamicSlotOption<
+    DimensionConfigSlotPayload,
+    DynamicGroupByDimensionConfigSlot
+  >;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -417,6 +450,14 @@ function getDimensionsForPlacement(
   return placement === 'rows' ? rowDimensions : columnDimensions;
 }
 
+function getConfigsForPlacement(
+  placement: DynamicGroupByPlacement,
+  rowConfigs: DimensionFieldConfig[],
+  columnConfigs: DimensionFieldConfig[],
+): DimensionFieldConfig[] {
+  return placement === 'rows' ? rowConfigs : columnConfigs;
+}
+
 function resolveLegacySelectedOptionId(
   slot: CrosstabDynamicGroupBySlot,
   selectedColumn: QueryFormColumn,
@@ -530,6 +571,74 @@ function applySlotsToDimensions(
   };
 }
 
+function getDimensionConfigPayload(
+  dimensionConfigs: DimensionFieldConfig[],
+  slot: Pick<CrosstabDynamicGroupBySlot, 'slotIndex' | 'spliceCount'>,
+  fields: readonly QueryFormColumn[],
+): DimensionFieldConfig[] {
+  const spliceCount = getDynamicSlotSpliceCount(slot);
+
+  return fields.map((field, index) => {
+    const sourceConfig =
+      dimensionConfigs[slot.slotIndex + index] ??
+      dimensionConfigs[slot.slotIndex + spliceCount - 1] ??
+      dimensionConfigs[slot.slotIndex];
+    const metadata = sourceConfig ?? {};
+
+    return {
+      ...metadata,
+      field,
+    };
+  });
+}
+
+function getSelectedDimensionConfigOptions(
+  dimensionConfigs: DimensionFieldConfig[],
+  selectedOptions: SelectedDynamicGroupBySlotOption[],
+): SelectedDynamicGroupByDimensionConfigSlotOption[] {
+  return selectedOptions.map(({ option, slot }) => ({
+    slot: {
+      id: slot.id,
+      slotIndex: slot.slotIndex,
+      spliceCount: slot.spliceCount,
+      defaultOptionId: slot.defaultOptionId,
+      options: [],
+    },
+    option: {
+      id: option.id,
+      payload: getDimensionConfigPayload(
+        dimensionConfigs,
+        slot,
+        option.payload,
+      ),
+    },
+  }));
+}
+
+function applySlotsToDimensionConfigs(
+  dimensionConfigs: DimensionFieldConfig[],
+  slots: CrosstabDynamicGroupBySlot[],
+  selectedOptions: SelectedDynamicGroupBySlotOption[],
+): ApplySlotsToDimensionConfigsResult {
+  const dimensions = dimensionConfigs.map(config => config.field);
+
+  validateSlotBounds(slots, dimensions);
+
+  const selectedDynamicGroupBy: Record<string, string> = {};
+
+  selectedOptions.forEach(({ option, slot }) => {
+    selectedDynamicGroupBy[slot.id] = option.id;
+  });
+
+  return {
+    configs: applyDynamicSlotSplices(
+      dimensionConfigs,
+      getSelectedDimensionConfigOptions(dimensionConfigs, selectedOptions),
+    ),
+    selectedDynamicGroupBy,
+  };
+}
+
 function resolveSelectedDynamicGroupByOptions(
   slots: CrosstabDynamicGroupBySlot[],
   ownState: CrosstabOwnState | undefined,
@@ -635,6 +744,78 @@ export function resolveDynamicGroupByDimensions({
   return {
     rowDimensions: effectiveRowDimensions,
     columnDimensions: effectiveColumnDimensions,
+    config,
+    selectedColumn: getSelectedColumn(config.slots, selectedDynamicGroupBy),
+    selectedDynamicGroupBy,
+    signature: createGroupBySignature(
+      effectiveRowDimensions,
+      effectiveColumnDimensions,
+    ),
+  };
+}
+
+export function resolveDynamicGroupByDimensionConfigs({
+  formData,
+  ownState,
+  rowConfigs,
+  columnConfigs,
+}: ResolveDynamicGroupByDimensionConfigsArgs): ResolveDynamicGroupByDimensionConfigsResult {
+  const rowDimensions = rowConfigs.map(config => config.field);
+  const columnDimensions = columnConfigs.map(config => config.field);
+  const config = getDynamicGroupByConfig(formData);
+
+  if (!config?.enabled) {
+    return {
+      rowConfigs,
+      columnConfigs,
+      config: undefined,
+      selectedColumn: undefined,
+      selectedDynamicGroupBy: undefined,
+      signature: createGroupBySignature(rowDimensions, columnDimensions),
+    };
+  }
+
+  const rowSlots = config.slots.filter(slot => slot.placement === 'rows');
+  const columnSlots = config.slots.filter(slot => slot.placement === 'columns');
+  const selectedOptions = resolveSelectedDynamicGroupByOptions(
+    config.slots,
+    ownState,
+  );
+  const selectedRowOptions = selectedOptions.filter(
+    ({ slot }) => slot.placement === 'rows',
+  );
+  const selectedColumnOptions = selectedOptions.filter(
+    ({ slot }) => slot.placement === 'columns',
+  );
+  const rowResult = applySlotsToDimensionConfigs(
+    getConfigsForPlacement('rows', rowConfigs, columnConfigs),
+    rowSlots,
+    selectedRowOptions,
+  );
+  const columnResult = applySlotsToDimensionConfigs(
+    getConfigsForPlacement('columns', rowConfigs, columnConfigs),
+    columnSlots,
+    selectedColumnOptions,
+  );
+  const effectiveRowDimensions = rowResult.configs.map(item => item.field);
+  const effectiveColumnDimensions = columnResult.configs.map(
+    item => item.field,
+  );
+
+  assertNoDuplicateColumns([
+    ...effectiveRowDimensions,
+    ...effectiveColumnDimensions,
+  ]);
+  assertMaxDimensions(effectiveRowDimensions, effectiveColumnDimensions);
+
+  const selectedDynamicGroupBy = {
+    ...rowResult.selectedDynamicGroupBy,
+    ...columnResult.selectedDynamicGroupBy,
+  };
+
+  return {
+    rowConfigs: rowResult.configs,
+    columnConfigs: columnResult.configs,
     config,
     selectedColumn: getSelectedColumn(config.slots, selectedDynamicGroupBy),
     selectedDynamicGroupBy,

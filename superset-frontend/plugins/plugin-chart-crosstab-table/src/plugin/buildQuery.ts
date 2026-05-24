@@ -28,15 +28,17 @@ import type {
   CrosstabOwnState as DynamicOwnState,
   CrosstabQueryPlanItem,
 } from '../types';
-import { resolveDynamicGroupByDimensions } from './dynamicGroupBy';
+import { resolveDynamicGroupByDimensionConfigs } from './dynamicGroupBy';
 import { resolveDynamicMetricConfigs } from './dynamicMetric';
 import {
-  getCrosstabColumnColumns,
+  getCrosstabColumnConfigs,
   getEffectiveCrosstabMetricConfigs,
-  getCrosstabRowColumns,
+  getCrosstabRowConfigs,
+  getCrosstabRowValueSummaries,
   getCrosstabSemanticOverrides,
 } from './fieldConfig';
-import { hasSqlSummarySemanticConfig } from './metricSemantics';
+import { hasConfiguredSummarySemantics } from './metricSemantics';
+import { buildDimensionOrderBy, getDimensionSortFields } from './sortConfig';
 import {
   assertServerColumnPaginationShape,
   buildColumnTupleWhereClause,
@@ -151,18 +153,25 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
     throw new Error('Crosstab table does not support server pagination in v1.');
   }
 
-  const persistedRowDimensions = ensureIsArray<QueryFormColumn>(
-    getCrosstabRowColumns(formData),
-  );
-  const persistedColumnDimensions = ensureIsArray<QueryFormColumn>(
-    getCrosstabColumnColumns(formData),
-  );
-  const { rowDimensions, columnDimensions } = resolveDynamicGroupByDimensions({
+  const persistedRowConfigs = getCrosstabRowConfigs(formData);
+  const persistedColumnConfigs = getCrosstabColumnConfigs(formData);
+  const {
+    rowConfigs: effectiveRowConfigs,
+    columnConfigs: effectiveColumnConfigs,
+  } = resolveDynamicGroupByDimensionConfigs({
     formData,
     ownState: options?.ownState,
-    rowDimensions: persistedRowDimensions,
-    columnDimensions: persistedColumnDimensions,
+    rowConfigs: persistedRowConfigs,
+    columnConfigs: persistedColumnConfigs,
   });
+  const rowDimensions = ensureIsArray<QueryFormColumn>(
+    effectiveRowConfigs.map(config => config.field),
+  );
+  const columnDimensions = ensureIsArray<QueryFormColumn>(
+    effectiveColumnConfigs.map(config => config.field),
+  );
+  const rowSortFields = getDimensionSortFields(effectiveRowConfigs);
+  const columnSortFields = getDimensionSortFields(effectiveColumnConfigs);
   const baseMetricConfigs = getEffectiveCrosstabMetricConfigs(formData);
   assertNoBusinessMatrixCalculatedFields(formData, rowDimensions);
   const resolvedParameters = resolveCrosstabParameters(
@@ -182,9 +191,10 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
   });
   const effectiveMetricConfigs = dynamicMetricResult.metricConfigs;
   const metrics = effectiveMetricConfigs.map(config => config.metric);
-  const hasNonAdditiveSummary = hasSqlSummarySemanticConfig(
+  const requiresSqlSummary = hasConfiguredSummarySemantics(
     effectiveMetricConfigs,
     getCrosstabSemanticOverrides(formData),
+    getCrosstabRowValueSummaries(formData),
   );
 
   return buildQueryContext(formData, baseQueryObject => [
@@ -211,11 +221,11 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
           );
           const domainQuery: QueryObject = {
             ...baseQueryObject,
-            columns: columnDimensions,
+            columns: unique([...columnDimensions, ...columnSortFields]),
             metrics: [],
             is_timeseries: false,
             post_processing: [],
-            orderby: columnDimensions.map(column => [column, true]),
+            orderby: buildDimensionOrderBy(effectiveColumnConfigs),
             row_limit: columnPageSize,
             row_offset: currentPage * columnPageSize,
           };
@@ -231,25 +241,21 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
           );
           const dataQuery: QueryObject = {
             ...baseQueryObject,
-            columns: unique([...rowDimensions, ...columnDimensions]),
+            columns: unique([
+              ...rowDimensions,
+              ...rowSortFields,
+              ...columnDimensions,
+              ...columnSortFields,
+            ]),
             metrics,
             is_timeseries: false,
             post_processing: [],
             extras: appendWhere(baseQueryObject, columnTupleWhere),
           };
-          const rowTotalQuery: QueryObject = {
-            ...baseQueryObject,
-            columns: rowDimensions,
-            metrics,
-            is_timeseries: false,
-            post_processing: [],
-            row_limit: Number(formData.row_limit) || 10000,
-            row_offset: 0,
-          };
           const queryPlan = buildCrosstabQueryPlan({
             rowFields: rowDimensions as string[],
             columnFields: columnDimensions as string[],
-            requiresSqlSummary: hasNonAdditiveSummary,
+            requiresSqlSummary,
             showRowTotals: formData.showRowTotals ?? true,
             showRowSubtotals: formData.showRowSubtotals ?? true,
             showColumnTotals: formData.showColumnTotals ?? true,
@@ -292,19 +298,17 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
             return plannedQueries;
           }
 
-          return hasNonAdditiveSummary
-            ? plannedQueries
-            : [
-                ...plannedQueries,
-                // Preserve the existing server-column row-total query once
-                // page tuples are loaded for additive-only plans.
-                rowTotalQuery,
-              ];
+          return plannedQueries;
         })()
       : (() => {
           const dataQuery: QueryObject = {
             ...baseQueryObject,
-            columns: unique([...rowDimensions, ...columnDimensions]),
+            columns: unique([
+              ...rowDimensions,
+              ...rowSortFields,
+              ...columnDimensions,
+              ...columnSortFields,
+            ]),
             metrics,
             is_timeseries: false,
             post_processing: [],
@@ -312,7 +316,7 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
           const queryPlan = buildCrosstabQueryPlan({
             rowFields: rowDimensions as string[],
             columnFields: columnDimensions as string[],
-            requiresSqlSummary: hasNonAdditiveSummary,
+            requiresSqlSummary,
             showRowTotals: formData.showRowTotals ?? true,
             showRowSubtotals: formData.showRowSubtotals ?? true,
             showColumnTotals: formData.showColumnTotals ?? true,
