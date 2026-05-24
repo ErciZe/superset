@@ -26,6 +26,8 @@ import {
 import type {
   CrosstabFieldConfig,
   CrosstabFormData,
+  CrosstabRowValueSummaryConfig,
+  DimensionFieldConfig,
   MetricFieldConfig,
 } from '../types';
 import { hasCanonicalV4Definitions } from './v4Contract';
@@ -41,16 +43,32 @@ function hasFieldConfig(config?: CrosstabFieldConfig) {
   );
 }
 
-export function getCrosstabRowColumns(formData: CrosstabFormData) {
+export function getCrosstabRowConfigs(
+  formData: CrosstabFormData,
+): DimensionFieldConfig[] {
   return hasFieldConfig(formData.crosstabFieldConfig)
-    ? (formData.crosstabFieldConfig?.rows ?? []).map(item => item.field)
-    : ensureIsArray<QueryFormColumn>(formData.groupbyRows);
+    ? formData.crosstabFieldConfig?.rows ?? []
+    : ensureIsArray<QueryFormColumn>(formData.groupbyRows).map(field => ({
+        field,
+      }));
+}
+
+export function getCrosstabColumnConfigs(
+  formData: CrosstabFormData,
+): DimensionFieldConfig[] {
+  return hasFieldConfig(formData.crosstabFieldConfig)
+    ? formData.crosstabFieldConfig?.columns ?? []
+    : ensureIsArray<QueryFormColumn>(formData.groupbyColumns).map(field => ({
+        field,
+      }));
+}
+
+export function getCrosstabRowColumns(formData: CrosstabFormData) {
+  return getCrosstabRowConfigs(formData).map(item => item.field);
 }
 
 export function getCrosstabColumnColumns(formData: CrosstabFormData) {
-  return hasFieldConfig(formData.crosstabFieldConfig)
-    ? (formData.crosstabFieldConfig?.columns ?? []).map(item => item.field)
-    : ensureIsArray<QueryFormColumn>(formData.groupbyColumns);
+  return getCrosstabColumnConfigs(formData).map(item => item.field);
 }
 
 export function getCrosstabMetrics(formData: CrosstabFormData) {
@@ -93,6 +111,12 @@ export function getCrosstabSemanticOverrideField(formData: CrosstabFormData) {
 
 export function getCrosstabSemanticOverrides(formData: CrosstabFormData) {
   return formData.crosstabFieldConfig?.semanticOverrides ?? [];
+}
+
+export function getCrosstabRowValueSummaries(
+  formData: CrosstabFormData,
+): CrosstabRowValueSummaryConfig | undefined {
+  return formData.crosstabFieldConfig?.rowValueSummaries;
 }
 
 export function getCrosstabFieldLabels(formData: CrosstabFormData) {

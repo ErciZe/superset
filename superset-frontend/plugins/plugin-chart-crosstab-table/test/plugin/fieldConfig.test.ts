@@ -23,13 +23,16 @@ import type {
 } from '../../src/types';
 import {
   getCrosstabColumnColumns,
+  getCrosstabColumnConfigs,
   getCrosstabFieldLabels,
   getCrosstabMetricConfigs,
   getCrosstabMetrics,
   getPersistedCrosstabMetricConfigs,
   getEffectiveCrosstabMetricConfigs,
   getCrosstabRowColumns,
+  getCrosstabRowConfigs,
   getCrosstabRowSubtotalDepths,
+  getCrosstabRowValueSummaries,
   getCrosstabSemanticOverrideField,
   getCrosstabSemanticOverrides,
   ERR_CROSSTAB_V4_METRIC_CONFIG,
@@ -217,5 +220,86 @@ describe('crosstab field config', () => {
     expect(getCrosstabSemanticOverrides(formData)).toEqual(semanticOverrides);
     expect(getCrosstabSemanticOverrideField(createFormData())).toBeUndefined();
     expect(getCrosstabSemanticOverrides(createFormData())).toEqual([]);
+  });
+
+  it('returns configured row and column dimension configs with sort metadata', () => {
+    const formData = {
+      crosstabFieldConfig: {
+        rows: [
+          {
+            field: 'metric_name_with_unit',
+            label: '指标',
+            sort: {
+              by: 'metric_order',
+              direction: 'asc',
+              type: 'number',
+              nulls: 'last',
+            },
+          },
+        ],
+        columns: [
+          {
+            field: 'biz_date',
+            label: '日期',
+            sort: {
+              by: 'biz_date',
+              direction: 'desc',
+              type: 'date',
+              nulls: 'last',
+            },
+          },
+        ],
+        metrics: [{ metric: '指标值', semantic: 'additive' }],
+      },
+    } as CrosstabFormData;
+
+    expect(getCrosstabRowConfigs(formData)).toEqual([
+      {
+        field: 'metric_name_with_unit',
+        label: '指标',
+        sort: {
+          by: 'metric_order',
+          direction: 'asc',
+          type: 'number',
+          nulls: 'last',
+        },
+      },
+    ]);
+    expect(getCrosstabColumnConfigs(formData)).toEqual([
+      {
+        field: 'biz_date',
+        label: '日期',
+        sort: {
+          by: 'biz_date',
+          direction: 'desc',
+          type: 'date',
+          nulls: 'last',
+        },
+      },
+    ]);
+  });
+
+  it('returns configured row value summaries before legacy semantic overrides', () => {
+    const formData = {
+      crosstabFieldConfig: {
+        rowValueSummaries: {
+          field: 'metric_name_with_unit',
+          values: [
+            { value: '销量（件）', semantic: 'additive' },
+            { value: '毛利率（%）', semantic: 'ratio', formatString: '.2%' },
+          ],
+        },
+        semanticOverrideField: 'metric_name_with_unit',
+        semanticOverrides: [{ value: '毛利率（%）', semantic: 'additive' }],
+      },
+    } as CrosstabFormData;
+
+    expect(getCrosstabRowValueSummaries(formData)).toEqual({
+      field: 'metric_name_with_unit',
+      values: [
+        { value: '销量（件）', semantic: 'additive' },
+        { value: '毛利率（%）', semantic: 'ratio', formatString: '.2%' },
+      ],
+    });
   });
 });

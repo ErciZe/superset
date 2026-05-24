@@ -224,10 +224,22 @@ export type CrosstabEngineResult = {
   generatedColumnIds: string[];
 };
 
+export type CrosstabSortDirection = 'asc' | 'desc';
+export type CrosstabSortType = 'string' | 'number' | 'date';
+export type CrosstabNullSort = 'first' | 'last';
+
+export type DimensionSortConfig = {
+  by: QueryFormColumn | 'self';
+  direction: CrosstabSortDirection;
+  type?: CrosstabSortType;
+  nulls?: CrosstabNullSort;
+};
+
 export type DimensionFieldConfig = {
   field: QueryFormColumn;
   label?: string;
   showSubtotal?: boolean;
+  sort?: DimensionSortConfig;
 };
 
 export type MetricSemantic =
@@ -258,6 +270,18 @@ export type MetricSemanticOverride = {
   semantic: MetricSemantic;
 };
 
+export type RowValueSummaryConfig = {
+  value: DataRecordValue;
+  semantic: MetricSemantic;
+  summaryMetric?: QueryFormMetric;
+  formatString?: string;
+};
+
+export type CrosstabRowValueSummaryConfig = {
+  field: QueryFormColumn;
+  values: RowValueSummaryConfig[];
+};
+
 export type MetricFieldConfig = {
   metric: QueryFormMetric;
   label?: string;
@@ -272,6 +296,7 @@ export type CrosstabFieldConfig = {
   metrics?: MetricFieldConfig[];
   semanticOverrideField?: QueryFormColumn;
   semanticOverrides?: MetricSemanticOverride[];
+  rowValueSummaries?: CrosstabRowValueSummaryConfig;
 };
 
 export type CrosstabChartProps = ChartProps<CrosstabFormData> &
