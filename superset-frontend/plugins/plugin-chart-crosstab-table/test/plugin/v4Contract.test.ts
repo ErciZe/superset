@@ -88,3 +88,15 @@ test('does not mark plain legacy charts as canonical V4 usage', () => {
     ),
   ).toBe(false);
 });
+
+test('treats empty canonical and legacy arrays as cleared state', () => {
+  const clearedFormData = formData({
+    crosstabParameters: [],
+    crosstabCalculatedFields: [],
+    parameters: [],
+    calculatedFields: [],
+  });
+
+  expect(hasCanonicalV4Definitions(clearedFormData)).toBe(false);
+  expect(() => assertNoLegacyV4Inputs(clearedFormData)).not.toThrow();
+});

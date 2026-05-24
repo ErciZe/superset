@@ -446,6 +446,7 @@ function getPreservedDynamicGroupByOwnState(
   delete preservedOwnState.serverColumnPageTuplesPage;
   delete preservedOwnState.serverColumnPageTuplesPageSize;
   delete preservedOwnState.serverColumnTotalCount;
+  delete (preservedOwnState as Record<string, unknown>).textParameters;
 
   return preservedOwnState;
 }
@@ -465,6 +466,7 @@ function getPreservedDynamicMetricOwnState(
   delete preservedOwnState.serverColumnPageTuplesPage;
   delete preservedOwnState.serverColumnPageTuplesPageSize;
   delete preservedOwnState.serverColumnTotalCount;
+  delete (preservedOwnState as Record<string, unknown>).textParameters;
 
   return preservedOwnState;
 }
@@ -482,6 +484,7 @@ function getPreservedRuntimeParameterOwnState(
   delete preservedOwnState.serverColumnPageTuplesPage;
   delete preservedOwnState.serverColumnPageTuplesPageSize;
   delete preservedOwnState.serverColumnTotalCount;
+  delete (preservedOwnState as Record<string, unknown>).textParameters;
 
   return preservedOwnState;
 }

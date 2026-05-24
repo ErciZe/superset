@@ -1647,6 +1647,7 @@ describe('CrosstabTable', () => {
         serverColumnPageTuplesPageSize: 8,
         serverColumnTotalCount: 100,
         numericParameters: { param_adjustment: 1 },
+        textParameters: { stale_country: 'DE' },
       },
       rowData: [],
       columns: [
@@ -1694,6 +1695,9 @@ describe('CrosstabTable', () => {
     );
     expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
       'serverColumnPageTuplesPageSize',
+    );
+    expect(setDataMask.mock.calls[0][0].ownState).not.toHaveProperty(
+      'textParameters',
     );
   });
 

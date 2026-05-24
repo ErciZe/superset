@@ -21,6 +21,10 @@ import type { CrosstabFormData } from '../types';
 export const ERR_CROSSTAB_V4_LEGACY_INPUT = 'ERR_CROSSTAB_V4_LEGACY_INPUT';
 
 function hasValue(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
   return value !== undefined && value !== '';
 }
 

@@ -32,6 +32,7 @@ import {
   CROSSTAB_TOTAL_COLUMN_ID,
 } from '../../src/crosstab/engine';
 import { getMetricConfigSignature } from '../../src/plugin/dynamicMetric';
+import { ERR_CROSSTAB_V4_METRIC_CONFIG } from '../../src/plugin/fieldConfig';
 
 const dynamicColumnGroupBy: Exclude<
   CrosstabFormData['dynamicGroupBy'],
@@ -327,6 +328,35 @@ describe('crosstab transformProps', () => {
       param_adjustment: 1.25,
       param_secondary: 1,
     });
+  });
+
+  it('rejects v4 charts when render-time metrics only exist under legacy formData.metrics', () => {
+    expect(() =>
+      transformProps(
+        createProps({
+          formData: {
+            datasource: '11__table',
+            viz_type: 'crosstab-table',
+            metrics: ['legacy_amount'],
+            crosstabParameters: [
+              {
+                id: 'param_adjustment',
+                kind: 'number',
+                name: 'adjustmentRate',
+                label: 'Adjustment',
+                defaultValue: 1,
+              },
+            ],
+            crosstabFieldConfig: {
+              rows: [{ field: 'metric_name_with_unit' }],
+              columns: [{ field: 'biz_date' }],
+              metrics: [],
+            },
+          },
+          queriesData: [{ data: [], colnames: [], coltypes: [] }],
+        }),
+      ),
+    ).toThrow(ERR_CROSSTAB_V4_METRIC_CONFIG);
   });
 
   it('converts query data into renderer props', () => {

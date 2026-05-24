@@ -27,10 +27,12 @@ import {
   getCrosstabMetricConfigs,
   getCrosstabMetrics,
   getPersistedCrosstabMetricConfigs,
+  getEffectiveCrosstabMetricConfigs,
   getCrosstabRowColumns,
   getCrosstabRowSubtotalDepths,
   getCrosstabSemanticOverrideField,
   getCrosstabSemanticOverrides,
+  ERR_CROSSTAB_V4_METRIC_CONFIG,
 } from '../../src/plugin/fieldConfig';
 
 function createFormData(
@@ -155,6 +157,46 @@ describe('crosstab field config', () => {
         semantic: 'average',
       }),
     ]);
+  });
+
+  it('requires persisted metric configs for canonical v4 charts', () => {
+    expect(() =>
+      getEffectiveCrosstabMetricConfigs(
+        createFormData({
+          crosstabParameters: [
+            {
+              id: 'param_adjustment',
+              kind: 'number',
+              name: 'adjustmentRate',
+              label: 'Adjustment',
+              defaultValue: 1,
+            },
+          ],
+          crosstabFieldConfig: {
+            rows: [{ field: 'metric_name_with_unit' }],
+            columns: [{ field: 'biz_date' }],
+            metrics: [],
+          },
+        }),
+      ),
+    ).toThrow(ERR_CROSSTAB_V4_METRIC_CONFIG);
+  });
+
+  it('keeps legacy metric fallback when canonical v4 arrays are cleared', () => {
+    expect(
+      getEffectiveCrosstabMetricConfigs(
+        createFormData({
+          metrics: ['legacy_amount'],
+          crosstabParameters: [],
+          crosstabCalculatedFields: [],
+          crosstabFieldConfig: {
+            rows: [{ field: 'metric_name_with_unit' }],
+            columns: [{ field: 'biz_date' }],
+            metrics: [],
+          },
+        }),
+      ),
+    ).toEqual([{ metric: 'legacy_amount' }]);
   });
 
   it('extracts semantic override config with empty defaults', () => {

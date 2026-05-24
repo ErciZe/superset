@@ -5,6 +5,7 @@ import {
   ERR_SERVER_COLUMN_PAGINATION_COLUMNS,
   ERR_SERVER_COLUMN_PAGINATION_SHAPE,
 } from '../../src/plugin/serverColumnPagination';
+import { ERR_CROSSTAB_V4_METRIC_CONFIG } from '../../src/plugin/fieldConfig';
 
 const dynamicColumnGroupBy = {
   enabled: true,
@@ -837,6 +838,42 @@ describe('crosstab buildQuery', () => {
       );
     },
   );
+
+  it('rejects v4 charts when only legacy top-level metrics remain', () => {
+    expect(() =>
+      buildQuery({
+        datasource: '11__table',
+        viz_type: 'crosstab-table',
+        metrics: ['legacy_amount'],
+        crosstabParameters: [
+          {
+            id: 'param_adjustment',
+            kind: 'number',
+            name: 'adjustmentRate',
+            label: 'Adjustment',
+            defaultValue: 1,
+          },
+        ],
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }],
+          metrics: [],
+        },
+        crosstabCalculatedFields: [
+          {
+            id: 'calc_margin_pct_v4',
+            name: 'Margin rate',
+            resultType: 'percent',
+            ast: {
+              kind: 'pct',
+              numerator: { kind: 'metric_ref', metricId: 'profit' },
+              denominator: { kind: 'metric_ref', metricId: 'sales' },
+            },
+          },
+        ],
+      } as never),
+    ).toThrow(ERR_CROSSTAB_V4_METRIC_CONFIG);
+  });
 
   it('rejects server pagination', () => {
     expect(() =>

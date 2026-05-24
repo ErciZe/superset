@@ -44,6 +44,7 @@ import {
 } from './calc/builder';
 import { getCalculatedFields } from './calcFields';
 import { getCrosstabParameters } from './parameters';
+import { hasCanonicalV4Definitions } from './v4Contract';
 
 const Editor = styled.div`
   display: grid;
@@ -276,10 +277,16 @@ function getMetricOptions(
     return selectedMetricOptions;
   }
 
-  const legacyMetrics = ensureIsArray<QueryFormMetric>(formData?.metrics);
-  const legacyMetricOptions = legacyMetrics
-    .map(metric => metricOptionFromMetric(metric, undefined, savedMetricLookup))
-    .filter((option): option is MetricOption => option !== undefined);
+  const legacyMetricOptions = hasCanonicalV4Definitions(
+    formData ??
+      ({ datasource: '0__table', viz_type: 'crosstab-table' } as never),
+  )
+    ? []
+    : ensureIsArray<QueryFormMetric>(formData?.metrics)
+        .map(metric =>
+          metricOptionFromMetric(metric, undefined, savedMetricLookup),
+        )
+        .filter((option): option is MetricOption => option !== undefined);
 
   if (legacyMetricOptions.length > 0) {
     return legacyMetricOptions;
