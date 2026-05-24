@@ -46,10 +46,14 @@ const ActionRow = styled.div`
 `;
 
 type CrosstabParametersControlProps = {
+  actions?: {
+    setControlValue?: (control: string, value: unknown) => void;
+  };
   hovered?: boolean;
   label?: string;
   name: string;
   onChange: (value: CrosstabParameter[]) => void;
+  onControlChange?: (control: string, value: unknown) => void;
   value?: CrosstabParameter[];
 };
 
@@ -59,76 +63,85 @@ type NumberParameterDraft = {
   name: string;
   label: string;
   defaultValue: string;
+  min: string;
+  max: string;
+  step: string;
+  unit: string;
 };
-
-type TextParameterDraft = {
-  id: string;
-  kind: 'text';
-  name: string;
-  label: string;
-  defaultValue: string;
-};
-
-type ParameterDraft = NumberParameterDraft | TextParameterDraft;
 
 function numberDraft(): NumberParameterDraft {
   return {
-    id: 'adjustmentRate',
+    id: 'param_adjustment',
     kind: 'number',
     name: 'adjustmentRate',
     label: t('Adjustment rate'),
     defaultValue: '1',
+    min: '',
+    max: '',
+    step: '',
+    unit: '',
   };
 }
 
-function textDraft(): TextParameterDraft {
-  return {
-    id: 'market',
-    kind: 'text',
-    name: 'market',
-    label: t('Market'),
-    defaultValue: '',
-  };
-}
-
-function draftFromParameter(parameter: CrosstabParameter): ParameterDraft {
+function draftFromParameter(
+  parameter: CrosstabParameter,
+): NumberParameterDraft {
   return {
     ...parameter,
     defaultValue: String(parameter.defaultValue),
+    min: parameter.min === undefined ? '' : String(parameter.min),
+    max: parameter.max === undefined ? '' : String(parameter.max),
+    step: parameter.step === undefined ? '' : String(parameter.step),
+    unit: parameter.unit ?? '',
   };
 }
 
-function parameterFromDraft(draft: ParameterDraft): CrosstabParameter {
-  if (draft.kind === 'number') {
-    if (draft.defaultValue.trim().length === 0) {
-      throw new Error(
-        t('Crosstab parameter numeric fields require finite numbers.'),
-      );
-    }
-
-    const defaultValue = Number(draft.defaultValue);
-
-    if (!Number.isFinite(defaultValue)) {
-      throw new Error(
-        t('Crosstab parameter numeric fields require finite numbers.'),
-      );
-    }
-
-    return {
-      id: draft.id.trim(),
-      kind: 'number',
-      name: draft.name.trim(),
-      label: draft.label.trim(),
-      defaultValue,
-    };
+function parseOptionalNumber(value: string): number | undefined {
+  if (value.trim().length === 0) {
+    return undefined;
   }
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    throw new Error(
+      t('Crosstab parameter numeric fields require finite numbers.'),
+    );
+  }
+
+  return parsed;
+}
+
+function parameterFromDraft(draft: NumberParameterDraft): CrosstabParameter {
+  if (draft.defaultValue.trim().length === 0) {
+    throw new Error(
+      t('Crosstab parameter numeric fields require finite numbers.'),
+    );
+  }
+
+  const defaultValue = Number(draft.defaultValue);
+
+  if (!Number.isFinite(defaultValue)) {
+    throw new Error(
+      t('Crosstab parameter numeric fields require finite numbers.'),
+    );
+  }
+
+  const min = parseOptionalNumber(draft.min);
+  const max = parseOptionalNumber(draft.max);
+  const step = parseOptionalNumber(draft.step);
+  const unit = draft.unit.trim() || undefined;
 
   return {
     id: draft.id.trim(),
-    kind: 'text',
+    kind: 'number',
     name: draft.name.trim(),
     label: draft.label.trim(),
-    defaultValue: draft.defaultValue,
+    defaultValue,
+    ...(min === undefined ? {} : { min }),
+    ...(max === undefined ? {} : { max }),
+    ...(step === undefined ? {} : { step }),
+    ...(unit === undefined ? {} : { unit }),
   };
 }
 
@@ -140,14 +153,24 @@ function validateParameters(nextValue: CrosstabParameter[]): void {
   } as CrosstabFormData);
 }
 
+function clearLegacyParameters(
+  actions: CrosstabParametersControlProps['actions'],
+  onControlChange: CrosstabParametersControlProps['onControlChange'],
+) {
+  const setControlValue = onControlChange ?? actions?.setControlValue;
+  setControlValue?.('parameters', undefined);
+}
+
 export default function CrosstabParametersControl({
+  actions,
   hovered,
   label,
   name,
   onChange,
+  onControlChange,
   value = [],
 }: CrosstabParametersControlProps) {
-  const [draft, setDraft] = useState<ParameterDraft | undefined>();
+  const [draft, setDraft] = useState<NumberParameterDraft | undefined>();
   const [editingId, setEditingId] = useState<string | undefined>();
 
   const saveDraft = useCallback(() => {
@@ -165,9 +188,10 @@ export default function CrosstabParametersControl({
 
     validateParameters(nextValue);
     onChange(nextValue);
+    clearLegacyParameters(actions, onControlChange);
     setDraft(undefined);
     setEditingId(undefined);
-  }, [draft, editingId, onChange, value]);
+  }, [actions, draft, editingId, onChange, onControlChange, value]);
 
   const deleteParameter = useCallback(
     (indexToDelete: number) => {
@@ -175,8 +199,11 @@ export default function CrosstabParametersControl({
 
       validateParameters(nextValue);
       onChange(nextValue);
+      clearLegacyParameters(actions, onControlChange);
       setDraft(currentDraft =>
-        currentDraft?.id === value[indexToDelete]?.id ? undefined : currentDraft,
+        currentDraft?.id === value[indexToDelete]?.id
+          ? undefined
+          : currentDraft,
       );
       setEditingId(currentEditingId =>
         currentEditingId === value[indexToDelete]?.id
@@ -184,11 +211,22 @@ export default function CrosstabParametersControl({
           : currentEditingId,
       );
     },
-    [onChange, value],
+    [actions, onChange, onControlChange, value],
   );
 
   const updateDraft = useCallback(
-    (field: 'id' | 'name' | 'label' | 'defaultValue', nextValue: string) => {
+    (
+      field:
+        | 'id'
+        | 'name'
+        | 'label'
+        | 'defaultValue'
+        | 'min'
+        | 'max'
+        | 'step'
+        | 'unit',
+      nextValue: string,
+    ) => {
       setDraft(currentDraft =>
         currentDraft ? { ...currentDraft, [field]: nextValue } : currentDraft,
       );
@@ -214,16 +252,6 @@ export default function CrosstabParametersControl({
           }}
         >
           {t('Add number parameter')}
-        </Button>
-        <Button
-          buttonSize="small"
-          buttonStyle="secondary"
-          onClick={() => {
-            setDraft(textDraft());
-            setEditingId(undefined);
-          }}
-        >
-          {t('Add text parameter')}
         </Button>
       </ActionRow>
       {value.map((parameter, index) => (
@@ -273,16 +301,63 @@ export default function CrosstabParametersControl({
             {t('Default')}
             <Input
               aria-label={t('Parameter default')}
-              type={draft.kind === 'number' ? 'number' : 'text'}
+              type="number"
               value={draft.defaultValue}
               onChange={event =>
                 updateDraft('defaultValue', event.target.value)
               }
             />
           </Field>
-          <Button buttonSize="small" buttonStyle="primary" onClick={saveDraft}>
-            {t('Save parameter')}
-          </Button>
+          <Field>
+            {t('Min')}
+            <Input
+              aria-label={t('Parameter min')}
+              type="number"
+              value={draft.min}
+              onChange={event => updateDraft('min', event.target.value)}
+            />
+          </Field>
+          <Field>
+            {t('Max')}
+            <Input
+              aria-label={t('Parameter max')}
+              type="number"
+              value={draft.max}
+              onChange={event => updateDraft('max', event.target.value)}
+            />
+          </Field>
+          <Field>
+            {t('Step')}
+            <Input
+              aria-label={t('Parameter step')}
+              type="number"
+              value={draft.step}
+              onChange={event => updateDraft('step', event.target.value)}
+            />
+          </Field>
+          <Field>
+            {t('Unit')}
+            <Input
+              aria-label={t('Parameter unit')}
+              value={draft.unit}
+              onChange={event => updateDraft('unit', event.target.value)}
+            />
+          </Field>
+          <ActionRow>
+            <Button buttonSize="small" onClick={saveDraft}>
+              {editingId === undefined ? t('Save') : t('Update')}
+            </Button>
+            <Button
+              buttonSize="small"
+              buttonStyle="secondary"
+              onClick={() => {
+                setDraft(undefined);
+                setEditingId(undefined);
+              }}
+            >
+              {t('Cancel')}
+            </Button>
+          </ActionRow>
         </FieldGrid>
       )}
     </Editor>

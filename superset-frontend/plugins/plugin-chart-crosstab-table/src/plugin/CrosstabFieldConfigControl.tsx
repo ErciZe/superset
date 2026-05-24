@@ -39,6 +39,7 @@ import type {
   MetricSemanticOverride,
 } from '../types';
 import { getMetricSemanticLabel } from './metricSemantics';
+import { hasCanonicalV4Definitions } from './v4Contract';
 
 const Zone = styled.div`
   border: 1px solid ${({ theme }) => theme.colorBorderSecondary};
@@ -142,12 +143,16 @@ type NormalizedCrosstabFieldConfig = {
 };
 
 type CrosstabFieldConfigControlProps = {
+  actions?: {
+    setControlValue?: (control: string, value: unknown) => void;
+  };
   columns?: ColumnMeta[];
   datasource?: unknown;
   formData?: CrosstabFormData;
   label?: string;
   name: string;
   onChange: (value: CrosstabFieldConfig) => void;
+  onControlChange?: (control: string, value: unknown) => void;
   savedMetrics?: Metric[];
   value?: CrosstabFieldConfig;
 };
@@ -305,11 +310,13 @@ function parseSemanticOverrides(value: string): MetricSemanticOverride[] {
 }
 
 export default function CrosstabFieldConfigControl({
+  actions,
   columns = [],
   datasource,
   formData,
   name,
   onChange,
+  onControlChange,
   savedMetrics = [],
   value,
 }: CrosstabFieldConfigControlProps) {
@@ -340,8 +347,21 @@ export default function CrosstabFieldConfigControl({
   const emit = useCallback(
     (nextConfig: NormalizedCrosstabFieldConfig) => {
       onChange(nextConfig);
+
+      if (
+        hasCanonicalV4Definitions({
+          ...(formData ?? {
+            datasource: '0__table',
+            viz_type: 'crosstab-table',
+          }),
+          crosstabFieldConfig: nextConfig,
+        } as CrosstabFormData)
+      ) {
+        const setControlValue = onControlChange ?? actions?.setControlValue;
+        setControlValue?.('metrics', []);
+      }
     },
-    [onChange],
+    [actions, formData, onChange, onControlChange],
   );
   const updateRows = useCallback(
     (nextFields: QueryFormColumn[] | QueryFormColumn | null | undefined) => {

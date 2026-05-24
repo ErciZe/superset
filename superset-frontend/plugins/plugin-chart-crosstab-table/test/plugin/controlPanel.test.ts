@@ -194,9 +194,9 @@ describe('crosstab controlPanel', () => {
         default: [],
       }),
     );
-    expect(
-      config.mapStateToProps?.({ datasource: { metrics } }),
-    ).toEqual({ value: metrics });
+    expect(config.mapStateToProps?.({ datasource: { metrics } })).toEqual({
+      value: metrics,
+    });
   });
 
   it('places dynamic slot controls before crosstab totals controls', () => {
@@ -312,11 +312,13 @@ describe('crosstab controlPanel', () => {
     ).toBe(CrosstabCalculatedFieldsControl);
   });
 
-  it('creates canonical number and text crosstab parameters', () => {
+  it('creates canonical numeric crosstab parameters and clears legacy parameters', () => {
     const onChange = jest.fn();
+    const onControlChange = jest.fn();
     const { rerender } = render(
       createElement(CrosstabParametersControl, {
         name: 'crosstabParameters',
+        onControlChange,
         onChange,
         value: [],
       }),
@@ -335,7 +337,19 @@ describe('crosstab controlPanel', () => {
     fireEvent.change(screen.getByLabelText('Parameter default'), {
       target: { value: '1.25' },
     });
-    fireEvent.click(screen.getByText('Save parameter'));
+    fireEvent.change(screen.getByLabelText('Parameter min'), {
+      target: { value: '0' },
+    });
+    fireEvent.change(screen.getByLabelText('Parameter max'), {
+      target: { value: '2' },
+    });
+    fireEvent.change(screen.getByLabelText('Parameter step'), {
+      target: { value: '0.25' },
+    });
+    fireEvent.change(screen.getByLabelText('Parameter unit'), {
+      target: { value: '%' },
+    });
+    fireEvent.click(screen.getByText('Save'));
 
     expect(onChange).toHaveBeenLastCalledWith([
       {
@@ -344,31 +358,37 @@ describe('crosstab controlPanel', () => {
         name: 'adjustmentRate',
         label: 'Adjustment rate',
         defaultValue: 1.25,
+        min: 0,
+        max: 2,
+        step: 0.25,
+        unit: '%',
       },
     ]);
+    expect(onControlChange).toHaveBeenCalledWith('parameters', undefined);
 
     rerender(
       createElement(CrosstabParametersControl, {
         name: 'crosstabParameters',
+        onControlChange,
         onChange,
         value: onChange.mock.calls[0][0],
       }),
     );
 
-    fireEvent.click(screen.getByText('Add text parameter'));
+    fireEvent.click(screen.getByText('Add number parameter'));
     fireEvent.change(screen.getByLabelText('Parameter id'), {
-      target: { value: 'market' },
+      target: { value: 'taxRate' },
     });
     fireEvent.change(screen.getByLabelText('Parameter name'), {
-      target: { value: 'market' },
+      target: { value: 'taxRate' },
     });
     fireEvent.change(screen.getByLabelText('Parameter label'), {
-      target: { value: 'Market' },
+      target: { value: 'Tax rate' },
     });
     fireEvent.change(screen.getByLabelText('Parameter default'), {
-      target: { value: 'US' },
+      target: { value: '0.5' },
     });
-    fireEvent.click(screen.getByText('Save parameter'));
+    fireEvent.click(screen.getByText('Save'));
 
     expect(onChange).toHaveBeenLastCalledWith([
       {
@@ -377,13 +397,17 @@ describe('crosstab controlPanel', () => {
         name: 'adjustmentRate',
         label: 'Adjustment rate',
         defaultValue: 1.25,
+        min: 0,
+        max: 2,
+        step: 0.25,
+        unit: '%',
       },
       {
-        id: 'market',
-        kind: 'text',
-        name: 'market',
-        label: 'Market',
-        defaultValue: 'US',
+        id: 'taxRate',
+        kind: 'number',
+        name: 'taxRate',
+        label: 'Tax rate',
+        defaultValue: 0.5,
       },
     ]);
   });
@@ -404,7 +428,7 @@ describe('crosstab controlPanel', () => {
       target: { value: '' },
     });
     const errors = catchWindowErrors(() =>
-      fireEvent.click(screen.getByText('Save parameter')),
+      fireEvent.click(screen.getByText('Save')),
     );
 
     expect(errors).toEqual(
@@ -428,11 +452,11 @@ describe('crosstab controlPanel', () => {
         defaultValue: 1,
       },
       {
-        id: 'market',
-        kind: 'text' as const,
-        name: 'market',
-        label: 'Market',
-        defaultValue: 'US',
+        id: 'tax',
+        kind: 'number' as const,
+        name: 'tax',
+        label: 'Tax',
+        defaultValue: 0.5,
       },
     ];
     const { rerender } = render(
@@ -457,15 +481,15 @@ describe('crosstab controlPanel', () => {
       }),
     );
 
-    fireEvent.click(screen.getByText('Save parameter'));
+    fireEvent.click(screen.getByText('Update'));
 
     expect(onChange).toHaveBeenLastCalledWith([
       {
-        id: 'market',
-        kind: 'text',
-        name: 'market',
+        id: 'tax',
+        kind: 'number',
+        name: 'tax',
         label: 'Market code',
-        defaultValue: 'US',
+        defaultValue: 0.5,
       },
     ]);
   });
@@ -534,6 +558,103 @@ describe('crosstab controlPanel', () => {
         ]),
       }),
     );
+  });
+
+  it('shows a structured preview and validation summary for calculated-field drafts', () => {
+    render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        actions: { setControlValue: jest.fn() },
+        formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+          crosstabFieldConfig: {
+            metrics: [
+              { metric: 'sales', label: 'Sales', semantic: 'additive' },
+              { metric: 'profit', label: 'Profit', semantic: 'additive' },
+            ],
+          },
+        },
+        name: 'crosstabCalculatedFields',
+        onChange: jest.fn(),
+        value: [],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('New calculated field'));
+
+    expect(screen.getByText('Expression preview')).toBeInTheDocument();
+    expect(screen.getByText('Validation')).toBeInTheDocument();
+    expect(screen.getByText('Ready to save.')).toBeInTheDocument();
+  });
+
+  it('duplicates a calculated field and clears legacy v4 write-through controls', () => {
+    const onChange = jest.fn();
+    const actions = { setControlValue: jest.fn() };
+
+    render(
+      createElement(CrosstabCalculatedFieldsControl, {
+        actions,
+        formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+          crosstabParameters: [
+            {
+              id: 'param_adjustment',
+              kind: 'number',
+              name: 'adjustmentRate',
+              label: 'Adjustment',
+              defaultValue: 1,
+            },
+          ],
+          crosstabFieldConfig: {
+            metrics: [
+              {
+                metric: 'Margin rate',
+                label: 'Margin rate',
+                calculatedFieldId: 'marginRate',
+                semantic: 'ratio',
+                formatString: '.2%',
+              },
+            ],
+          },
+        },
+        name: 'crosstabCalculatedFields',
+        onChange,
+        savedMetrics: [
+          { metric_name: 'profit', expression: 'SUM(gross_profit)' },
+          { metric_name: 'sales', expression: 'SUM(sales_amount)' },
+        ],
+        value: [
+          {
+            id: 'marginRate',
+            name: 'Margin rate',
+            resultType: 'percent',
+            formatString: '.2%',
+            ast: {
+              kind: 'pct',
+              numerator: { kind: 'metric_ref', metricId: 'profit' },
+              denominator: { kind: 'metric_ref', metricId: 'sales' },
+            },
+          },
+        ],
+      }),
+    );
+
+    fireEvent.click(screen.getByText('Duplicate'));
+    fireEvent.click(screen.getByText('Save calculated field'));
+
+    expect(actions.setControlValue).toHaveBeenCalledWith(
+      'calculatedFields',
+      [],
+    );
+    expect(actions.setControlValue).toHaveBeenCalledWith('metrics', []);
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'marginRate', name: 'Margin rate' }),
+      expect.objectContaining({
+        id: 'marginRate_copy',
+        name: 'Margin rate Copy',
+      }),
+    ]);
   });
 
   it('creates pct fields from saved metric names and datasource metric records', () => {
@@ -1340,6 +1461,43 @@ describe('crosstab controlPanel', () => {
     });
   });
 
+  it('clears hidden metrics when canonical v4 metric selection is edited', () => {
+    const onChange = jest.fn();
+    const actions = { setControlValue: jest.fn() };
+
+    render(
+      createElement(CrosstabFieldConfigControl, {
+        actions,
+        columns: [],
+        datasource: {},
+        formData: {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+          crosstabParameters: [
+            {
+              id: 'param_adjustment',
+              kind: 'number',
+              name: 'adjustmentRate',
+              label: 'Adjustment',
+              defaultValue: 1,
+            },
+          ],
+        },
+        name: 'crosstabFieldConfig',
+        onChange,
+        value: {
+          metrics: [{ metric: 'amount', label: 'Amount' }],
+        },
+      }),
+    );
+
+    fireEvent.change(screen.getByLabelText('Metric semantic'), {
+      target: { value: 'additive' },
+    });
+
+    expect(actions.setControlValue).toHaveBeenCalledWith('metrics', []);
+  });
+
   it('ignores invalid metric semantic values', () => {
     const onChange = jest.fn();
 
@@ -1379,9 +1537,7 @@ describe('crosstab controlPanel', () => {
       }),
     );
 
-    expect(
-      screen.getByLabelText('Remove V4验收毛利率'),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Remove V4验收毛利率')).toBeInTheDocument();
     expect(screen.queryByLabelText('显示信息提示')).not.toBeInTheDocument();
   });
 

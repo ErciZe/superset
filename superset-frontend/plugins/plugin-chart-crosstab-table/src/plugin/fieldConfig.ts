@@ -28,6 +28,9 @@ import type {
   CrosstabFormData,
   MetricFieldConfig,
 } from '../types';
+import { hasCanonicalV4Definitions } from './v4Contract';
+
+export const ERR_CROSSTAB_V4_METRIC_CONFIG = 'ERR_CROSSTAB_V4_METRIC_CONFIG';
 
 function hasFieldConfig(config?: CrosstabFieldConfig) {
   return Boolean(
@@ -60,6 +63,24 @@ export function getPersistedCrosstabMetricConfigs(
   formData: CrosstabFormData,
 ): MetricFieldConfig[] {
   return formData.crosstabFieldConfig?.metrics ?? [];
+}
+
+export function getEffectiveCrosstabMetricConfigs(
+  formData: CrosstabFormData,
+): MetricFieldConfig[] {
+  const persistedMetricConfigs = getPersistedCrosstabMetricConfigs(formData);
+
+  if (persistedMetricConfigs.length > 0) {
+    return persistedMetricConfigs;
+  }
+
+  if (hasCanonicalV4Definitions(formData)) {
+    throw new Error(ERR_CROSSTAB_V4_METRIC_CONFIG);
+  }
+
+  return ensureIsArray<QueryFormMetric>(formData.metrics).map(metric => ({
+    metric,
+  }));
 }
 
 export function getCrosstabMetricConfigs(formData: CrosstabFormData) {

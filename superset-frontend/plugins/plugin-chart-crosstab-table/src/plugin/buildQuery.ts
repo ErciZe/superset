@@ -27,13 +27,12 @@ import type {
   CrosstabFormData,
   CrosstabOwnState as DynamicOwnState,
   CrosstabQueryPlanItem,
-  MetricFieldConfig,
 } from '../types';
 import { resolveDynamicGroupByDimensions } from './dynamicGroupBy';
 import { resolveDynamicMetricConfigs } from './dynamicMetric';
 import {
   getCrosstabColumnColumns,
-  getPersistedCrosstabMetricConfigs,
+  getEffectiveCrosstabMetricConfigs,
   getCrosstabRowColumns,
   getCrosstabSemanticOverrides,
 } from './fieldConfig';
@@ -47,10 +46,20 @@ import {
 } from './serverColumnPagination';
 import type { CrosstabOwnState as ServerColumnOwnState } from './serverColumnPagination';
 import { buildCrosstabQueryPlan } from './summaryQueryPlan';
-import { expandCalculatedFieldMetricConfigs } from './calcFields';
+import {
+  expandCalculatedFieldMetricConfigs,
+  getCalculatedFields,
+} from './calcFields';
 import { resolveCrosstabParameters } from './parameters';
 
 const unique = <T>(values: T[]): T[] => [...new Set(values)];
+const BUSINESS_MATRIX_ROW_FIELDS = new Set([
+  'metric_name',
+  'metric_name_with_unit',
+]);
+
+export const ERR_CROSSTAB_BUSINESS_MATRIX_CALCULATED_FIELD =
+  'Crosstab calculated fields do not support business matrix row dimensions.';
 
 function appendWhere(queryObject: QueryObject, whereClause: string) {
   const existingWhere = queryObject.extras?.where;
@@ -59,6 +68,25 @@ function appendWhere(queryObject: QueryObject, whereClause: string) {
     ...queryObject.extras,
     where: [existingWhere, whereClause].filter(Boolean).join(' AND '),
   };
+}
+
+function assertNoBusinessMatrixCalculatedFields(
+  formData: CrosstabFormData,
+  rowDimensions: QueryFormColumn[],
+) {
+  if (
+    !rowDimensions.some(
+      dimension =>
+        typeof dimension === 'string' &&
+        BUSINESS_MATRIX_ROW_FIELDS.has(dimension),
+    )
+  ) {
+    return;
+  }
+
+  if (getCalculatedFields(formData).length > 0) {
+    throw new Error(ERR_CROSSTAB_BUSINESS_MATRIX_CALCULATED_FIELD);
+  }
 }
 
 function buildSummaryQuery(
@@ -135,12 +163,8 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
     rowDimensions: persistedRowDimensions,
     columnDimensions: persistedColumnDimensions,
   });
-  const persistedMetricConfigs = getPersistedCrosstabMetricConfigs(formData);
-  const baseMetricConfigs: MetricFieldConfig[] = persistedMetricConfigs.length
-    ? persistedMetricConfigs
-    : ensureIsArray<QueryFormMetric>(formData.metrics).map(metric => ({
-        metric,
-      }));
+  const baseMetricConfigs = getEffectiveCrosstabMetricConfigs(formData);
+  assertNoBusinessMatrixCalculatedFields(formData, rowDimensions);
   const resolvedParameters = resolveCrosstabParameters(
     formData,
     options?.ownState as DynamicOwnState | undefined,

@@ -27,12 +27,23 @@ import {
 import { Button, Drawer, Input, Select } from '@superset-ui/core/components';
 import ControlHeader from '../../../../src/explore/components/ControlHeader';
 import type {
+  CrosstabCalculatedField,
   CrosstabFieldConfig,
   CrosstabFormData,
-  CrosstabV4CalculatedField,
   MetricFieldConfig,
 } from '../types';
+import {
+  astToDraft,
+  createExpressionDraft,
+  draftToAst,
+  duplicateCalculatedField,
+  previewExpression,
+  validateExpressionDraft,
+  type ExpressionDraft,
+  type ExpressionPreviewLabels,
+} from './calc/builder';
 import { getCalculatedFields } from './calcFields';
+import { getCrosstabParameters } from './parameters';
 
 const Editor = styled.div`
   display: grid;
@@ -65,12 +76,19 @@ type MetricOption = {
   metric: QueryFormMetric;
 };
 
+type ParameterOption = {
+  label: string;
+  value: string;
+};
+
 type CalculatedFieldDraft = {
+  description: string;
   editingFieldId?: string;
   fieldId: string;
   fieldName: string;
-  numeratorMetric?: string;
-  denominatorMetric?: string;
+  expression: ExpressionDraft;
+  formatString: string;
+  resultType: CrosstabCalculatedField['resultType'];
 };
 
 type CrosstabCalculatedFieldsControlProps = {
@@ -81,10 +99,10 @@ type CrosstabCalculatedFieldsControlProps = {
   hovered?: boolean;
   label?: string;
   name: string;
-  onChange: (value: CrosstabV4CalculatedField[]) => void;
+  onChange: (value: CrosstabCalculatedField[]) => void;
   onControlChange?: (control: string, value: unknown) => void;
   savedMetrics?: SavedMetric[];
-  value?: CrosstabV4CalculatedField[];
+  value?: CrosstabCalculatedField[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -177,13 +195,11 @@ function metricOptionFromMetric(
   if (typeof metric === 'string') {
     const savedMetric = savedMetricLookup?.get(metric);
 
-    return savedMetric
-      ? {
-          label: label ?? metric,
-          value: metric,
-          metric: savedMetric,
-        }
-      : undefined;
+    return {
+      label: label ?? metric,
+      value: metric,
+      metric: savedMetric ?? metric,
+    };
   }
 
   if (isRecord(metric) && nonEmptyString(metric.metric_name)) {
@@ -262,9 +278,7 @@ function getMetricOptions(
 
   const legacyMetrics = ensureIsArray<QueryFormMetric>(formData?.metrics);
   const legacyMetricOptions = legacyMetrics
-    .map(metric =>
-      metricOptionFromMetric(metric, undefined, savedMetricLookup),
-    )
+    .map(metric => metricOptionFromMetric(metric, undefined, savedMetricLookup))
     .filter((option): option is MetricOption => option !== undefined);
 
   if (legacyMetricOptions.length > 0) {
@@ -289,7 +303,8 @@ function getSavedMetricOptionLookup(
     const option = getSavedMetricNames(metric)
       .map(alias => optionByValue.get(alias))
       .find(
-        (metricOption): metricOption is MetricOption => metricOption !== undefined,
+        (metricOption): metricOption is MetricOption =>
+          metricOption !== undefined,
       );
 
     if (!option) {
@@ -328,38 +343,164 @@ function getSelectedMetricValue(
 }
 
 function validateCalculatedFields(
-  nextValue: CrosstabV4CalculatedField[],
+  nextValue: CrosstabCalculatedField[],
+  formData?: CrosstabFormData,
 ): void {
   getCalculatedFields({
-    viz_type: 'crosstab-table',
-    datasource: '0__table',
+    ...(formData ?? {
+      datasource: '0__table',
+      viz_type: 'crosstab-table',
+    }),
     crosstabCalculatedFields: nextValue,
+    crosstabParameters: formData?.crosstabParameters,
   } as CrosstabFormData);
 }
 
-function pctMetricRef(
-  field: CrosstabV4CalculatedField,
-  role: 'numerator' | 'denominator',
-): string | undefined {
-  if (field.ast.kind !== 'pct') {
-    return undefined;
+function getParameterOptions(formData?: CrosstabFormData): ParameterOption[] {
+  if (!formData) {
+    return [];
   }
 
-  const node = field.ast[role];
+  try {
+    return getCrosstabParameters(formData).map(parameter => ({
+      label: parameter.label,
+      value: parameter.id,
+    }));
+  } catch {
+    return [];
+  }
+}
 
-  return node.kind === 'metric_ref' ? node.metricId : undefined;
+function getCalculatedFieldSemantic(
+  field: CrosstabCalculatedField,
+): MetricFieldConfig['semantic'] {
+  return field.resultType === 'number' ? 'additive' : 'ratio';
 }
 
 function calculatedMetricConfig(
-  field: CrosstabV4CalculatedField,
+  field: CrosstabCalculatedField,
 ): MetricFieldConfig {
   return {
     metric: field.name,
     label: field.name,
     calculatedFieldId: field.id,
-    semantic: 'ratio',
+    semantic: getCalculatedFieldSemantic(field),
     formatString: field.formatString,
   };
+}
+
+function buildDefaultDraft(
+  metricOptions: MetricOption[],
+  parameterOptions: ParameterOption[],
+): CalculatedFieldDraft {
+  return {
+    description: '',
+    fieldId: 'profitRate',
+    fieldName: t('Profit rate'),
+    expression: createExpressionDraft({
+      denominatorMetricId: metricOptions[1]?.value ?? metricOptions[0]?.value,
+      numeratorMetricId: metricOptions[0]?.value,
+      parameterId: parameterOptions[0]?.value,
+    }),
+    formatString: '.2%',
+    resultType: 'percent',
+  };
+}
+
+function resolveExpressionDraft(
+  draft: ExpressionDraft,
+  metricOptions: MetricOption[],
+  metricOptionLookup: Map<string, MetricOption>,
+): ExpressionDraft {
+  switch (draft.kind) {
+    case 'metric_ref':
+      return {
+        ...draft,
+        metricId:
+          getSelectedMetricValue(
+            draft.metricId,
+            metricOptions,
+            0,
+            metricOptionLookup,
+          ) ?? draft.metricId,
+      };
+    case 'binary_op':
+      return {
+        ...draft,
+        left: resolveExpressionDraft(
+          draft.left,
+          metricOptions,
+          metricOptionLookup,
+        ),
+        right: resolveExpressionDraft(
+          draft.right,
+          metricOptions,
+          metricOptionLookup,
+        ),
+      };
+    case 'safe_div':
+    case 'pct':
+    case 'ratio':
+      return {
+        ...draft,
+        numerator: resolveExpressionDraft(
+          draft.numerator,
+          metricOptions,
+          metricOptionLookup,
+        ),
+        denominator: resolveExpressionDraft(
+          draft.denominator,
+          metricOptions,
+          metricOptionLookup,
+        ),
+      };
+    default:
+      return draft;
+  }
+}
+
+function draftFromCalculatedField(
+  field: CrosstabCalculatedField,
+  metricOptions: MetricOption[],
+  metricOptionLookup: Map<string, MetricOption>,
+  editingFieldId?: string,
+): CalculatedFieldDraft {
+  return {
+    description: field.description ?? '',
+    editingFieldId,
+    fieldId: field.id,
+    fieldName: field.name,
+    expression: resolveExpressionDraft(
+      astToDraft(field.ast),
+      metricOptions,
+      metricOptionLookup,
+    ),
+    formatString:
+      field.formatString ??
+      (field.resultType === 'percent'
+        ? '.2%'
+        : field.resultType === 'ratio'
+          ? '.4f'
+          : ''),
+    resultType: field.resultType,
+  };
+}
+
+function countMetricRefs(draft: ExpressionDraft): number {
+  switch (draft.kind) {
+    case 'metric_ref':
+      return 1;
+    case 'binary_op':
+      return countMetricRefs(draft.left) + countMetricRefs(draft.right);
+    case 'safe_div':
+    case 'pct':
+    case 'ratio':
+      return (
+        countMetricRefs(draft.numerator) + countMetricRefs(draft.denominator)
+      );
+    default:
+      return 0;
+  }
 }
 
 function getMetricConfigLabel(config: MetricFieldConfig): string {
@@ -367,10 +508,10 @@ function getMetricConfigLabel(config: MetricFieldConfig): string {
 }
 
 function getNextCalculatedFields(
-  value: CrosstabV4CalculatedField[],
-  field: CrosstabV4CalculatedField,
+  value: CrosstabCalculatedField[],
+  field: CrosstabCalculatedField,
   editingFieldId?: string,
-): CrosstabV4CalculatedField[] {
+): CrosstabCalculatedField[] {
   if (editingFieldId === undefined) {
     return [...value, field];
   }
@@ -389,8 +530,8 @@ function getNextCalculatedFields(
 }
 
 function assertUniqueCalculatedField(
-  value: CrosstabV4CalculatedField[],
-  field: CrosstabV4CalculatedField,
+  value: CrosstabCalculatedField[],
+  field: CrosstabCalculatedField,
   fieldConfig: CrosstabFieldConfig,
   editingFieldId?: string,
 ): void {
@@ -415,7 +556,7 @@ function assertUniqueCalculatedField(
 
 function syncCalculatedMetricConfig(
   fieldConfig: CrosstabFieldConfig,
-  field: CrosstabV4CalculatedField,
+  field: CrosstabCalculatedField,
   editingFieldId?: string,
 ): CrosstabFieldConfig {
   const targetId = editingFieldId ?? field.id;
@@ -453,6 +594,243 @@ function removeCalculatedMetricConfig(
   };
 }
 
+function clearLegacyCalculatedFieldInputs(
+  setControlValue: (control: string, value: unknown) => void,
+) {
+  setControlValue('calculatedFields', []);
+  setControlValue('metrics', []);
+}
+
+type ExpressionEditorProps = {
+  draft: ExpressionDraft;
+  metricOptionLookup: Map<string, MetricOption>;
+  metricOptions: MetricOption[];
+  onChange: (draft: ExpressionDraft) => void;
+  parameterOptions: ParameterOption[];
+  title: string;
+};
+
+function ExpressionEditor({
+  draft,
+  metricOptionLookup,
+  metricOptions,
+  onChange,
+  parameterOptions,
+  title,
+}: ExpressionEditorProps) {
+  const defaultNumeratorMetric = metricOptions[0]?.value;
+  const defaultDenominatorMetric =
+    metricOptions[1]?.value ?? metricOptions[0]?.value;
+  const defaultParameter = parameterOptions[0]?.value;
+
+  const replaceKind = (kind: ExpressionDraft['kind']) => {
+    onChange(
+      createExpressionDraft({
+        denominatorMetricId: defaultDenominatorMetric,
+        kind,
+        numeratorMetricId: defaultNumeratorMetric,
+        parameterId: defaultParameter,
+      }),
+    );
+  };
+
+  const kindSelector = (
+    <Field>
+      {t('%s kind', title)}
+      <Select
+        ariaLabel={t('%s kind', title)}
+        allowSelectAll={false}
+        options={[
+          { label: t('Metric reference'), value: 'metric_ref' },
+          { label: t('Parameter reference'), value: 'number_param' },
+          { label: t('Literal number'), value: 'literal_number' },
+          { label: t('Binary operation'), value: 'binary_op' },
+          { label: t('Safe divide'), value: 'safe_div' },
+          { label: t('Percent'), value: 'pct' },
+          { label: t('Ratio'), value: 'ratio' },
+        ]}
+        value={draft.kind}
+        onChange={nextKind => replaceKind(nextKind as ExpressionDraft['kind'])}
+      />
+    </Field>
+  );
+
+  switch (draft.kind) {
+    case 'metric_ref':
+      return (
+        <>
+          {kindSelector}
+          <Field>
+            {title}
+            <Select
+              ariaLabel={title}
+              allowSelectAll={false}
+              options={metricOptions}
+              value={
+                getSelectedMetricValue(
+                  draft.metricId,
+                  metricOptions,
+                  0,
+                  metricOptionLookup,
+                ) ?? draft.metricId
+              }
+              onChange={nextMetric =>
+                onChange({
+                  ...draft,
+                  metricId: String(nextMetric),
+                })
+              }
+            />
+          </Field>
+        </>
+      );
+    case 'number_param':
+      return (
+        <>
+          {kindSelector}
+          <Field>
+            {title}
+            <Select
+              ariaLabel={title}
+              allowSelectAll={false}
+              options={parameterOptions}
+              value={draft.parameterId}
+              onChange={nextParameter =>
+                onChange({
+                  ...draft,
+                  parameterId: String(nextParameter),
+                })
+              }
+            />
+          </Field>
+        </>
+      );
+    case 'literal_number':
+      return (
+        <>
+          {kindSelector}
+          <Field>
+            {title}
+            <Input
+              aria-label={title}
+              type="number"
+              value={draft.value}
+              onChange={event =>
+                onChange({
+                  ...draft,
+                  value: event.target.value,
+                })
+              }
+            />
+          </Field>
+        </>
+      );
+    case 'binary_op':
+      return (
+        <>
+          {kindSelector}
+          <Field>
+            {t('Operator')}
+            <Select
+              ariaLabel={t('Operator')}
+              allowSelectAll={false}
+              options={[
+                { label: '+', value: '+' },
+                { label: '-', value: '-' },
+                { label: '*', value: '*' },
+                { label: '/', value: '/' },
+              ]}
+              value={draft.op}
+              onChange={nextOperator =>
+                onChange({
+                  ...draft,
+                  op: nextOperator as '+' | '-' | '*' | '/',
+                })
+              }
+            />
+          </Field>
+          <ExpressionEditor
+            draft={draft.left}
+            metricOptionLookup={metricOptionLookup}
+            metricOptions={metricOptions}
+            onChange={left => onChange({ ...draft, left })}
+            parameterOptions={parameterOptions}
+            title={t('Left expression')}
+          />
+          <ExpressionEditor
+            draft={draft.right}
+            metricOptionLookup={metricOptionLookup}
+            metricOptions={metricOptions}
+            onChange={right => onChange({ ...draft, right })}
+            parameterOptions={parameterOptions}
+            title={t('Right expression')}
+          />
+        </>
+      );
+    case 'safe_div':
+      return (
+        <>
+          {kindSelector}
+          <ExpressionEditor
+            draft={draft.numerator}
+            metricOptionLookup={metricOptionLookup}
+            metricOptions={metricOptions}
+            onChange={numerator => onChange({ ...draft, numerator })}
+            parameterOptions={parameterOptions}
+            title={t('Numerator expression')}
+          />
+          <ExpressionEditor
+            draft={draft.denominator}
+            metricOptionLookup={metricOptionLookup}
+            metricOptions={metricOptions}
+            onChange={denominator => onChange({ ...draft, denominator })}
+            parameterOptions={parameterOptions}
+            title={t('Denominator expression')}
+          />
+          <Field>
+            {t('Default value')}
+            <Input
+              aria-label={t('Default value')}
+              type="number"
+              value={draft.defaultValue ?? ''}
+              onChange={event =>
+                onChange({
+                  ...draft,
+                  defaultValue: event.target.value,
+                })
+              }
+            />
+          </Field>
+        </>
+      );
+    case 'pct':
+    case 'ratio':
+      return (
+        <>
+          {kindSelector}
+          <ExpressionEditor
+            draft={draft.numerator}
+            metricOptionLookup={metricOptionLookup}
+            metricOptions={metricOptions}
+            onChange={numerator => onChange({ ...draft, numerator })}
+            parameterOptions={parameterOptions}
+            title={t('Numerator metric')}
+          />
+          <ExpressionEditor
+            draft={draft.denominator}
+            metricOptionLookup={metricOptionLookup}
+            metricOptions={metricOptions}
+            onChange={denominator => onChange({ ...draft, denominator })}
+            parameterOptions={parameterOptions}
+            title={t('Denominator metric')}
+          />
+        </>
+      );
+    default:
+      return null;
+  }
+}
+
 export default function CrosstabCalculatedFieldsControl({
   actions,
   formData,
@@ -469,32 +847,54 @@ export default function CrosstabCalculatedFieldsControl({
     () => getMetricOptions(formData, savedMetrics),
     [formData, savedMetrics],
   );
+  const parameterOptions = useMemo(
+    () => getParameterOptions(formData),
+    [formData],
+  );
   const savedMetricOptionLookup = useMemo(
     () => getSavedMetricOptionLookup(metricOptions, savedMetrics),
     [metricOptions, savedMetrics],
   );
-  const [draft, setDraft] = useState<CalculatedFieldDraft>({
-    fieldId: 'profitRate',
-    fieldName: t('Profit rate'),
-  });
+  const [draft, setDraft] = useState<CalculatedFieldDraft>(() =>
+    buildDefaultDraft([], []),
+  );
+  const previewLabels = useMemo<ExpressionPreviewLabels>(
+    () => ({
+      metrics: Object.fromEntries(
+        metricOptions.map(option => [option.value, option.label]),
+      ),
+      parameters: Object.fromEntries(
+        parameterOptions.map(option => [option.value, option.label]),
+      ),
+    }),
+    [metricOptions, parameterOptions],
+  );
+  const validationMessage = useMemo(
+    () => validateExpressionDraft(draft.expression),
+    [draft.expression],
+  );
+  const expressionPreview = useMemo(
+    () => previewExpression(draft.expression, previewLabels),
+    [draft.expression, previewLabels],
+  );
 
-  const resolvedNumeratorMetric = getSelectedMetricValue(
-    draft.numeratorMetric,
-    metricOptions,
-    0,
-    savedMetricOptionLookup,
-  );
-  const resolvedDenominatorMetric = getSelectedMetricValue(
-    draft.denominatorMetric,
-    metricOptions,
-    1,
-    savedMetricOptionLookup,
-  );
-  const selectedNumeratorMetric = metricOptions.find(
-    option => option.value === resolvedNumeratorMetric,
-  );
-  const selectedDenominatorMetric = metricOptions.find(
-    option => option.value === resolvedDenominatorMetric,
+  const resetDraft = useCallback(() => {
+    setDraft(buildDefaultDraft(metricOptions, parameterOptions));
+  }, [metricOptions, parameterOptions]);
+
+  const openEditorForField = useCallback(
+    (field: CrosstabCalculatedField, editingFieldId?: string) => {
+      setDraft(
+        draftFromCalculatedField(
+          field,
+          metricOptions,
+          savedMetricOptionLookup,
+          editingFieldId,
+        ),
+      );
+      setIsOpen(true);
+    },
+    [metricOptions, savedMetricOptionLookup],
   );
 
   const saveField = useCallback(() => {
@@ -506,26 +906,24 @@ export default function CrosstabCalculatedFieldsControl({
       );
     }
 
-    if (!selectedNumeratorMetric || !selectedDenominatorMetric) {
+    if (
+      draft.fieldId.trim().length === 0 ||
+      draft.fieldName.trim().length === 0
+    ) {
+      throw new Error(t('Calculated fields require ids and names.'));
+    }
+
+    if (countMetricRefs(draft.expression) > 0 && metricOptions.length < 2) {
       throw new Error(t('Calculated fields require two saved metrics.'));
     }
 
-    const field: CrosstabV4CalculatedField = {
+    const field: CrosstabCalculatedField = {
       id: draft.fieldId.trim(),
       name: draft.fieldName.trim(),
-      resultType: 'percent',
-      formatString: '.2%',
-      ast: {
-        kind: 'pct',
-        numerator: {
-          kind: 'metric_ref',
-          metricId: selectedNumeratorMetric.value,
-        },
-        denominator: {
-          kind: 'metric_ref',
-          metricId: selectedDenominatorMetric.value,
-        },
-      },
+      description: draft.description.trim() || undefined,
+      resultType: draft.resultType,
+      formatString: draft.formatString.trim() || undefined,
+      ast: draftToAst(draft.expression),
     };
     const currentFieldConfig = getFieldConfig(formData);
     const nextValue = getNextCalculatedFields(
@@ -545,22 +943,20 @@ export default function CrosstabCalculatedFieldsControl({
       currentFieldConfig,
       draft.editingFieldId,
     );
-    validateCalculatedFields(nextValue);
+    validateCalculatedFields(nextValue, formData);
     onChange(nextValue);
     setControlValue('crosstabFieldConfig', nextFieldConfig);
+    clearLegacyCalculatedFieldInputs(setControlValue);
     setIsOpen(false);
-    setDraft({
-      fieldId: 'profitRate',
-      fieldName: t('Profit rate'),
-    });
+    resetDraft();
   }, [
     actions,
     draft,
     formData,
+    metricOptions.length,
     onChange,
     onControlChange,
-    selectedDenominatorMetric,
-    selectedNumeratorMetric,
+    resetDraft,
     value,
   ]);
 
@@ -580,17 +976,26 @@ export default function CrosstabCalculatedFieldsControl({
         fieldId,
       );
 
-      validateCalculatedFields(nextValue);
+      validateCalculatedFields(nextValue, formData);
       onChange(nextValue);
       setControlValue('crosstabFieldConfig', nextFieldConfig);
+      clearLegacyCalculatedFieldInputs(setControlValue);
       setDraft(currentDraft =>
         currentDraft.editingFieldId === fieldId
-          ? { fieldId: 'profitRate', fieldName: t('Profit rate') }
+          ? buildDefaultDraft(metricOptions, parameterOptions)
           : currentDraft,
       );
       setIsOpen(false);
     },
-    [actions, formData, onChange, onControlChange, value],
+    [
+      actions,
+      formData,
+      metricOptions,
+      onChange,
+      onControlChange,
+      parameterOptions,
+      value,
+    ],
   );
 
   return (
@@ -605,10 +1010,7 @@ export default function CrosstabCalculatedFieldsControl({
         buttonSize="small"
         buttonStyle="secondary"
         onClick={() => {
-          setDraft({
-            fieldId: 'profitRate',
-            fieldName: t('Profit rate'),
-          });
+          resetDraft();
           setIsOpen(true);
         }}
       >
@@ -619,18 +1021,15 @@ export default function CrosstabCalculatedFieldsControl({
           <span>{field.name}</span>
           <Button
             buttonSize="small"
-            onClick={() => {
-              setDraft({
-                editingFieldId: field.id,
-                fieldId: field.id,
-                fieldName: field.name,
-                numeratorMetric: pctMetricRef(field, 'numerator'),
-                denominatorMetric: pctMetricRef(field, 'denominator'),
-              });
-              setIsOpen(true);
-            }}
+            onClick={() => openEditorForField(field, field.id)}
           >
             {t('Edit')}
+          </Button>
+          <Button
+            buttonSize="small"
+            onClick={() => openEditorForField(duplicateCalculatedField(field))}
+          >
+            {t('Duplicate')}
           </Button>
           <Button buttonSize="small" onClick={() => deleteField(field.id)}>
             {t('Delete')}
@@ -671,35 +1070,71 @@ export default function CrosstabCalculatedFieldsControl({
             />
           </Field>
           <Field>
-            {t('Numerator metric')}
-            <Select
-              ariaLabel={t('Numerator metric')}
-              allowSelectAll={false}
-              options={metricOptions}
-              value={resolvedNumeratorMetric}
-              onChange={nextMetric =>
+            {t('Description')}
+            <Input
+              aria-label={t('Calculated field description')}
+              value={draft.description}
+              onChange={event =>
                 setDraft(currentDraft => ({
                   ...currentDraft,
-                  numeratorMetric: String(nextMetric),
+                  description: event.target.value,
                 }))
               }
             />
           </Field>
           <Field>
-            {t('Denominator metric')}
+            {t('Result type')}
             <Select
-              ariaLabel={t('Denominator metric')}
+              ariaLabel={t('Result type')}
               allowSelectAll={false}
-              options={metricOptions}
-              value={resolvedDenominatorMetric}
-              onChange={nextMetric =>
+              options={[
+                { label: t('Number'), value: 'number' },
+                { label: t('Ratio'), value: 'ratio' },
+                { label: t('Percent'), value: 'percent' },
+              ]}
+              value={draft.resultType}
+              onChange={nextType =>
                 setDraft(currentDraft => ({
                   ...currentDraft,
-                  denominatorMetric: String(nextMetric),
+                  resultType: nextType as CrosstabCalculatedField['resultType'],
                 }))
               }
             />
           </Field>
+          <Field>
+            {t('Format string')}
+            <Input
+              aria-label={t('Format string')}
+              value={draft.formatString}
+              onChange={event =>
+                setDraft(currentDraft => ({
+                  ...currentDraft,
+                  formatString: event.target.value,
+                }))
+              }
+            />
+          </Field>
+          <ExpressionEditor
+            draft={draft.expression}
+            metricOptionLookup={savedMetricOptionLookup}
+            metricOptions={metricOptions}
+            onChange={expression =>
+              setDraft(currentDraft => ({
+                ...currentDraft,
+                expression,
+              }))
+            }
+            parameterOptions={parameterOptions}
+            title={t('Expression')}
+          />
+          <div>
+            <strong>{t('Expression preview')}</strong>
+            <code>{expressionPreview}</code>
+          </div>
+          <div>
+            <strong>{t('Validation')}</strong>
+            <span>{validationMessage}</span>
+          </div>
           <Button buttonSize="small" buttonStyle="primary" onClick={saveField}>
             {t('Save calculated field')}
           </Button>

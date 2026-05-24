@@ -30,6 +30,7 @@ import {
   ThemedAgGridReact,
 } from '@superset-ui/core/components';
 import {
+  t,
   useTheme,
   type DataRecord,
   type DataRecordValue,
@@ -50,7 +51,6 @@ import type {
   CrosstabFormData,
   CrosstabOwnState,
   CrosstabParameter,
-  CrosstabV4NumberParameter,
 } from './types';
 import {
   formatCrosstabValue,
@@ -487,7 +487,7 @@ function getPreservedRuntimeParameterOwnState(
 }
 
 function validateNumericParameterValue(
-  parameter: CrosstabV4NumberParameter,
+  parameter: CrosstabParameter,
   value: number,
 ) {
   if (!Number.isFinite(value)) {
@@ -524,7 +524,6 @@ export default function CrosstabTable({
   rowData,
   expandedRowPaths,
   numericParameters,
-  textParameters,
   selectedDynamicGroupBy,
   selectedDynamicMetric,
   serverColumnCurrentPage,
@@ -636,7 +635,7 @@ export default function CrosstabTable({
             : slot.defaultOptionId;
 
         return {
-          label: slot.label ?? '分组维度',
+          label: slot.label ?? t('Group dimension'),
           options,
           slotId: slot.id,
           value,
@@ -664,7 +663,7 @@ export default function CrosstabTable({
             : slot.defaultOptionId;
 
         return {
-          label: slot.label ?? '指标',
+          label: slot.label ?? t('Metric'),
           options,
           slotId: slot.id,
           value,
@@ -674,20 +673,11 @@ export default function CrosstabTable({
   }, [dynamicMetricConfig, selectedDynamicMetric]);
   const parameterControls = useMemo(
     () =>
-      getCrosstabParameters(formData as CrosstabFormData).map(parameter => {
-        if (parameter.kind === 'number') {
-          return {
-            parameter,
-            value: numericParameters?.[parameter.id] ?? parameter.defaultValue,
-          };
-        }
-
-        return {
-          parameter,
-          value: textParameters?.[parameter.id] ?? parameter.defaultValue,
-        };
-      }),
-    [formData, numericParameters, textParameters],
+      getCrosstabParameters(formData as CrosstabFormData).map(parameter => ({
+        parameter,
+        value: numericParameters?.[parameter.id] ?? parameter.defaultValue,
+      })),
+    [formData, numericParameters],
   );
   const totalGeneratedColumnCount = serverColumnPagination
     ? (serverColumnTotalCount ?? treeLeafColumnIds.length)
@@ -845,7 +835,7 @@ export default function CrosstabTable({
     ],
   );
   const updateNumericParameter = useCallback(
-    (parameter: CrosstabV4NumberParameter, value: number) => {
+    (parameter: CrosstabParameter, value: number) => {
       validateNumericParameterValue(parameter, value);
 
       if (!serverColumnPagination) {
@@ -857,42 +847,6 @@ export default function CrosstabTable({
           ...getPreservedRuntimeParameterOwnState(ownState),
           numericParameters: {
             ...(ownState?.numericParameters ?? {}),
-            [parameter.id]: value,
-          },
-          currentColumnPage: 0,
-          currentColumnPageSize: effectiveColumnsPerPage,
-        },
-      });
-    },
-    [
-      effectiveColumnsPerPage,
-      ownState,
-      serverColumnPagination,
-      setColumnPage,
-      setDataMask,
-    ],
-  );
-  const updateTextParameter = useCallback(
-    (
-      parameter: Extract<CrosstabParameter, { kind: 'text' }>,
-      value: string,
-    ) => {
-      if (
-        parameter.allowedValues !== undefined &&
-        !parameter.allowedValues.includes(value)
-      ) {
-        return;
-      }
-
-      if (!serverColumnPagination) {
-        setColumnPage(0);
-      }
-
-      setDataMask?.({
-        ownState: {
-          ...getPreservedRuntimeParameterOwnState(ownState),
-          textParameters: {
-            ...(ownState?.textParameters ?? {}),
             [parameter.id]: value,
           },
           currentColumnPage: 0,
@@ -1030,13 +984,18 @@ export default function CrosstabTable({
           disabled={effectiveColumnPage === 0 || isServerColumnLoading}
           onClick={previousColumnPage}
           htmlType="button"
-          aria-label="Previous crosstab columns"
+          aria-label={t('Previous crosstab columns')}
         >
-          上一页
+          {t('Previous')}
         </Button>
-        <span>{`列 ${pageStart + 1}-${pageEnd} / ${
-          totalGeneratedColumnCount
-        }`}</span>
+        <span>
+          {t(
+            'Columns %s-%s / %s',
+            pageStart + 1,
+            pageEnd,
+            totalGeneratedColumnCount,
+          )}
+        </span>
         <Button
           buttonSize="small"
           disabled={
@@ -1044,9 +1003,9 @@ export default function CrosstabTable({
           }
           onClick={nextColumnPage}
           htmlType="button"
-          aria-label="Next crosstab columns"
+          aria-label={t('Next crosstab columns')}
         >
-          下一页
+          {t('Next')}
         </Button>
       </div>
     ) : null;
@@ -1062,7 +1021,7 @@ export default function CrosstabTable({
     >
       <span>{selector.label}</span>
       <Select
-        ariaLabel={`Select crosstab group by dimension ${selector.label}`}
+        ariaLabel={t('Select crosstab group by dimension %s', selector.label)}
         allowSelectAll={false}
         onChange={(nextOptionId: string) =>
           updateDynamicGroupByOption(selector.slotId, nextOptionId)
@@ -1084,7 +1043,7 @@ export default function CrosstabTable({
     >
       <span>{selector.label}</span>
       <Select
-        ariaLabel={`Select crosstab metric ${selector.label}`}
+        ariaLabel={t('Select crosstab metric %s', selector.label)}
         allowSelectAll={false}
         onChange={(nextOptionId: string) =>
           updateDynamicMetricOption(selector.slotId, nextOptionId)
@@ -1096,34 +1055,7 @@ export default function CrosstabTable({
   ));
   const runtimeParameterControls = parameterControls.map(
     ({ parameter, value }) => {
-      const label = parameter.label ?? parameter.name;
-
-      if (parameter.kind === 'number') {
-        return (
-          <div
-            key={parameter.id}
-            data-test={`crosstab-parameter-control--${parameter.id}`}
-            style={{
-              alignItems: 'center',
-              display: 'inline-flex',
-              gap: theme.sizeUnit,
-            }}
-          >
-            <span>{label}</span>
-            <input
-              aria-label={label}
-              max={parameter.max}
-              min={parameter.min}
-              onChange={event =>
-                updateNumericParameter(parameter, Number(event.target.value))
-              }
-              step={parameter.step}
-              type="number"
-              value={value as number}
-            />
-          </div>
-        );
-      }
+      const { label } = parameter;
 
       return (
         <div
@@ -1136,29 +1068,17 @@ export default function CrosstabTable({
           }}
         >
           <span>{label}</span>
-          {parameter.allowedValues === undefined ? (
-            <input
-              aria-label={label}
-              onChange={event =>
-                updateTextParameter(parameter, event.target.value)
-              }
-              type="text"
-              value={value as string}
-            />
-          ) : (
-            <Select
-              ariaLabel={label}
-              allowSelectAll={false}
-              onChange={(nextValue: string) =>
-                updateTextParameter(parameter, nextValue)
-              }
-              options={parameter.allowedValues.map(option => ({
-                label: option,
-                value: option,
-              }))}
-              value={value as string}
-            />
-          )}
+          <input
+            aria-label={label}
+            max={parameter.max}
+            min={parameter.min}
+            onChange={event =>
+              updateNumericParameter(parameter, Number(event.target.value))
+            }
+            step={parameter.step}
+            type="number"
+            value={value}
+          />
         </div>
       );
     },
@@ -1191,7 +1111,7 @@ export default function CrosstabTable({
           buttonSize="small"
           onClick={exportCsv}
           htmlType="button"
-          aria-label="Export crosstab CSV"
+          aria-label={t('Export crosstab CSV')}
         >
           CSV
         </Button>

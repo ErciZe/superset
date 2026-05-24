@@ -252,7 +252,7 @@ describe('crosstab dynamic group by resolver', () => {
       slots: [
         {
           id: '__legacy__',
-          label: '分组维度',
+          label: 'Group dimension',
           placement: 'columns',
           slotIndex: 1,
           spliceCount: 1,
@@ -340,7 +340,7 @@ describe('crosstab dynamic group by resolver', () => {
       slots: [
         {
           id: '__legacy__',
-          label: '分组维度',
+          label: 'Group dimension',
           placement: 'columns',
           slotIndex: 1,
           spliceCount: 1,

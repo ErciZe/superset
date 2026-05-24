@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { getColumnLabel, type QueryFormColumn } from '@superset-ui/core';
+import { getColumnLabel, t, type QueryFormColumn } from '@superset-ui/core';
 import type {
   CrosstabDynamicGroupByConfig,
   CrosstabDynamicGroupByInput,
@@ -60,7 +60,7 @@ export const ERR_CROSSTAB_DYNAMIC_GROUP_BY_MAX_DIMENSIONS =
   'ERR_CROSSTAB_DYNAMIC_GROUP_BY_MAX_DIMENSIONS';
 
 const LEGACY_SLOT_ID = '__legacy__';
-const LEGACY_SLOT_LABEL = '分组维度';
+const LEGACY_SLOT_LABEL = t('Group dimension');
 const MAX_DIMENSIONS = 8;
 
 type ResolveDynamicGroupByDimensionsArgs = {

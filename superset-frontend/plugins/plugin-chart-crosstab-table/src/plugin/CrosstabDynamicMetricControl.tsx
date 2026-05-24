@@ -41,6 +41,7 @@ import {
   getDynamicMetricConfig,
 } from './dynamicMetric';
 import { validateDynamicSlots } from './dynamicSlots';
+import { getMetricSemanticLabel } from './metricSemantics';
 
 const Editor = styled.div`
   display: grid;
@@ -522,7 +523,7 @@ export default function CrosstabDynamicMetricControl({
                   <Select
                     ariaLabel={t('Metric semantic')}
                     options={metricSemantics.map(semantic => ({
-                      label: semantic,
+                      label: getMetricSemanticLabel(semantic),
                       value: semantic,
                     }))}
                     value={metricConfig.semantic ?? 'unknown'}

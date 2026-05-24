@@ -18,20 +18,15 @@
  */
 import type {
   CrosstabFormData,
-  CrosstabNumberParameter,
   CrosstabOwnState,
   CrosstabParameter,
-  CrosstabTextParameter,
-  CrosstabV4NumberParameter,
 } from '../types';
+import { assertNoLegacyV4Inputs } from './v4Contract';
 
 export const ERR_CROSSTAB_PARAMETER_CONFIG = 'ERR_CROSSTAB_PARAMETER_CONFIG';
 export const ERR_CROSSTAB_PARAMETER_VALUE = 'ERR_CROSSTAB_PARAMETER_VALUE';
 
-export type CrosstabParameterValues = Record<string, number> & {
-  readonly number: Record<string, number>;
-  readonly text: Record<string, string>;
-};
+export type CrosstabParameterValues = Record<string, number>;
 
 export type ResolvedCrosstabParameters = {
   config: CrosstabParameter[];
@@ -73,16 +68,8 @@ function assertNonEmptyString(value: unknown): asserts value is string {
   }
 }
 
-function assertRuntimeString(value: unknown): asserts value is string {
-  if (typeof value !== 'string') {
-    throw new Error(ERR_CROSSTAB_PARAMETER_VALUE);
-  }
-}
-
 function parseParameterInput(
-  value:
-    | CrosstabFormData['crosstabParameters']
-    | CrosstabFormData['parameters'],
+  value: CrosstabFormData['crosstabParameters'],
 ): unknown[] {
   if (value === undefined || value === '') {
     return [];
@@ -150,68 +137,11 @@ function validateNumberValue(
   }
 }
 
-function normalizeLegacyNumberParameter(
-  value: unknown,
-): CrosstabNumberParameter {
+function normalizeParameter(value: unknown): CrosstabParameter {
   if (!isObject(value)) {
     throw new Error(ERR_CROSSTAB_PARAMETER_CONFIG);
   }
 
-  const {
-    kind,
-    name,
-    label,
-    default: defaultValue,
-    min,
-    max,
-    step,
-    unit,
-  } = value;
-
-  if (kind !== 'number' || typeof name !== 'string' || name.length === 0) {
-    throw new Error(ERR_CROSSTAB_PARAMETER_CONFIG);
-  }
-
-  assertFiniteNumber(defaultValue, ERR_CROSSTAB_PARAMETER_CONFIG);
-  assertOptionalString(label);
-  assertOptionalFiniteNumber(min);
-  assertOptionalFiniteNumber(max);
-  assertOptionalFiniteNumber(step);
-  assertOptionalString(unit);
-  validateNumberConfig(min, max, step);
-  validateNumberValue(
-    defaultValue,
-    min,
-    max,
-    step,
-    ERR_CROSSTAB_PARAMETER_CONFIG,
-  );
-
-  return {
-    kind,
-    name,
-    ...(label === undefined ? {} : { label }),
-    default: defaultValue,
-    ...(min === undefined ? {} : { min }),
-    ...(max === undefined ? {} : { max }),
-    ...(step === undefined ? {} : { step }),
-    ...(unit === undefined ? {} : { unit }),
-  };
-}
-
-function assertOptionalStringArray(
-  value: unknown,
-): asserts value is string[] | undefined {
-  if (value !== undefined) {
-    if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
-      throw new Error(ERR_CROSSTAB_PARAMETER_CONFIG);
-    }
-  }
-}
-
-function normalizeNumberParameter(
-  value: Record<string, unknown>,
-): CrosstabV4NumberParameter {
   const { id, kind, name, label, defaultValue, min, max, step, unit } = value;
 
   if (kind !== 'number') {
@@ -248,51 +178,6 @@ function normalizeNumberParameter(
   };
 }
 
-function normalizeTextParameter(
-  value: Record<string, unknown>,
-): CrosstabTextParameter {
-  const { id, kind, name, label, defaultValue, allowedValues } = value;
-
-  if (kind !== 'text') {
-    throw new Error(ERR_CROSSTAB_PARAMETER_CONFIG);
-  }
-
-  assertNonEmptyString(id);
-  assertNonEmptyString(name);
-  assertNonEmptyString(label);
-  assertNonEmptyString(defaultValue);
-  assertOptionalStringArray(allowedValues);
-
-  if (allowedValues !== undefined && !allowedValues.includes(defaultValue)) {
-    throw new Error(ERR_CROSSTAB_PARAMETER_CONFIG);
-  }
-
-  return {
-    id,
-    kind,
-    name,
-    label,
-    defaultValue,
-    ...(allowedValues === undefined ? {} : { allowedValues }),
-  };
-}
-
-function normalizeCanonicalParameter(value: unknown): CrosstabParameter {
-  if (!isObject(value)) {
-    throw new Error(ERR_CROSSTAB_PARAMETER_CONFIG);
-  }
-
-  if (value.kind === 'number') {
-    return normalizeNumberParameter(value);
-  }
-
-  if (value.kind === 'text') {
-    return normalizeTextParameter(value);
-  }
-
-  throw new Error(ERR_CROSSTAB_PARAMETER_CONFIG);
-}
-
 function assertUniqueParameterKeys(parameters: CrosstabParameter[]): void {
   const ids = new Set<string>();
   const names = new Set<string>();
@@ -307,47 +192,13 @@ function assertUniqueParameterKeys(parameters: CrosstabParameter[]): void {
   });
 }
 
-function legacyNumberParameterToCanonical(
-  parameter: CrosstabNumberParameter,
-): CrosstabV4NumberParameter {
-  return {
-    id: parameter.name,
-    kind: 'number',
-    name: parameter.name,
-    label: parameter.label ?? parameter.name,
-    defaultValue: parameter.default,
-    ...(parameter.min === undefined ? {} : { min: parameter.min }),
-    ...(parameter.max === undefined ? {} : { max: parameter.max }),
-    ...(parameter.step === undefined ? {} : { step: parameter.step }),
-    ...(parameter.unit === undefined ? {} : { unit: parameter.unit }),
-  };
-}
-
-export function getCrosstabNumberParameters(
-  formData: CrosstabFormData,
-): CrosstabNumberParameter[] {
-  const parameters = parseParameterInput(formData.parameters).map(
-    normalizeLegacyNumberParameter,
-  );
-
-  if (parameters.length > 1) {
-    throw new Error(ERR_CROSSTAB_PARAMETER_CONFIG);
-  }
-
-  return parameters;
-}
-
 export function getCrosstabParameters(
   formData: CrosstabFormData,
 ): CrosstabParameter[] {
-  const parameters =
-    formData.crosstabParameters === undefined
-      ? getCrosstabNumberParameters(formData).map(
-          legacyNumberParameterToCanonical,
-        )
-      : parseParameterInput(formData.crosstabParameters).map(
-          normalizeCanonicalParameter,
-        );
+  assertNoLegacyV4Inputs(formData, ERR_CROSSTAB_PARAMETER_CONFIG);
+  const parameters = parseParameterInput(formData.crosstabParameters).map(
+    normalizeParameter,
+  );
 
   assertUniqueParameterKeys(parameters);
 
@@ -355,7 +206,7 @@ export function getCrosstabParameters(
 }
 
 function validateParameterValue(
-  parameter: CrosstabV4NumberParameter,
+  parameter: CrosstabParameter,
   value: number,
 ): void {
   validateNumberValue(
@@ -367,60 +218,22 @@ function validateParameterValue(
   );
 }
 
-function createParameterValues(
-  numberValues: Record<string, number>,
-  textValues: Record<string, string>,
-): CrosstabParameterValues {
-  const values: Record<string, number> = { ...numberValues };
-
-  Object.defineProperties(values, {
-    number: {
-      value: numberValues,
-      enumerable: false,
-    },
-    text: {
-      value: textValues,
-      enumerable: false,
-    },
-  });
-
-  return values as CrosstabParameterValues;
-}
-
 export function resolveCrosstabParameters(
   formData: CrosstabFormData,
   ownState?: CrosstabOwnState,
 ): ResolvedCrosstabParameters {
   const config = getCrosstabParameters(formData);
-  const numberValues: Record<string, number> = {};
-  const textValues: Record<string, string> = {};
+  const values: Record<string, number> = {};
 
   config.forEach(parameter => {
-    if (parameter.kind === 'number') {
-      const ownValue = ownState?.numericParameters?.[parameter.id];
-      const value = ownValue === undefined ? parameter.defaultValue : ownValue;
-
-      validateParameterValue(parameter, value);
-      numberValues[parameter.id] = value;
-
-      return;
-    }
-
-    const ownValue: unknown = ownState?.textParameters?.[parameter.id];
+    const ownValue = ownState?.numericParameters?.[parameter.id];
     const value = ownValue === undefined ? parameter.defaultValue : ownValue;
-    assertRuntimeString(value);
 
-    if (
-      parameter.allowedValues !== undefined &&
-      !parameter.allowedValues.includes(value)
-    ) {
-      throw new Error(ERR_CROSSTAB_PARAMETER_VALUE);
-    }
-
-    textValues[parameter.id] = value;
+    validateParameterValue(parameter, value);
+    values[parameter.id] = value;
   });
 
-  return { config, values: createParameterValues(numberValues, textValues) };
+  return { config, values };
 }
 
 function encodeSignaturePart(value: string): string {
@@ -445,16 +258,11 @@ export function getParameterSignature(
 
       return 0;
     })
-    .map(parameter => {
-      const id = encodeSignaturePart(parameter.id);
-
-      if (parameter.kind === 'number') {
-        return `number:${id}=${resolved.values.number[parameter.id]}`;
-      }
-
-      return `text:${id}=${encodeSignaturePart(
-        resolved.values.text[parameter.id],
-      )}`;
-    })
+    .map(
+      parameter =>
+        `number:${encodeSignaturePart(parameter.id)}=${
+          resolved.values[parameter.id]
+        }`,
+    )
     .join('|');
 }

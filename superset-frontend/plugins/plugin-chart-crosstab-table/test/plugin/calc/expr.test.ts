@@ -21,13 +21,11 @@ import {
   ERR_CROSSTAB_CALC_FIELD,
   ERR_CROSSTAB_CALC_METRIC,
   emitCalculatedFieldAstSql,
-  emitCalculatedFieldSql,
   validateCalculatedFieldAst,
 } from '../../../src/plugin/calc/expr';
 import type {
   CrosstabCalculatedField,
   CrosstabExpressionNode,
-  CrosstabV4CalculatedField,
 } from '../../../src/types';
 
 const metricSql = {
@@ -37,19 +35,14 @@ const metricSql = {
 };
 
 const parameterValues = {
-  number: {
-    multiplier: 1.25,
-    offset: 10,
-  },
-  text: {
-    region: 'west',
-  },
+  multiplier: 1.25,
+  offset: 10,
 };
 
 function field(
   ast: CrosstabExpressionNode,
-  resultType: CrosstabV4CalculatedField['resultType'] = 'number',
-): CrosstabV4CalculatedField {
+  resultType: CrosstabCalculatedField['resultType'] = 'number',
+): CrosstabCalculatedField {
   return {
     id: 'gross_margin_rate',
     name: '毛利率',
@@ -128,6 +121,19 @@ test('rejects missing metrics', () => {
   ).toThrow(ERR_CROSSTAB_CALC_METRIC);
 });
 
+test('rejects missing number params', () => {
+  expect(() =>
+    emitCalculatedFieldAstSql(
+      field({ kind: 'number_param', parameterId: 'missing' }),
+      {
+        dialect: 'doris',
+        metricSql,
+        parameterValues,
+      },
+    ),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
 test.each([
   ['semicolon', 'SUM(profit); DROP TABLE chart'],
   ['line comment', 'SUM(profit) -- comment'],
@@ -152,46 +158,6 @@ test.each([
     ),
   ).toThrow(ERR_CROSSTAB_CALC_METRIC);
 });
-
-test('rejects text params inside numeric expressions', () => {
-  expect(() =>
-    emit({
-      kind: 'binary_op',
-      op: '+',
-      left: { kind: 'metric_ref', metricId: 'profit' },
-      right: { kind: 'text_param', parameterId: 'region' },
-    }),
-  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
-});
-
-test('rejects text AST for number result fields', () => {
-  expect(() =>
-    emitCalculatedFieldAstSql(
-      field({ kind: 'literal_text', value: 'not numeric' }, 'number'),
-      {
-        dialect: 'doris',
-        metricSql,
-        parameterValues,
-      },
-    ),
-  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
-});
-
-test.each([
-  ['literal_number', { kind: 'literal_number', value: 1 }],
-  ['metric_ref', { kind: 'metric_ref', metricId: 'profit' }],
-] satisfies Array<[string, CrosstabExpressionNode]>)(
-  'rejects %s AST for text result fields',
-  (_label, ast) => {
-    expect(() =>
-      emitCalculatedFieldAstSql(field(ast, 'text'), {
-        dialect: 'doris',
-        metricSql,
-        parameterValues,
-      }),
-    ).toThrow(ERR_CROSSTAB_CALC_FIELD);
-  },
-);
 
 test.each(['safe_div', 'pct', 'ratio'] as const)(
   'rejects literal zero denominator in %s during validation',
@@ -221,25 +187,4 @@ test('rejects unsupported dialects', () => {
       },
     ),
   ).toThrow(ERR_CROSSTAB_CALC_DIALECT);
-});
-
-test('preserves legacy ratio compiler API', () => {
-  const legacyField: CrosstabCalculatedField = {
-    id: 'gross_margin_rate',
-    label: '毛利率',
-    template: 'ratio',
-    inputs: { leftMetric: 'profit', rightMetric: 'sales' },
-    semantic: 'ratio',
-    formatString: '.2%',
-  };
-
-  expect(
-    emitCalculatedFieldSql(legacyField, {
-      dialect: 'doris',
-      metricSql,
-      parameterValues: {},
-    }),
-  ).toBe(
-    '(CASE WHEN SUM(sales_amount) = 0 THEN NULL ELSE SUM(gross_profit) / SUM(sales_amount) END)',
-  );
 });

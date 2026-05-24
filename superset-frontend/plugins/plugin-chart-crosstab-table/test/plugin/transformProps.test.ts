@@ -239,7 +239,7 @@ describe('crosstab transformProps', () => {
     expect(signatureA).not.toBe(signatureB);
   });
 
-  it('includes text parameter values in effective metric signature', () => {
+  it('includes every numeric parameter value in effective metric signature', () => {
     const baseProps = createProps({
       formData: {
         ...canonicalParameterizedCalculatedFormData,
@@ -255,12 +255,11 @@ describe('crosstab transformProps', () => {
             step: 0.01,
           },
           {
-            id: 'param_country',
-            kind: 'text',
-            name: 'country',
-            label: '国家',
-            defaultValue: 'US',
-            allowedValues: ['US', 'DE'],
+            id: 'param_secondary',
+            kind: 'number',
+            name: 'secondaryRate',
+            label: '次级系数',
+            defaultValue: 1,
           },
         ],
       },
@@ -275,11 +274,11 @@ describe('crosstab transformProps', () => {
 
     const signatureA = transformProps({
       ...baseProps,
-      ownState: { textParameters: { param_country: 'US' } },
+      ownState: { numericParameters: { param_secondary: 1 } },
     }).effectiveMetricSignature;
     const signatureB = transformProps({
       ...baseProps,
-      ownState: { textParameters: { param_country: 'DE' } },
+      ownState: { numericParameters: { param_secondary: 1.5 } },
     }).effectiveMetricSignature;
 
     expect(signatureA).not.toBe(signatureB);
@@ -302,18 +301,17 @@ describe('crosstab transformProps', () => {
               step: 0.01,
             },
             {
-              id: 'param_country',
-              kind: 'text',
-              name: 'country',
-              label: '国家',
-              defaultValue: 'US',
-              allowedValues: ['US', 'DE'],
+              id: 'param_secondary',
+              kind: 'number',
+              name: 'secondaryRate',
+              label: '次级系数',
+              defaultValue: 1,
             },
           ],
         },
         ownState: {
           numericParameters: { param_adjustment: 1.25 },
-          textParameters: { param_country: 'DE' },
+          currentColumnPage: 0,
         },
         queriesData: [
           {
@@ -325,8 +323,10 @@ describe('crosstab transformProps', () => {
       }),
     );
 
-    expect(props.numericParameters).toEqual({ param_adjustment: 1.25 });
-    expect(props.textParameters).toEqual({ param_country: 'DE' });
+    expect(props.numericParameters).toEqual({
+      param_adjustment: 1.25,
+      param_secondary: 1,
+    });
   });
 
   it('converts query data into renderer props', () => {

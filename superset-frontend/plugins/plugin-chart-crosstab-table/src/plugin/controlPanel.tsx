@@ -121,6 +121,24 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'parameters',
+            config: {
+              type: 'HiddenControl',
+              hidden: true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'calculatedFields',
+            config: {
+              type: 'HiddenControl',
+              hidden: true,
+            },
+          },
+        ],
         ['adhoc_filters'],
         ['row_limit'],
       ],

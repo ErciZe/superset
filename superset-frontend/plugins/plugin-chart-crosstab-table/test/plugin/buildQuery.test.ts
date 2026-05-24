@@ -1,4 +1,6 @@
-import buildQuery from '../../src/plugin/buildQuery';
+import buildQuery, {
+  ERR_CROSSTAB_BUSINESS_MATRIX_CALCULATED_FIELD,
+} from '../../src/plugin/buildQuery';
 import {
   ERR_SERVER_COLUMN_PAGINATION_COLUMNS,
   ERR_SERVER_COLUMN_PAGINATION_SHAPE,
@@ -1169,5 +1171,57 @@ describe('crosstab buildQuery', () => {
         } as never,
       ),
     ).toThrow(ERR_SERVER_COLUMN_PAGINATION_SHAPE);
+  });
+
+  it('rejects calculated fields on business matrix row dimensions', () => {
+    expect(() =>
+      buildQuery({
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }, { field: 'shop_name' }],
+          metrics: [
+            {
+              metric: 'V4示例毛利率',
+              label: 'V4示例毛利率',
+              calculatedFieldId: 'calc_margin_pct_v4',
+              semantic: 'ratio',
+            },
+          ],
+        },
+        datasourceMetrics: [
+          {
+            metric_name: 'v4_gross_profit_sum',
+            verbose_name: 'V4毛利',
+            expression: 'SUM(gross_profit)',
+          },
+          {
+            metric_name: 'v4_sales_amount_sum',
+            verbose_name: 'V4销售额',
+            expression: 'SUM(sales_amount)',
+          },
+        ],
+        crosstabCalculatedFields: [
+          {
+            id: 'calc_margin_pct_v4',
+            name: 'V4示例毛利率',
+            resultType: 'percent',
+            formatString: '.2%',
+            ast: {
+              kind: 'pct',
+              numerator: {
+                kind: 'metric_ref',
+                metricId: 'v4_gross_profit_sum',
+              },
+              denominator: {
+                kind: 'metric_ref',
+                metricId: 'v4_sales_amount_sum',
+              },
+            },
+          },
+        ],
+      } as never),
+    ).toThrow(ERR_CROSSTAB_BUSINESS_MATRIX_CALCULATED_FIELD);
   });
 });

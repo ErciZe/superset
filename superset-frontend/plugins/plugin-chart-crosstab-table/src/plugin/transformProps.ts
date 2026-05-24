@@ -55,9 +55,8 @@ import {
 import type { CrosstabOwnState as ServerColumnOwnState } from './serverColumnPagination';
 import {
   getCrosstabColumnColumns,
+  getEffectiveCrosstabMetricConfigs,
   getCrosstabFieldLabels,
-  getCrosstabMetrics,
-  getPersistedCrosstabMetricConfigs,
   getCrosstabRowColumns,
   getCrosstabRowSubtotalDepths,
   getCrosstabSemanticOverrideField,
@@ -347,7 +346,6 @@ export default function transformProps(
   const persistedColumnDimensions = ensureIsArray<QueryFormColumn>(
     getCrosstabColumnColumns(crosstabFormData),
   );
-  const metrics = getCrosstabMetrics(crosstabFormData);
   const crosstabOwnState = (ownState ?? {}) as CrosstabOwnState;
   const dynamicGroupBy = resolveDynamicGroupByDimensions({
     formData: crosstabFormData,
@@ -357,11 +355,7 @@ export default function transformProps(
   });
   const rowFields = dynamicGroupBy.rowDimensions.map(normalizeColumn);
   const columnFields = dynamicGroupBy.columnDimensions.map(normalizeColumn);
-  const persistedMetricConfigs =
-    getPersistedCrosstabMetricConfigs(crosstabFormData);
-  const baseMetricConfigs = persistedMetricConfigs.length
-    ? persistedMetricConfigs
-    : ensureIsArray<QueryFormMetric>(metrics).map(metric => ({ metric }));
+  const baseMetricConfigs = getEffectiveCrosstabMetricConfigs(crosstabFormData);
   const resolvedParameters = resolveCrosstabParameters(
     crosstabFormData,
     crosstabOwnState,
@@ -674,8 +668,7 @@ export default function transformProps(
     serverColumnCurrentPage: currentPage,
     serverColumnPageSize: columnPageSize,
     serverColumnTotalCount: totalCount,
-    numericParameters: resolvedParameters.values.number,
-    textParameters: resolvedParameters.values.text,
+    numericParameters: resolvedParameters.values,
     isServerColumnLoading:
       serverColumnPagination &&
       (resetDynamicGroupByOwnState ||

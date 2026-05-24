@@ -26,7 +26,6 @@ import { ERR_CROSSTAB_CALC_METRIC } from '../../src/plugin/calc/expr';
 import type {
   CrosstabCalculatedField,
   CrosstabFormData,
-  CrosstabV4CalculatedField,
   MetricFieldConfig,
 } from '../../src/types';
 
@@ -51,7 +50,7 @@ const metricConfigs: MetricFieldConfig[] = [
   },
 ];
 
-const calculatedField: CrosstabV4CalculatedField = {
+const calculatedField: CrosstabCalculatedField = {
   id: 'calc_margin_pct',
   name: '毛利率调整',
   resultType: 'percent',
@@ -81,7 +80,7 @@ test('expands canonical AST calculated fields into SQL metric configs', () => {
         calculatedFieldId: 'calc_margin_pct',
       },
     ],
-    parameterValues: { number: {}, text: {} },
+    parameterValues: {},
   });
 
   expect(result.metricConfigs).toHaveLength(3);
@@ -110,7 +109,7 @@ test('removes calculated field placeholders that use canonical ids', () => {
         calculatedFieldId: 'calc_margin_pct',
       },
     ],
-    parameterValues: { number: {}, text: {} },
+    parameterValues: {},
   });
 
   expect(result.metricConfigs).toHaveLength(3);
@@ -152,7 +151,7 @@ test('expands calculated fields that reference selected saved metric names', () 
         calculatedFieldId: 'calc_margin_pct',
       },
     ],
-    parameterValues: { number: {}, text: {} },
+    parameterValues: {},
   });
 
   expect(result.metricConfigs[2].metric).toEqual({
@@ -207,7 +206,7 @@ test('expands calculated fields that reference hidden datasource saved metrics',
         calculatedFieldId: 'calc_margin_pct_v4',
       },
     ],
-    parameterValues: { number: {}, text: {} },
+    parameterValues: {},
   });
 
   expect(result.metricConfigs).toEqual([
@@ -225,7 +224,7 @@ test('expands calculated fields that reference hidden datasource saved metrics',
   ]);
 });
 
-test('prefers legacy SQL metrics over datasource saved metrics for hidden calculated dependencies', () => {
+test('resolves datasource saved metrics for hidden calculated dependencies even when legacy SQL metrics exist', () => {
   const result = expandCalculatedFieldMetricConfigs({
     dialect: 'doris',
     formData: {
@@ -281,7 +280,7 @@ test('prefers legacy SQL metrics over datasource saved metrics for hidden calcul
         calculatedFieldId: 'calc_margin_pct_v4',
       },
     ],
-    parameterValues: { number: {}, text: {} },
+    parameterValues: {},
   });
 
   expect(result.metricConfigs).toEqual([
@@ -290,7 +289,7 @@ test('prefers legacy SQL metrics over datasource saved metrics for hidden calcul
         expressionType: 'SQL',
         label: 'V4示例毛利率',
         sqlExpression:
-          '((CASE WHEN SUM(legacy_sales_amount) = 0 THEN NULL ELSE SUM(legacy_gross_profit) / SUM(legacy_sales_amount) END) * 100)',
+          '((CASE WHEN SUM(datasource_sales_amount) = 0 THEN NULL ELSE SUM(datasource_gross_profit) / SUM(datasource_sales_amount) END) * 100)',
       },
       label: 'V4示例毛利率',
       semantic: 'ratio',
@@ -299,83 +298,71 @@ test('prefers legacy SQL metrics over datasource saved metrics for hidden calcul
   ]);
 });
 
-test('prefers legacy SQL metrics over conflicting datasource saved metric aliases', () => {
-  const result = expandCalculatedFieldMetricConfigs({
-    dialect: 'doris',
-    formData: {
-      ...formData,
-      metrics: [
-        {
-          expressionType: 'SQL',
-          label: 'v4_gross_profit_sum',
-          sqlExpression: 'SUM(legacy_gross_profit)',
-        },
-        {
-          expressionType: 'SQL',
-          label: 'v4_sales_amount_sum',
-          sqlExpression: 'SUM(legacy_sales_amount)',
-        },
-      ],
-      datasourceMetrics: [
-        {
-          metric_name: 'v4_gross_profit_sum',
-          verbose_name: 'V4毛利',
-          expression: 'SUM(datasource_gross_profit)',
-        },
-        {
-          label: 'v4_gross_profit_sum',
-          verbose_name: 'V4毛利冲突',
-          expression: 'SUM(conflicting_gross_profit)',
-        },
-        {
-          metric_name: 'v4_sales_amount_sum',
-          verbose_name: 'V4销售额',
-          expression: 'SUM(datasource_sales_amount)',
-        },
-      ],
-      crosstabCalculatedFields: [
-        {
-          id: 'calc_margin_pct_v4',
-          name: 'V4示例毛利率',
-          resultType: 'percent',
-          formatString: '.2%',
-          ast: {
-            kind: 'pct',
-            numerator: {
-              kind: 'metric_ref',
-              metricId: 'v4_gross_profit_sum',
-            },
-            denominator: {
-              kind: 'metric_ref',
-              metricId: 'v4_sales_amount_sum',
+test('rejects conflicting datasource saved metric aliases even when legacy SQL metrics exist', () => {
+  expect(() =>
+    expandCalculatedFieldMetricConfigs({
+      dialect: 'doris',
+      formData: {
+        ...formData,
+        metrics: [
+          {
+            expressionType: 'SQL',
+            label: 'v4_gross_profit_sum',
+            sqlExpression: 'SUM(legacy_gross_profit)',
+          },
+          {
+            expressionType: 'SQL',
+            label: 'v4_sales_amount_sum',
+            sqlExpression: 'SUM(legacy_sales_amount)',
+          },
+        ],
+        datasourceMetrics: [
+          {
+            metric_name: 'v4_gross_profit_sum',
+            verbose_name: 'V4毛利',
+            expression: 'SUM(datasource_gross_profit)',
+          },
+          {
+            label: 'v4_gross_profit_sum',
+            verbose_name: 'V4毛利冲突',
+            expression: 'SUM(conflicting_gross_profit)',
+          },
+          {
+            metric_name: 'v4_sales_amount_sum',
+            verbose_name: 'V4销售额',
+            expression: 'SUM(datasource_sales_amount)',
+          },
+        ],
+        crosstabCalculatedFields: [
+          {
+            id: 'calc_margin_pct_v4',
+            name: 'V4示例毛利率',
+            resultType: 'percent',
+            formatString: '.2%',
+            ast: {
+              kind: 'pct',
+              numerator: {
+                kind: 'metric_ref',
+                metricId: 'v4_gross_profit_sum',
+              },
+              denominator: {
+                kind: 'metric_ref',
+                metricId: 'v4_sales_amount_sum',
+              },
             },
           },
+        ],
+      } as unknown as CrosstabFormData,
+      metricConfigs: [
+        {
+          metric: 'V4示例毛利率',
+          label: 'V4示例毛利率',
+          calculatedFieldId: 'calc_margin_pct_v4',
         },
       ],
-    } as unknown as CrosstabFormData,
-    metricConfigs: [
-      {
-        metric: 'V4示例毛利率',
-        label: 'V4示例毛利率',
-        calculatedFieldId: 'calc_margin_pct_v4',
-      },
-    ],
-    parameterValues: { number: {}, text: {} },
-  });
-
-  expect(result.metricConfigs).toEqual([
-    {
-      metric: {
-        expressionType: 'SQL',
-        label: 'V4示例毛利率',
-        sqlExpression:
-          '((CASE WHEN SUM(legacy_sales_amount) = 0 THEN NULL ELSE SUM(legacy_gross_profit) / SUM(legacy_sales_amount) END) * 100)',
-      },
-      label: 'V4示例毛利率',
-      semantic: 'ratio',
-      formatString: '.2%',
-    },
-  ]);
+      parameterValues: {},
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_METRIC);
 });
 
 test('rejects conflicting datasource saved metric aliases for calculated dependencies', () => {
@@ -428,7 +415,7 @@ test('rejects conflicting datasource saved metric aliases for calculated depende
           calculatedFieldId: 'calc_margin_pct_v4',
         },
       ],
-      parameterValues: { number: {}, text: {} },
+      parameterValues: {},
     }),
   ).toThrow(ERR_CROSSTAB_CALC_METRIC);
 });
@@ -477,7 +464,7 @@ test('ignores unrelated duplicate datasource saved metric display aliases', () =
         calculatedFieldId: 'calc_margin_pct_v4',
       },
     ],
-    parameterValues: { number: {}, text: {} },
+    parameterValues: {},
   });
 
   expect(result.metricConfigs[0].metric).toEqual({
@@ -502,7 +489,7 @@ test('fails fast when saved metric SQL cannot be resolved', () => {
           calculatedFieldId: 'calc_margin_pct',
         },
       ],
-      parameterValues: { number: {}, text: {} },
+      parameterValues: {},
     }),
   ).toThrow('ERR_CROSSTAB_CALC_METRIC');
 });
@@ -522,7 +509,7 @@ test('rejects duplicate calculated field ids', () => {
         ],
       },
       metricConfigs,
-      parameterValues: { number: {}, text: {} },
+      parameterValues: {},
     }),
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
@@ -542,7 +529,7 @@ test('rejects duplicate calculated field names', () => {
         ],
       },
       metricConfigs,
-      parameterValues: { number: {}, text: {} },
+      parameterValues: {},
     }),
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
@@ -569,13 +556,13 @@ test('rejects cross collisions between calculated field ids and names', () => {
         ],
       },
       metricConfigs,
-      parameterValues: { number: {}, text: {} },
+      parameterValues: {},
     }),
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
 
 test('rejects recursive calculated field references', () => {
-  const recursiveFields: CrosstabV4CalculatedField[] = [
+  const recursiveFields: CrosstabCalculatedField[] = [
     {
       id: 'calc_a',
       name: '计算A',
@@ -598,7 +585,7 @@ test('rejects recursive calculated field references', () => {
         crosstabCalculatedFields: recursiveFields,
       },
       metricConfigs,
-      parameterValues: { number: {}, text: {} },
+      parameterValues: {},
     }),
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
@@ -616,10 +603,10 @@ test('rejects malformed canonical field shapes', () => {
             resultType: 'currency',
             ast: { kind: 'metric_ref', metricId: 'sales' },
           },
-        ] as unknown as CrosstabV4CalculatedField[],
+        ] as unknown as CrosstabCalculatedField[],
       },
       metricConfigs,
-      parameterValues: { number: {}, text: {} },
+      parameterValues: {},
     }),
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
@@ -643,7 +630,7 @@ test('rejects malformed calculated field AST during normalization', () => {
       dialect: 'doris',
       formData: malformedAstFormData,
       metricConfigs,
-      parameterValues: { number: {}, text: {} },
+      parameterValues: {},
     }),
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
@@ -664,80 +651,99 @@ test('rejects calculated field ids that collide with base metric labels', () => 
         ],
       },
       metricConfigs,
-      parameterValues: { number: {}, text: {} },
+      parameterValues: {},
     }),
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
 
-test('changes signature when number or text parameter values change', () => {
+test('rejects number_param refs that are not declared in crosstabParameters', () => {
+  expect(() =>
+    expandCalculatedFieldMetricConfigs({
+      dialect: 'doris',
+      formData: {
+        ...formData,
+        crosstabParameters: [
+          {
+            id: 'param_adjustment',
+            kind: 'number',
+            name: 'adjustmentRate',
+            label: 'Adjustment',
+            defaultValue: 1,
+          },
+        ],
+        crosstabCalculatedFields: [
+          {
+            id: 'calc_adjusted_margin',
+            name: 'Adjusted margin',
+            resultType: 'percent',
+            ast: {
+              kind: 'binary_op',
+              op: '*',
+              left: {
+                kind: 'pct',
+                numerator: { kind: 'metric_ref', metricId: 'profit' },
+                denominator: { kind: 'metric_ref', metricId: 'sales' },
+              },
+              right: {
+                kind: 'number_param',
+                parameterId: 'missing_parameter',
+              },
+            },
+          },
+        ],
+      },
+      metricConfigs,
+      parameterValues: { param_adjustment: 1.25 },
+    }),
+  ).toThrow(ERR_CROSSTAB_CALC_FIELD);
+});
+
+test('changes signature when numeric parameter values change', () => {
   const baseSignature = getCalculatedFieldsSignature([calculatedField], {
-    number: { adjustmentRate: 1.25 },
-    text: { scenario: 'base' },
+    adjustmentRate: 1.25,
   });
 
   expect(
-    getCalculatedFieldsSignature([calculatedField], {
-      number: { adjustmentRate: 1.5 },
-      text: { scenario: 'base' },
-    }),
+    getCalculatedFieldsSignature([calculatedField], { adjustmentRate: 1.5 }),
   ).not.toBe(baseSignature);
   expect(
     getCalculatedFieldsSignature([calculatedField], {
-      number: { adjustmentRate: 1.25 },
-      text: { scenario: 'stress' },
+      adjustmentRate: 1.25,
+      secondaryRate: 0.8,
     }),
   ).not.toBe(baseSignature);
 });
 
 test('creates deterministic signatures for reordered parameter keys', () => {
   const signature = getCalculatedFieldsSignature([calculatedField], {
-    number: {
-      secondaryRate: 0.8,
-      adjustmentRate: 1.25,
-    },
-    text: {
-      scenario: 'base',
-      region: '华东',
-    },
+    secondaryRate: 0.8,
+    adjustmentRate: 1.25,
   });
   const reorderedSignature = getCalculatedFieldsSignature([calculatedField], {
-    number: {
-      adjustmentRate: 1.25,
-      secondaryRate: 0.8,
-    },
-    text: {
-      region: '华东',
-      scenario: 'base',
-    },
+    adjustmentRate: 1.25,
+    secondaryRate: 0.8,
   });
 
   expect(reorderedSignature).toBe(signature);
 });
 
 test('rejects legacy calculatedFields on the strict canonical path', () => {
-  const legacyField: CrosstabCalculatedField = {
-    id: 'adjusted_margin',
-    label: '含参毛利率',
-    template: 'parameterized_ratio',
-    inputs: {
-      leftMetric: 'profit',
-      rightMetric: 'sales',
-      parameterName: 'adjustmentRate',
-    },
-    semantic: 'ratio',
-    formatString: '.2%',
-  };
-
   expect(() =>
     expandCalculatedFieldMetricConfigs({
       dialect: 'doris',
       formData: {
         ...formData,
         crosstabCalculatedFields: undefined,
-        calculatedFields: [legacyField],
+        calculatedFields: [
+          {
+            id: 'adjusted_margin',
+            label: '含参毛利率',
+            template: 'parameterized_ratio',
+          },
+        ],
       },
       metricConfigs,
-      parameterValues: { number: { adjustmentRate: 1.25 }, text: {} },
+      parameterValues: { adjustmentRate: 1.25 },
     }),
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });
@@ -754,7 +760,7 @@ test('rejects V4-shaped data under legacy calculatedFields', () => {
         ] as unknown as CrosstabCalculatedField[],
       },
       metricConfigs,
-      parameterValues: { number: {}, text: {} },
+      parameterValues: {},
     }),
   ).toThrow(ERR_CROSSTAB_CALC_FIELD);
 });

@@ -19,6 +19,7 @@
 import {
   getColumnLabel,
   getMetricLabel,
+  t,
   type DataRecord,
   type QueryFormColumn,
   type QueryFormMetric,
@@ -77,6 +78,23 @@ export function isSqlSummarySemantic(semantic: MetricSemantic) {
   return (
     semantic === 'ratio' || semantic === 'average' || semantic === 'distinct'
   );
+}
+
+export function getMetricSemanticLabel(semantic: MetricSemantic) {
+  switch (semantic) {
+    case 'unknown':
+      return t('Unknown');
+    case 'additive':
+      return t('Additive');
+    case 'ratio':
+      return t('Ratio');
+    case 'average':
+      return t('Average');
+    case 'distinct':
+      return t('Distinct count');
+    default:
+      return semantic;
+  }
 }
 
 export function hasSqlSummarySemanticConfig(

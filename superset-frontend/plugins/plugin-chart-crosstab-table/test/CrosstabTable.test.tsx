@@ -339,16 +339,6 @@ describe('CrosstabTable', () => {
     return input;
   }
 
-  function getTextParameterSelect(id: string) {
-    const select = container.querySelector(
-      `[data-test="crosstab-parameter-control--${id}"] select`,
-    );
-    if (!(select instanceof HTMLSelectElement)) {
-      throw new Error('Unable to find text parameter select');
-    }
-    return select;
-  }
-
   function getInvalidSelectChangeButton() {
     const button = container.querySelector(
       'button[aria-label="Trigger invalid mock select change"]',
@@ -748,12 +738,13 @@ describe('CrosstabTable', () => {
       formData: {
         datasource: '1__table',
         viz_type: 'crosstab_table',
-        parameters: [
+        crosstabParameters: [
           {
+            id: 'param_adjustment',
             kind: 'number',
             name: 'adjustmentRate',
             label: '调整系数',
-            default: 1,
+            defaultValue: 1,
             min: 0,
             max: 2,
             step: 0.01,
@@ -763,7 +754,7 @@ describe('CrosstabTable', () => {
       hooks: {
         setDataMask,
       },
-      numericParameters: { adjustmentRate: 1 },
+      numericParameters: { param_adjustment: 1 },
       rowData: [
         generatedColumnIds.reduce<Record<string, unknown>>(
           (row, columnId, index) => ({
@@ -811,7 +802,7 @@ describe('CrosstabTable', () => {
 
     renderChart(props);
 
-    expect(getByText('列 1-4 / 101')).toBeInTheDocument();
+    expect(getByText('Columns 1-4 / 101')).toBeInTheDocument();
     expect(getPaginationFooter()).toHaveStyle({
       display: 'flex',
       flex: '0 0 auto',
@@ -837,19 +828,19 @@ describe('CrosstabTable', () => {
       nextButton.click();
     });
 
-    expect(getByText('列 5-8 / 101')).toBeInTheDocument();
+    expect(getByText('Columns 5-8 / 101')).toBeInTheDocument();
     expect(getByText('指标项')).toBeInTheDocument();
     expect(getByText('Total')).toBeInTheDocument();
     expect(getByText('D5')).toBeInTheDocument();
     expect(getByText('D8')).toBeInTheDocument();
     expect(() => getByText('D1')).toThrow('Unable to find text: D1');
 
-    const input = getNumericParameterInput('adjustmentRate');
+    const input = getNumericParameterInput('param_adjustment');
     act(() => {
       Simulate.change(input, { target: { value: '1.25' } } as never);
     });
 
-    expect(getByText('列 1-4 / 101')).toBeInTheDocument();
+    expect(getByText('Columns 1-4 / 101')).toBeInTheDocument();
     expect(getByText('D1')).toBeInTheDocument();
     expect(container).not.toHaveTextContent(/D5/);
   });
@@ -916,7 +907,7 @@ describe('CrosstabTable', () => {
 
     renderChart(props);
 
-    expect(getByText('列 1-5 / 4598')).toBeInTheDocument();
+    expect(getByText('Columns 1-5 / 4598')).toBeInTheDocument();
     expect(getByText('D5')).toBeInTheDocument();
 
     const nextButton = container.querySelector(
@@ -997,7 +988,7 @@ describe('CrosstabTable', () => {
 
     renderChart(props);
 
-    expect(getByText('列 1-5 / 4598')).toBeInTheDocument();
+    expect(getByText('Columns 1-5 / 4598')).toBeInTheDocument();
     expect(setDataMask).toHaveBeenCalledWith({
       ownState: {
         currentColumnPage: 0,
@@ -1499,12 +1490,13 @@ describe('CrosstabTable', () => {
         datasource: '1__table',
         viz_type: 'crosstab_table',
         generatedColumnWidth: 120,
-        parameters: [
+        crosstabParameters: [
           {
+            id: 'param_adjustment',
             kind: 'number',
             name: 'adjustmentRate',
             label: '调整系数',
-            default: 1,
+            defaultValue: 1,
             min: 0,
             max: 2,
             step: 0.01,
@@ -1514,7 +1506,7 @@ describe('CrosstabTable', () => {
       hooks: {
         setDataMask,
       },
-      numericParameters: { adjustmentRate: 1 },
+      numericParameters: { param_adjustment: 1 },
       ownState: {
         currentColumnPage: 2,
         currentColumnPageSize: 8,
@@ -1540,7 +1532,7 @@ describe('CrosstabTable', () => {
 
     renderChart(props);
 
-    const input = getNumericParameterInput('adjustmentRate');
+    const input = getNumericParameterInput('param_adjustment');
     expect(input).toHaveAccessibleName('调整系数');
     expect(input).toHaveValue(1);
 
@@ -1550,7 +1542,7 @@ describe('CrosstabTable', () => {
 
     expect(setDataMask).toHaveBeenCalledWith({
       ownState: expect.objectContaining({
-        numericParameters: { adjustmentRate: 1.25 },
+        numericParameters: { param_adjustment: 1.25 },
         currentColumnPage: 0,
         currentColumnPageSize: 5,
         expandedRowPaths: ['category::A'],
@@ -1576,7 +1568,7 @@ describe('CrosstabTable', () => {
     );
   });
 
-  it('renders number and text runtime parameters from canonical config', () => {
+  it('renders numeric runtime parameters from canonical config', () => {
     const props = {
       height: 400,
       width: 800,
@@ -1594,18 +1586,9 @@ describe('CrosstabTable', () => {
             max: 2,
             step: 0.01,
           },
-          {
-            id: 'param_country',
-            kind: 'text',
-            name: 'country',
-            label: 'Country',
-            defaultValue: 'DE',
-            allowedValues: ['DE', 'FR'],
-          },
         ],
       },
       numericParameters: { param_adjustment: 1 },
-      textParameters: { param_country: 'DE' },
       rowData: [],
       columns: [
         {
@@ -1621,16 +1604,12 @@ describe('CrosstabTable', () => {
     renderChart(props);
 
     const numberInput = getNumericParameterInput('param_adjustment');
-    const textSelect = getTextParameterSelect('param_country');
 
     expect(numberInput).toHaveAccessibleName('Adjustment');
     expect(numberInput).toHaveValue(1);
-    expect(getByText('Country')).toBeInTheDocument();
-    expect(textSelect).toHaveAccessibleName('Country');
-    expect(textSelect).toHaveValue('DE');
   });
 
-  it('writes runtime text parameter own-state and resets column pagination', () => {
+  it('writes runtime numeric parameter own-state and resets column pagination', () => {
     const setDataMask = jest.fn();
     const props = {
       height: 400,
@@ -1641,19 +1620,21 @@ describe('CrosstabTable', () => {
         generatedColumnWidth: 120,
         crosstabParameters: [
           {
-            id: 'param_country',
-            kind: 'text',
-            name: 'country',
-            label: 'Country',
-            defaultValue: 'DE',
-            allowedValues: ['DE', 'FR'],
+            id: 'param_adjustment',
+            kind: 'number',
+            name: 'adjustmentRate',
+            label: 'Adjustment',
+            defaultValue: 1,
+            min: 0,
+            max: 2,
+            step: 0.01,
           },
         ],
       },
       hooks: {
         setDataMask,
       },
-      textParameters: { param_country: 'DE' },
+      numericParameters: { param_adjustment: 1 },
       ownState: {
         unrelatedOwnStateField: 'preserved',
         currentColumnPage: 2,
@@ -1665,7 +1646,7 @@ describe('CrosstabTable', () => {
         serverColumnPageTuplesPage: 2,
         serverColumnPageTuplesPageSize: 8,
         serverColumnTotalCount: 100,
-        textParameters: { param_country: 'DE' },
+        numericParameters: { param_adjustment: 1 },
       },
       rowData: [],
       columns: [
@@ -1681,17 +1662,17 @@ describe('CrosstabTable', () => {
 
     renderChart(props);
 
-    const select = getTextParameterSelect('param_country');
+    const input = getNumericParameterInput('param_adjustment');
 
     act(() => {
-      Simulate.change(select, { target: { value: 'FR' } } as never);
+      Simulate.change(input, { target: { value: '1.25' } } as never);
     });
 
     expect(setDataMask).toHaveBeenCalledWith({
       ownState: expect.objectContaining({
         unrelatedOwnStateField: 'preserved',
         expandedRowPaths: ['category::A'],
-        textParameters: { param_country: 'FR' },
+        numericParameters: { param_adjustment: 1.25 },
         currentColumnPage: 0,
         currentColumnPageSize: 5,
       }),
@@ -1725,12 +1706,13 @@ describe('CrosstabTable', () => {
         datasource: '1__table',
         viz_type: 'crosstab_table',
         generatedColumnWidth: 120,
-        parameters: [
+        crosstabParameters: [
           {
+            id: 'param_adjustment',
             kind: 'number',
             name: 'adjustmentRate',
             label: '调整系数',
-            default: 1,
+            defaultValue: 1,
             min: 0,
             max: 2,
             step: 0.01,
@@ -1740,7 +1722,7 @@ describe('CrosstabTable', () => {
       hooks: {
         setDataMask,
       },
-      numericParameters: { adjustmentRate: 1 },
+      numericParameters: { param_adjustment: 1 },
       ownState: {
         expandedRowPaths: ['category::A'],
       },
@@ -1758,7 +1740,7 @@ describe('CrosstabTable', () => {
 
     renderChart(props);
 
-    const input = getNumericParameterInput('adjustmentRate');
+    const input = getNumericParameterInput('param_adjustment');
 
     const maxErrors = catchWindowErrors(() => {
       act(() => {

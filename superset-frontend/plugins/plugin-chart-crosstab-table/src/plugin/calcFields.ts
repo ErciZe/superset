@@ -16,25 +16,22 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import {
-  ensureIsArray,
-  getMetricLabel,
-  type QueryFormMetric,
-} from '@superset-ui/core';
+import { getMetricLabel, type QueryFormMetric } from '@superset-ui/core';
 
 import type {
+  CrosstabCalculatedField,
   CrosstabExpressionNode,
   CrosstabFormData,
-  CrosstabV4CalculatedField,
   MetricFieldConfig,
 } from '../types';
 import {
   ERR_CROSSTAB_CALC_METRIC,
   emitCalculatedFieldAstSql,
   type CalcSqlDialect,
-  type EmitCalculatedFieldAstSqlArgs,
   validateCalculatedFieldAst,
 } from './calc/expr';
+import { getCrosstabParameters } from './parameters';
+import { assertNoLegacyV4Inputs } from './v4Contract';
 
 export const ERR_CROSSTAB_CALC_FIELD = 'ERR_CROSSTAB_CALC_FIELD';
 
@@ -42,7 +39,7 @@ type ExpandCalculatedFieldMetricConfigsArgs = {
   dialect: CalcSqlDialect;
   formData: CrosstabFormData;
   metricConfigs: MetricFieldConfig[];
-  parameterValues: EmitCalculatedFieldAstSqlArgs['parameterValues'];
+  parameterValues: Record<string, number>;
 };
 
 type ExpandCalculatedFieldMetricConfigsResult = {
@@ -63,7 +60,6 @@ const calculatedFieldResultTypes: ReadonlySet<unknown> = new Set([
   'number',
   'ratio',
   'percent',
-  'text',
 ]);
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -72,7 +68,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function assertCalculatedField(
   value: unknown,
-): asserts value is CrosstabV4CalculatedField {
+): asserts value is CrosstabCalculatedField {
   if (!isObject(value) || !isObject(value.ast)) {
     throw new Error(ERR_CROSSTAB_CALC_FIELD);
   }
@@ -96,7 +92,7 @@ function assertCalculatedField(
 
 function parseCalculatedFields(
   value: CrosstabFormData['crosstabCalculatedFields'],
-): CrosstabV4CalculatedField[] {
+): CrosstabCalculatedField[] {
   if (value === undefined || value === '') {
     return [];
   }
@@ -196,10 +192,15 @@ function addMetricSql(
   metricSql: Record<string, string>,
   key: string | undefined,
   sqlExpression: string,
-): void {
+): Record<string, string> {
   if (key !== undefined && key.trim().length > 0) {
-    metricSql[key] = sqlExpression;
+    return {
+      ...metricSql,
+      [key]: sqlExpression,
+    };
   }
+
+  return metricSql;
 }
 
 function addDatasourceMetricSql(
@@ -208,7 +209,7 @@ function addDatasourceMetricSql(
   sqlExpression: string,
   referencedMetricIds: Set<string>,
   explicitMetricKeys: Set<string>,
-): void {
+): Record<string, string> {
   const existingSqlExpression = metricSql[key];
 
   if (
@@ -216,17 +217,20 @@ function addDatasourceMetricSql(
     existingSqlExpression !== sqlExpression
   ) {
     if (explicitMetricKeys.has(key)) {
-      return;
+      return metricSql;
     }
 
     if (!referencedMetricIds.has(key)) {
-      return;
+      return metricSql;
     }
 
     throw new Error(ERR_CROSSTAB_CALC_METRIC);
   }
 
-  metricSql[key] = sqlExpression;
+  return {
+    ...metricSql,
+    [key]: sqlExpression,
+  };
 }
 
 function addMetricConfigSql(
@@ -260,21 +264,26 @@ function addMetricConfigSql(
     return metricSql;
   }
 
-  const nextMetricSql = { ...metricSql };
   const metricLabel = getMetricLabel(config.metric);
-
-  addMetricSql(nextMetricSql, metricLabel, sqlExpression);
-  addMetricSql(nextMetricSql, config.label, sqlExpression);
-  addMetricSql(nextMetricSql, metricName, sqlExpression);
-  addMetricSql(
+  const nextMetricSql = addMetricSql(metricSql, metricLabel, sqlExpression);
+  const withConfigLabel = addMetricSql(
     nextMetricSql,
+    config.label,
+    sqlExpression,
+  );
+  const withMetricName = addMetricSql(
+    withConfigLabel,
+    metricName,
+    sqlExpression,
+  );
+
+  return addMetricSql(
+    withMetricName,
     datasourceMetric === undefined
       ? undefined
       : getSavedMetricName(datasourceMetric),
     sqlExpression,
   );
-
-  return nextMetricSql;
 }
 
 function addExplicitMetricConfigSql(
@@ -300,71 +309,61 @@ function addExplicitMetricConfigSql(
     return metricSql;
   }
 
-  const nextMetricSql = { ...metricSql };
   const metricLabel = getMetricLabel(config.metric);
+  const nextMetricSql = addMetricSql(metricSql, metricLabel, sqlExpression);
+  const withConfigLabel = addMetricSql(
+    nextMetricSql,
+    config.label,
+    sqlExpression,
+  );
 
-  addMetricSql(nextMetricSql, metricLabel, sqlExpression);
-  addMetricSql(nextMetricSql, config.label, sqlExpression);
-  addMetricSql(nextMetricSql, metricName, sqlExpression);
-
-  return nextMetricSql;
+  return addMetricSql(withConfigLabel, metricName, sqlExpression);
 }
 
 function getMetricSqlMap(
   metricConfigs: MetricFieldConfig[],
   formData: CrosstabFormData,
-  calculatedFields: CrosstabV4CalculatedField[],
+  calculatedFields: CrosstabCalculatedField[],
 ): Record<string, string> {
   const datasourceMetricLookup = getDatasourceMetricLookup(formData);
   const referencedMetricIds = getReferencedMetricIds(calculatedFields);
-  const legacyMetrics = ensureIsArray<QueryFormMetric>(formData.metrics);
-  const explicitMetricSql = [
-    ...legacyMetrics.map(metric => ({ metric })),
-    ...metricConfigs,
-  ].reduce<Record<string, string>>(
+  const explicitMetricSql = metricConfigs.reduce<Record<string, string>>(
     (metricSql, config) => addExplicitMetricConfigSql(metricSql, config),
     {},
   );
   const explicitMetricKeys = new Set(Object.keys(explicitMetricSql));
-  const datasourceMetricSql = getDatasourceSavedMetrics(
-    formData,
-  ).reduce<Record<string, string>>((metricSql, metric) => {
+  const datasourceMetricSql = getDatasourceSavedMetrics(formData).reduce<
+    Record<string, string>
+  >((metricSql, metric) => {
     const sqlExpression = getSavedMetricExpression(metric);
 
     if (sqlExpression === undefined) {
       return metricSql;
     }
 
-    const nextMetricSql = { ...metricSql };
-
-    getSavedMetricNames(metric).forEach(metricName => {
-      addDatasourceMetricSql(
-        nextMetricSql,
-        metricName,
-        sqlExpression,
-        referencedMetricIds,
-        explicitMetricKeys,
-      );
-    });
-
-    return nextMetricSql;
+    return getSavedMetricNames(metric).reduce(
+      (nextMetricSql, metricName) =>
+        addDatasourceMetricSql(
+          nextMetricSql,
+          metricName,
+          sqlExpression,
+          referencedMetricIds,
+          explicitMetricKeys,
+        ),
+      metricSql,
+    );
   }, explicitMetricSql);
-  const legacyMetricSql = legacyMetrics.reduce<Record<string, string>>(
-    (metricSql, metric) =>
-      addMetricConfigSql(metricSql, { metric }, datasourceMetricLookup),
-    datasourceMetricSql,
-  );
 
   return metricConfigs.reduce<Record<string, string>>(
     (metricSql, config) =>
       addMetricConfigSql(metricSql, config, datasourceMetricLookup),
-    legacyMetricSql,
+    datasourceMetricSql,
   );
 }
 
 function isCalculatedFieldPlaceholder(
   config: MetricFieldConfig,
-  calculatedFieldById: Map<string, CrosstabV4CalculatedField>,
+  calculatedFieldById: Map<string, CrosstabCalculatedField>,
 ): boolean {
   const field =
     config.calculatedFieldId === undefined
@@ -384,7 +383,7 @@ function isCalculatedFieldPlaceholder(
 
 function assertNoDuplicateFields(
   metricConfigs: MetricFieldConfig[],
-  calculatedFields: CrosstabV4CalculatedField[],
+  calculatedFields: CrosstabCalculatedField[],
 ): void {
   const labels = new Set<string>();
   const calculatedKeys = new Set<string>();
@@ -416,7 +415,7 @@ function assertNoDuplicateFields(
 
 function stripCalculatedFieldPlaceholders(
   metricConfigs: MetricFieldConfig[],
-  calculatedFields: CrosstabV4CalculatedField[],
+  calculatedFields: CrosstabCalculatedField[],
 ): MetricFieldConfig[] {
   const calculatedFieldById = new Map(
     calculatedFields.map(field => [field.id, field]),
@@ -428,7 +427,7 @@ function stripCalculatedFieldPlaceholders(
 }
 
 function calculatedMetric(
-  field: CrosstabV4CalculatedField,
+  field: CrosstabCalculatedField,
   sqlExpression: string,
 ): QueryFormMetric {
   return {
@@ -439,7 +438,7 @@ function calculatedMetric(
 }
 
 function getCalculatedFieldSemantic(
-  field: CrosstabV4CalculatedField,
+  field: CrosstabCalculatedField,
 ): MetricFieldConfig['semantic'] {
   switch (field.resultType) {
     case 'percent':
@@ -447,8 +446,6 @@ function getCalculatedFieldSemantic(
       return 'ratio';
     case 'number':
       return 'additive';
-    case 'text':
-      return 'unknown';
     default:
       throw new Error(ERR_CROSSTAB_CALC_FIELD);
   }
@@ -479,19 +476,15 @@ function stableSerialize(value: unknown): string {
 
 export function getCalculatedFields(
   formData: CrosstabFormData,
-): CrosstabV4CalculatedField[] {
+): CrosstabCalculatedField[] {
   try {
-    if (
-      formData.crosstabCalculatedFields === undefined &&
-      formData.calculatedFields !== undefined &&
-      formData.calculatedFields !== '' &&
-      (!Array.isArray(formData.calculatedFields) ||
-        formData.calculatedFields.length > 0)
-    ) {
-      throw new Error(ERR_CROSSTAB_CALC_FIELD);
-    }
+    assertNoLegacyV4Inputs(formData, ERR_CROSSTAB_CALC_FIELD);
 
-    return parseCalculatedFields(formData.crosstabCalculatedFields);
+    const parsed = parseCalculatedFields(formData.crosstabCalculatedFields);
+
+    assertKnownParameterRefs(parsed, getCrosstabParameters(formData));
+
+    return parsed;
   } catch (error) {
     throw new Error(ERR_CROSSTAB_CALC_FIELD);
   }
@@ -516,17 +509,60 @@ function collectMetricRefs(
       collectMetricRefs(node.denominator, metricRefs);
       return;
     case 'number_param':
-    case 'text_param':
     case 'literal_number':
-    case 'literal_text':
       return;
     default:
       throw new Error(ERR_CROSSTAB_CALC_FIELD);
   }
 }
 
+function collectParameterRefs(
+  node: CrosstabExpressionNode,
+  parameterRefs: Set<string>,
+): void {
+  switch (node.kind) {
+    case 'number_param':
+      parameterRefs.add(node.parameterId);
+      return;
+    case 'binary_op':
+      collectParameterRefs(node.left, parameterRefs);
+      collectParameterRefs(node.right, parameterRefs);
+      return;
+    case 'safe_div':
+    case 'pct':
+    case 'ratio':
+      collectParameterRefs(node.numerator, parameterRefs);
+      collectParameterRefs(node.denominator, parameterRefs);
+      return;
+    case 'metric_ref':
+    case 'literal_number':
+      return;
+    default:
+      throw new Error(ERR_CROSSTAB_CALC_FIELD);
+  }
+}
+
+function assertKnownParameterRefs(
+  calculatedFields: CrosstabCalculatedField[],
+  parameters: ReturnType<typeof getCrosstabParameters>,
+): void {
+  const parameterIds = new Set(parameters.map(parameter => parameter.id));
+
+  calculatedFields.forEach(field => {
+    const parameterRefs = new Set<string>();
+
+    collectParameterRefs(field.ast, parameterRefs);
+
+    parameterRefs.forEach(parameterId => {
+      if (!parameterIds.has(parameterId)) {
+        throw new Error(ERR_CROSSTAB_CALC_FIELD);
+      }
+    });
+  });
+}
+
 function getReferencedMetricIds(
-  calculatedFields: CrosstabV4CalculatedField[],
+  calculatedFields: CrosstabCalculatedField[],
 ): Set<string> {
   const referencedMetricIds = new Set<string>();
 
@@ -538,7 +574,7 @@ function getReferencedMetricIds(
 }
 
 function assertNoRecursiveCalculatedFields(
-  calculatedFields: CrosstabV4CalculatedField[],
+  calculatedFields: CrosstabCalculatedField[],
 ): void {
   const calculatedIds = new Set(calculatedFields.map(field => field.id));
   const refsById = new Map<string, string[]>();
@@ -579,16 +615,16 @@ function getCalculatedMetricSqlMap({
   metricSql,
   parameterValues,
 }: {
-  calculatedFields: CrosstabV4CalculatedField[];
+  calculatedFields: CrosstabCalculatedField[];
   dialect: CalcSqlDialect;
   metricSql: Record<string, string>;
-  parameterValues: EmitCalculatedFieldAstSqlArgs['parameterValues'];
+  parameterValues: Record<string, number>;
 }): Record<string, string> {
   const fieldById = new Map(calculatedFields.map(field => [field.id, field]));
   const resolvedMetricSql = { ...metricSql };
   const resolving = new Set<string>();
 
-  function resolveFieldSql(field: CrosstabV4CalculatedField): string {
+  function resolveFieldSql(field: CrosstabCalculatedField): string {
     const existingSql = resolvedMetricSql[field.id];
 
     if (existingSql !== undefined) {
@@ -682,14 +718,11 @@ export function expandCalculatedFieldMetricConfigs({
 }
 
 export function getCalculatedFieldsSignature(
-  calculatedFields: CrosstabV4CalculatedField[],
-  parameterValues: EmitCalculatedFieldAstSqlArgs['parameterValues'],
+  calculatedFields: CrosstabCalculatedField[],
+  parameterValues: Record<string, number>,
 ): string {
   return [
     stableSerialize(calculatedFields),
-    `parameters:${stableSerialize({
-      number: parameterValues.number,
-      text: parameterValues.text,
-    })}`,
+    `parameters:${stableSerialize(parameterValues)}`,
   ].join('|');
 }
