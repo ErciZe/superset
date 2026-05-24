@@ -316,6 +316,51 @@ describe('buildCrosstab', () => {
     );
   });
 
+  it('keeps generated column order in source record order when only row comparator is configured', () => {
+    const result = buildCrosstab(
+      [
+        {
+          metric_name_with_unit: '利润（元）',
+          metric_order: 2,
+          biz_date: '2025-01-02',
+          指标值: 20,
+        },
+        {
+          metric_name_with_unit: '销量（件）',
+          metric_order: 1,
+          biz_date: '2025-01-01',
+          指标值: 10,
+        },
+      ],
+      {
+        rowFields: ['metric_name_with_unit'],
+        columnFields: ['biz_date'],
+        metricFields: ['指标值'],
+        showColumnTotals: false,
+        showRowTotals: false,
+        showRowSubtotals: false,
+        showColumnSubtotals: false,
+        maxGeneratedColumns: 100,
+        defaultRowExpandedDepth: 0,
+        rowComparator: (left, right) =>
+          Number(left.metric_order) - Number(right.metric_order),
+      },
+    );
+
+    expect(result.rowData.map(row => row.metric_name_with_unit)).toEqual([
+      '销量（件）',
+      '利润（元）',
+    ]);
+    expect(result.columnTree.map(column => column.label)).toEqual([
+      '2025-01-02',
+      '2025-01-01',
+    ]);
+    expect(result.generatedColumnIds).toEqual([
+      '__crosstab_col__string:10:2025-01-02__metric__指标值',
+      '__crosstab_col__string:10:2025-01-01__metric__指标值',
+    ]);
+  });
+
   it('orders generated columns by optional column comparator', () => {
     const result = buildCrosstab(
       [
@@ -681,6 +726,61 @@ describe('buildCrosstab', () => {
           maxGeneratedColumns: 20,
           defaultRowExpandedDepth: 1,
           summaryValues: { rowTotal, grandTotal },
+          resolveSemantic: ({ row }) =>
+            row.metric_name_with_unit === '毛利率（%）' ? 'ratio' : 'additive',
+        },
+      ),
+    ).toThrow(ERR_CROSSTAB_MIXED_GRAND_TOTAL_SEMANTICS);
+  });
+
+  it('fails fast for mixed grand total semantics before using complete SQL summary maps', () => {
+    const rowTotal = buildSummaryResultMap({
+      records: [
+        { metric_name_with_unit: '毛利率（%）', 指标值: -9.5145 },
+        { metric_name_with_unit: '销售额', 指标值: 100 },
+      ],
+      rowFields: ['metric_name_with_unit'],
+      columnFields: [],
+      metricFields: ['指标值'],
+    });
+    const columnTotal = buildSummaryResultMap({
+      records: [{ stat_date: '2026-05-01', 指标值: 90.4855 }],
+      rowFields: [],
+      columnFields: ['stat_date'],
+      metricFields: ['指标值'],
+    });
+    const grandTotal = buildSummaryResultMap({
+      records: [{ 指标值: 90.4855 }],
+      rowFields: [],
+      columnFields: [],
+      metricFields: ['指标值'],
+    });
+
+    expect(() =>
+      buildCrosstab(
+        [
+          {
+            metric_name_with_unit: '毛利率（%）',
+            stat_date: '2026-05-01',
+            指标值: -9.5145,
+          },
+          {
+            metric_name_with_unit: '销售额',
+            stat_date: '2026-05-01',
+            指标值: 100,
+          },
+        ],
+        {
+          rowFields: ['metric_name_with_unit'],
+          columnFields: ['stat_date'],
+          metricFields: ['指标值'],
+          showRowSubtotals: false,
+          showRowTotals: true,
+          showColumnTotals: true,
+          showColumnSubtotals: false,
+          maxGeneratedColumns: 20,
+          defaultRowExpandedDepth: 1,
+          summaryValues: { rowTotal, columnTotal, grandTotal },
           resolveSemantic: ({ row }) =>
             row.metric_name_with_unit === '毛利率（%）' ? 'ratio' : 'additive',
         },

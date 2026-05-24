@@ -579,6 +579,8 @@ function getColumnSqlSummaryValue({
   options: CrosstabBuildOptions;
   map?: Map<string, number | null>;
 }): number | null | undefined {
+  const semantic = getColumnSqlSemantic(leafRows, metric, options);
+
   if (map) {
     return getRequiredSummaryValue(map, {
       rowValues: [],
@@ -587,7 +589,7 @@ function getColumnSqlSummaryValue({
     });
   }
 
-  if (getColumnSqlSemantic(leafRows, metric, options)) {
+  if (semantic) {
     throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   }
 
@@ -630,6 +632,7 @@ function getSqlGrandTotal(
   }
 
   const [metric] = options.metricFields;
+  const semantic = getColumnSqlSemantic(leafRows, metric, options);
 
   if (options.summaryValues?.grandTotal) {
     return getRequiredSummaryValue(options.summaryValues.grandTotal, {
@@ -638,23 +641,6 @@ function getSqlGrandTotal(
       metric,
     });
   }
-
-  if (!options.resolveSemantic) {
-    return undefined;
-  }
-
-  const { resolveSemantic } = options;
-  const semantics = new Set(
-    leafRows.map(row =>
-      normalizeGrandTotalSemantic(resolveSemantic({ row, metric })),
-    ),
-  );
-
-  if (semantics.size > 1) {
-    throw new Error(ERR_CROSSTAB_MIXED_GRAND_TOTAL_SEMANTICS);
-  }
-
-  const [semantic] = Array.from(semantics);
 
   if (!semantic || !isSqlSemantic(semantic)) {
     return undefined;
@@ -983,11 +969,8 @@ export function buildCrosstab(
   const orderedRecords = options.rowComparator
     ? [...records].sort(options.rowComparator)
     : [...records];
-  const columnRecords = options.columnComparator
-    ? [...records].sort(options.columnComparator)
-    : orderedRecords;
   const columnTuples = buildColumnTuples(
-    columnRecords,
+    records,
     columnFields,
     options.maxGeneratedColumns,
     metricFields.length,
