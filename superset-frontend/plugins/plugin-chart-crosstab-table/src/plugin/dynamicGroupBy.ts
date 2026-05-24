@@ -172,6 +172,22 @@ function assertColumnArray(value: unknown): asserts value is QueryFormColumn[] {
   value.forEach(assertColumn);
 }
 
+function assertDimensionConfigArray(
+  value: unknown,
+): asserts value is DimensionFieldConfig[] {
+  if (!Array.isArray(value)) {
+    throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+  }
+
+  value.forEach(config => {
+    if (!isObject(config)) {
+      throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+    }
+
+    assertColumn(config.field);
+  });
+}
+
 function parseSlotIndex(value: unknown): number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
@@ -260,15 +276,29 @@ function validateOption(value: unknown): CrosstabDynamicGroupByOption {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   }
 
-  const { columns, id, label } = value;
+  const { columnConfigs, columns, id, label } = value;
 
   if (!isNonEmptyString(id) || typeof label !== 'string') {
     throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   }
 
   assertColumnArray(columns);
+  if (columnConfigs === undefined) {
+    return { id, label, columns };
+  }
 
-  return { id, label, columns };
+  assertDimensionConfigArray(columnConfigs);
+  if (columnConfigs.length !== columns.length) {
+    throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SPLICE_COUNT);
+  }
+
+  columnConfigs.forEach((config, index) => {
+    if (getColumnLabel(config.field) !== getColumnLabel(columns[index])) {
+      throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+    }
+  });
+
+  return { id, label, columns, columnConfigs };
 }
 
 function validateSlot(value: unknown): CrosstabDynamicGroupBySlot {
@@ -594,25 +624,31 @@ function getDimensionConfigPayload(
 
 function getSelectedDimensionConfigOptions(
   dimensionConfigs: DimensionFieldConfig[],
+  slots: CrosstabDynamicGroupBySlot[],
   selectedOptions: SelectedDynamicGroupBySlotOption[],
 ): SelectedDynamicGroupByDimensionConfigSlotOption[] {
-  return selectedOptions.map(({ option, slot }) => ({
-    slot: {
-      id: slot.id,
-      slotIndex: slot.slotIndex,
-      spliceCount: slot.spliceCount,
-      defaultOptionId: slot.defaultOptionId,
-      options: [],
-    },
-    option: {
-      id: option.id,
-      payload: getDimensionConfigPayload(
-        dimensionConfigs,
-        slot,
-        option.payload,
-      ),
-    },
-  }));
+  return selectedOptions.map(({ option, slot }) => {
+    const sourceSlot = slots.find(candidateSlot => candidateSlot.id === slot.id);
+    const sourceOption = sourceSlot?.options.find(
+      candidateOption => candidateOption.id === option.id,
+    );
+
+    return {
+      slot: {
+        id: slot.id,
+        slotIndex: slot.slotIndex,
+        spliceCount: slot.spliceCount,
+        defaultOptionId: slot.defaultOptionId,
+        options: [],
+      },
+      option: {
+        id: option.id,
+        payload:
+          sourceOption?.columnConfigs ??
+          getDimensionConfigPayload(dimensionConfigs, slot, option.payload),
+      },
+    };
+  });
 }
 
 function applySlotsToDimensionConfigs(
@@ -633,7 +669,11 @@ function applySlotsToDimensionConfigs(
   return {
     configs: applyDynamicSlotSplices(
       dimensionConfigs,
-      getSelectedDimensionConfigOptions(dimensionConfigs, selectedOptions),
+      getSelectedDimensionConfigOptions(
+        dimensionConfigs,
+        slots,
+        selectedOptions,
+      ),
     ),
     selectedDynamicGroupBy,
   };

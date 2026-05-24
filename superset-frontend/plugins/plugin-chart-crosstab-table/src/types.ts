@@ -54,6 +54,7 @@ export type CrosstabDynamicGroupByOption = {
   id: string;
   label: string;
   columns: QueryFormColumn[];
+  columnConfigs?: DimensionFieldConfig[];
 };
 
 export type CrosstabDynamicGroupBySlot = {

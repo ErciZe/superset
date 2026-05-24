@@ -230,6 +230,86 @@ describe('crosstab dynamic group by resolver', () => {
     ]);
   });
 
+  it('uses option column configs before positional metadata when resolving config slots', () => {
+    const result = resolveDynamicGroupByDimensionConfigs({
+      formData: createFormData({
+        enabled: true,
+        slots: [
+          {
+            id: 'column_level',
+            placement: 'columns',
+            slotIndex: 1,
+            defaultOptionId: 'shop',
+            options: [
+              {
+                id: 'shop',
+                label: '店铺',
+                columns: ['shop_name'],
+                columnConfigs: [
+                  {
+                    field: 'shop_name',
+                    label: '店铺',
+                    sort: {
+                      by: 'shop_name',
+                      direction: 'asc',
+                      type: 'string',
+                      nulls: 'last',
+                    },
+                  },
+                ],
+              },
+              {
+                id: 'country',
+                label: '国家',
+                columns: ['country'],
+                columnConfigs: [
+                  {
+                    field: 'country',
+                    label: '国家',
+                    sort: {
+                      by: 'country',
+                      direction: 'asc',
+                      type: 'string',
+                      nulls: 'last',
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+      ownState: {
+        selectedDynamicGroupBy: {
+          column_level: 'country',
+        },
+      },
+      rowConfigs: [{ field: 'metric_name_with_unit' }],
+      columnConfigs: [
+        { field: 'biz_date', label: '日期' },
+        {
+          field: 'shop_name',
+          label: '位置继承',
+          sort: { by: 'shop_order', direction: 'desc', type: 'number' },
+        },
+      ],
+    });
+
+    expect(result.columnConfigs).toEqual([
+      { field: 'biz_date', label: '日期' },
+      {
+        field: 'country',
+        label: '国家',
+        sort: {
+          by: 'country',
+          direction: 'asc',
+          type: 'string',
+          nulls: 'last',
+        },
+      },
+    ]);
+  });
+
   it('matches valid object columns and uses their labels in the signature', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData({
