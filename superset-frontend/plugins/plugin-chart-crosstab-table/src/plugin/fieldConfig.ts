@@ -47,7 +47,7 @@ export function getCrosstabRowConfigs(
   formData: CrosstabFormData,
 ): DimensionFieldConfig[] {
   return hasFieldConfig(formData.crosstabFieldConfig)
-    ? formData.crosstabFieldConfig?.rows ?? []
+    ? (formData.crosstabFieldConfig?.rows ?? [])
     : ensureIsArray<QueryFormColumn>(formData.groupbyRows).map(field => ({
         field,
       }));
@@ -57,7 +57,7 @@ export function getCrosstabColumnConfigs(
   formData: CrosstabFormData,
 ): DimensionFieldConfig[] {
   return hasFieldConfig(formData.crosstabFieldConfig)
-    ? formData.crosstabFieldConfig?.columns ?? []
+    ? (formData.crosstabFieldConfig?.columns ?? [])
     : ensureIsArray<QueryFormColumn>(formData.groupbyColumns).map(field => ({
         field,
       }));

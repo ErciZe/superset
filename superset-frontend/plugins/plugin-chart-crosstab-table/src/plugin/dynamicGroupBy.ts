@@ -628,7 +628,9 @@ function getSelectedDimensionConfigOptions(
   selectedOptions: SelectedDynamicGroupBySlotOption[],
 ): SelectedDynamicGroupByDimensionConfigSlotOption[] {
   return selectedOptions.map(({ option, slot }) => {
-    const sourceSlot = slots.find(candidateSlot => candidateSlot.id === slot.id);
+    const sourceSlot = slots.find(
+      candidateSlot => candidateSlot.id === slot.id,
+    );
     const sourceOption = sourceSlot?.options.find(
       candidateOption => candidateOption.id === option.id,
     );

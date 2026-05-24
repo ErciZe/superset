@@ -76,14 +76,10 @@ describe('crosstab metric semantics', () => {
 
   it('treats row value summaries as configured summary semantics even when additive', () => {
     expect(
-      hasConfiguredSummarySemantics(
-        [{ metric: '指标值' }],
-        [],
-        {
-          field: 'metric_name_with_unit',
-          values: [{ value: '销量（件）', semantic: 'additive' }],
-        },
-      ),
+      hasConfiguredSummarySemantics([{ metric: '指标值' }], [], {
+        field: 'metric_name_with_unit',
+        values: [{ value: '销量（件）', semantic: 'additive' }],
+      }),
     ).toBe(true);
   });
 
