@@ -185,6 +185,7 @@ export type CrosstabBuildOptions = {
   maxGeneratedColumns: number;
   defaultRowExpandedDepth: number;
   summaryValues?: CrosstabSummaryValues;
+  summaryValueRequirements?: Partial<Record<CrosstabSummaryKind, boolean>>;
   resolveSemantic?: ResolveCrosstabMetricSemantic;
 };
 

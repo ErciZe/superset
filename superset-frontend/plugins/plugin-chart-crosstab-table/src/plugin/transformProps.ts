@@ -605,6 +605,37 @@ export default function transformProps(
         }
       : {}),
   };
+  const shouldRenderData =
+    Boolean(dataQuery) &&
+    !(
+      serverColumnPagination &&
+      (resetDynamicGroupByOwnState ||
+        resetDynamicMetricOwnState ||
+        resetDynamicMetricConfigOwnState)
+    );
+  const summaryValueRequirements =
+    requiresSqlSummary && shouldRenderData
+      ? {
+          ...((formData.showColumnTotals ?? true) ? { row_total: true } : {}),
+          ...((formData.showRowTotals ?? true) ? { grand_total: true } : {}),
+          ...((formData.showRowSubtotals ?? true)
+            ? {
+                row_subtotal_cells: true,
+                row_subtotal_total: formData.showColumnTotals ?? true,
+              }
+            : {}),
+          ...((formData.showColumnTotals ?? true)
+            ? { column_total: true }
+            : {}),
+          ...((formData.showColumnSubtotals ?? false)
+            ? {
+                column_subtotal_cells: true,
+                column_subtotal_total: formData.showRowTotals ?? true,
+                row_column_subtotal_cells: formData.showRowSubtotals ?? true,
+              }
+            : {}),
+        }
+      : undefined;
 
   if (
     serverColumnPagination &&
@@ -651,6 +682,7 @@ export default function transformProps(
     maxGeneratedColumns: formData.maxGeneratedColumns ?? 300,
     defaultRowExpandedDepth: formData.defaultRowExpandedDepth ?? 1,
     summaryValues,
+    summaryValueRequirements,
     rowComparator,
     columnComparator,
     resolveSemantic: ({ row, metric }) =>

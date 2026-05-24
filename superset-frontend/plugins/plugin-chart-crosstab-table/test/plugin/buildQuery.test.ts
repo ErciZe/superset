@@ -983,6 +983,51 @@ describe('crosstab buildQuery', () => {
     );
   });
 
+  it('rejects server column pagination without an effective column dimension', () => {
+    expect(() =>
+      buildQuery(
+        {
+          datasource: '7__table',
+          viz_type: 'crosstab-table',
+          groupbyRows: ['metric_name_with_unit'],
+          groupbyColumns: ['biz_date', 'shop_name', 'country'],
+          metrics: ['指标值'],
+          serverColumnPagination: true,
+          dynamicGroupBy: {
+            enabled: true,
+            slots: [
+              {
+                id: 'dimension1',
+                placement: 'columns',
+                slotIndex: 0,
+                spliceCount: 1,
+                defaultOptionId: 'none',
+                options: [{ id: 'none', label: '无', columns: [] }],
+              },
+              {
+                id: 'dimension2',
+                placement: 'columns',
+                slotIndex: 1,
+                spliceCount: 1,
+                defaultOptionId: 'none',
+                options: [{ id: 'none', label: '无', columns: [] }],
+              },
+              {
+                id: 'dimension3',
+                placement: 'columns',
+                slotIndex: 2,
+                spliceCount: 1,
+                defaultOptionId: 'none',
+                options: [{ id: 'none', label: '无', columns: [] }],
+              },
+            ],
+          },
+        } as never,
+        { ownState: {} },
+      ),
+    ).toThrow(ERR_SERVER_COLUMN_PAGINATION_SHAPE);
+  });
+
   it('builds current page data without a legacy row total query after server column page tuples are loaded', () => {
     const queryContext = buildQuery(
       {

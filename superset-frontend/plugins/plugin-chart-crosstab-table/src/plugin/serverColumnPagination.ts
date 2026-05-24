@@ -30,7 +30,7 @@ export const DEFAULT_GENERATED_COLUMN_WIDTH = 120;
 export const ERR_SERVER_COLUMN_PAGINATION_COLUMNS =
   'Crosstab server column pagination only supports physical column dimensions.';
 export const ERR_SERVER_COLUMN_PAGINATION_SHAPE =
-  'Crosstab server column pagination currently requires exactly one row dimension and at least one metric.';
+  'Crosstab server column pagination currently requires exactly one row dimension, at least one column dimension, and at least one metric.';
 export const ERR_SERVER_COLUMN_PAGINATION_ROW_LIMIT =
   'Crosstab server column pagination query reached the row limit. Reduce the column page size or add filters.';
 
@@ -128,7 +128,11 @@ export function assertServerColumnPaginationShape(
   columnDimensions: QueryFormColumn[],
   metricCount: number,
 ) {
-  if (rowDimensions.length !== 1 || metricCount < 1) {
+  if (
+    rowDimensions.length !== 1 ||
+    columnDimensions.length < 1 ||
+    metricCount < 1
+  ) {
     throw new Error(ERR_SERVER_COLUMN_PAGINATION_SHAPE);
   }
 

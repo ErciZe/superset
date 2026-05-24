@@ -949,6 +949,29 @@ describe('crosstab transformProps', () => {
             },
           ],
         },
+        {
+          data: [
+            {
+              metric_name_with_unit: '销售额',
+              profit: 7,
+            },
+          ],
+        },
+        {
+          data: [
+            {
+              biz_date: '2026-05-01',
+              profit: 7,
+            },
+          ],
+        },
+        {
+          data: [
+            {
+              profit: 7,
+            },
+          ],
+        },
       ],
       datasource: {
         verboseMap: {

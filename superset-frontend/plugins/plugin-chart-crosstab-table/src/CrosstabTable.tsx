@@ -84,6 +84,7 @@ type MeasuredGridWidth = {
 };
 
 type DynamicGroupBySelector = {
+  canClear: boolean;
   clearOptionId?: string;
   label: string;
   options: {
@@ -634,6 +635,7 @@ export default function CrosstabTable({
       ]),
     );
     const selectedOptionIdsBySlot = new Map<string, string>();
+    const activeOptionCountsByPlacement = new Map<string, number>();
 
     sortedSlots.forEach(slot => {
       const valueSet = new Set(slot.options.map(option => option.id));
@@ -642,14 +644,28 @@ export default function CrosstabTable({
         selectedOptionId && valueSet.has(selectedOptionId)
           ? selectedOptionId
           : slot.defaultOptionId;
+      const selectedOption = slot.options.find(option => option.id === value);
 
       selectedOptionIdsBySlot.set(slot.id, value);
+      if (selectedOption && selectedOption.columns.length > 0) {
+        activeOptionCountsByPlacement.set(
+          slot.placement,
+          (activeOptionCountsByPlacement.get(slot.placement) ?? 0) + 1,
+        );
+      }
     });
 
     return sortedSlots.map(slot => {
       const clearOptionId = clearOptionIdsBySlot.get(slot.id);
       const value =
         selectedOptionIdsBySlot.get(slot.id) ?? slot.defaultOptionId;
+      const selectedOption = slot.options.find(option => option.id === value);
+      const canClear =
+        clearOptionId !== undefined &&
+        (selectedOption?.columns.length ?? 0) === 0
+          ? true
+          : clearOptionId !== undefined &&
+            (activeOptionCountsByPlacement.get(slot.placement) ?? 0) > 1;
       const selectedOptionIdsFromOtherSlots = new Set(
         [...selectedOptionIdsBySlot]
           .filter(([selectedSlotId]) => selectedSlotId !== slot.id)
@@ -661,9 +677,10 @@ export default function CrosstabTable({
       );
       const options = slot.options.map(option => ({
         disabled:
-          option.id !== clearOptionId &&
-          option.id !== value &&
-          selectedOptionIdsFromOtherSlots.has(option.id),
+          (option.id === clearOptionId && !canClear) ||
+          (option.id !== clearOptionId &&
+            option.id !== value &&
+            selectedOptionIdsFromOtherSlots.has(option.id)),
         label: option.label,
         value: option.id,
       }));
@@ -672,6 +689,7 @@ export default function CrosstabTable({
       );
 
       return {
+        canClear,
         clearOptionId,
         label: slot.label ?? t('Group dimension'),
         options,
@@ -1068,12 +1086,12 @@ export default function CrosstabTable({
             updateDynamicGroupByOption(selector.slotId, nextOptionId)
           }
           onClear={
-            clearOptionId === undefined
+            clearOptionId === undefined || !selector.canClear
               ? undefined
               : () => updateDynamicGroupByOption(selector.slotId, clearOptionId)
           }
           options={selector.options}
-          allowClear={clearOptionId !== undefined}
+          allowClear={clearOptionId !== undefined && selector.canClear}
           sortComparator={PRESERVE_SELECT_OPTION_ORDER}
           value={selector.value}
         />

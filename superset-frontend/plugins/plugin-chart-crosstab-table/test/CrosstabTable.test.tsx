@@ -1730,6 +1730,97 @@ describe('CrosstabTable', () => {
     });
   });
 
+  it('prevents clearing the last active dynamic group-by slot for a placement', () => {
+    const setDataMask = jest.fn();
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        generatedColumnWidth: 120,
+        viz_type: 'crosstab_table',
+      },
+      hooks: {
+        setDataMask,
+      },
+      ownState: {
+        selectedDynamicGroupBy: {
+          dimension1: 'date',
+          dimension2: 'none',
+          dimension3: 'none',
+        },
+      },
+      selectedDynamicGroupBy: {
+        dimension1: 'date',
+        dimension2: 'none',
+        dimension3: 'none',
+      },
+      rowData: [],
+      columns: [],
+      columnTree: [],
+      generatedColumnIds: [],
+      dynamicGroupByConfig: {
+        enabled: true,
+        slots: [
+          {
+            id: 'dimension1',
+            label: '维度1',
+            placement: 'columns',
+            slotIndex: 0,
+            spliceCount: 1,
+            defaultOptionId: 'date',
+            options: [
+              { id: 'none', label: '无', columns: [] },
+              { id: 'date', label: '日期', columns: ['biz_date'] },
+              { id: 'shop', label: '店铺', columns: ['shop_name'] },
+            ],
+          },
+          {
+            id: 'dimension2',
+            label: '维度2',
+            placement: 'columns',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'none',
+            options: [
+              { id: 'none', label: '无', columns: [] },
+              { id: 'date', label: '日期', columns: ['biz_date'] },
+              { id: 'shop', label: '店铺', columns: ['shop_name'] },
+            ],
+          },
+          {
+            id: 'dimension3',
+            label: '维度3',
+            placement: 'columns',
+            slotIndex: 2,
+            spliceCount: 1,
+            defaultOptionId: 'none',
+            options: [
+              { id: 'none', label: '无', columns: [] },
+              { id: 'date', label: '日期', columns: ['biz_date'] },
+              { id: 'shop', label: '店铺', columns: ['shop_name'] },
+            ],
+          },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    const firstSelect = getDynamicGroupBySelect('dimension1');
+    expect(getSelectOption(firstSelect, 'none').disabled).toBe(true);
+    expect(() => getDynamicGroupByClearButton('dimension1')).toThrow(
+      'Unable to find dynamic group-by clear button',
+    );
+
+    act(() => {
+      firstSelect.value = 'none';
+      firstSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(setDataMask).not.toHaveBeenCalled();
+  });
+
   it('renders a numeric parameter control and writes own-state on change', () => {
     const setDataMask = jest.fn();
     const props = {

@@ -332,6 +332,8 @@ function buildGroupRows(
               metric,
               options,
               map: options.summaryValues?.rowSubtotalCells,
+              requireSummary:
+                options.summaryValueRequirements?.row_subtotal_cells,
             });
 
             return {
@@ -362,6 +364,8 @@ function buildGroupRows(
               metric: metricFields[0],
               options,
               map: options.summaryValues?.rowSubtotalTotal,
+              requireSummary:
+                options.summaryValueRequirements?.row_subtotal_total,
             })
           : undefined;
 
@@ -462,6 +466,11 @@ function addColumnSubtotalsToRow(
                     rowLookupFields.length === options.rowFields.length
                       ? options.summaryValues?.columnSubtotalCells
                       : options.summaryValues?.rowColumnSubtotalCells,
+                  requireSummary:
+                    rowLookupFields.length === options.rowFields.length
+                      ? options.summaryValueRequirements?.column_subtotal_cells
+                      : options.summaryValueRequirements
+                          ?.row_column_subtotal_cells,
                 })
               : undefined;
 
@@ -515,6 +524,7 @@ function getRowSqlSummaryValue({
   metric,
   options,
   map,
+  requireSummary,
 }: {
   row: DataRecord;
   rowLookupFields: string[];
@@ -522,6 +532,7 @@ function getRowSqlSummaryValue({
   metric: string;
   options: CrosstabBuildOptions;
   map?: Map<string, number | null>;
+  requireSummary?: boolean;
 }): number | null | undefined {
   if (map) {
     return getRequiredSummaryValue(map, {
@@ -529,6 +540,10 @@ function getRowSqlSummaryValue({
       columnValues: columnValues as DataRecordValue[],
       metric,
     });
+  }
+
+  if (requireSummary) {
+    throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   }
 
   const semantic = options.resolveSemantic?.({ row, metric }) ?? 'additive';
@@ -572,12 +587,14 @@ function getColumnSqlSummaryValue({
   metric,
   options,
   map,
+  requireSummary,
 }: {
   leafRows: DataRecord[];
   columnValues: unknown[];
   metric: string;
   options: CrosstabBuildOptions;
   map?: Map<string, number | null>;
+  requireSummary?: boolean;
 }): number | null | undefined {
   const semantic = getColumnSqlSemantic(leafRows, metric, options);
 
@@ -589,7 +606,7 @@ function getColumnSqlSummaryValue({
     });
   }
 
-  if (semantic) {
+  if (semantic || requireSummary) {
     throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   }
 
@@ -612,6 +629,10 @@ function getSqlRowTotal(
       columnValues: [],
       metric,
     });
+  }
+
+  if (options.summaryValueRequirements?.row_total) {
+    throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   }
 
   const semantic = options.resolveSemantic?.({ row, metric }) ?? 'additive';
@@ -640,6 +661,10 @@ function getSqlGrandTotal(
       columnValues: [],
       metric,
     });
+  }
+
+  if (options.summaryValueRequirements?.grand_total) {
+    throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   }
 
   if (!semantic || !isSqlSemantic(semantic)) {
@@ -728,6 +753,8 @@ function buildSubtotalRows(
               metric,
               options,
               map: options.summaryValues?.rowSubtotalCells,
+              requireSummary:
+                options.summaryValueRequirements?.row_subtotal_cells,
             });
 
             return {
@@ -758,6 +785,8 @@ function buildSubtotalRows(
               metric: metricFields[0],
               options,
               map: options.summaryValues?.rowSubtotalTotal,
+              requireSummary:
+                options.summaryValueRequirements?.row_subtotal_total,
             })
           : undefined;
 
@@ -879,6 +908,7 @@ function buildGrandTotalRow(
           metric,
           options,
           map: options.summaryValues?.columnTotal,
+          requireSummary: options.summaryValueRequirements?.column_total,
         });
 
         return {
@@ -914,6 +944,8 @@ function buildGrandTotalRow(
                 metric,
                 options,
                 map: options.summaryValues?.columnSubtotalTotal,
+                requireSummary:
+                  options.summaryValueRequirements?.column_subtotal_total,
               });
 
               return {

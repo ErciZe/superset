@@ -276,6 +276,33 @@ describe('buildCrosstab', () => {
     });
   });
 
+  it('fails when an additive row total is marked summary-required but no summary map is present', () => {
+    expect(() =>
+      buildCrosstab(
+        [
+          {
+            metric_name_with_unit: '销量（件）',
+            biz_date: '2025-01-01',
+            指标值: 10,
+          },
+        ],
+        {
+          rowFields: ['metric_name_with_unit'],
+          columnFields: ['biz_date'],
+          metricFields: ['指标值'],
+          showColumnTotals: true,
+          showRowTotals: false,
+          showRowSubtotals: false,
+          showColumnSubtotals: false,
+          maxGeneratedColumns: 100,
+          defaultRowExpandedDepth: 0,
+          summaryValueRequirements: { row_total: true },
+          resolveSemantic: () => 'additive',
+        },
+      ),
+    ).toThrow(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
+  });
+
   it('orders rows by optional row comparator without exposing hidden sort fields', () => {
     const result = buildCrosstab(
       [
