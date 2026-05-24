@@ -19,9 +19,11 @@
 import {
   DataRecord,
   DataRecordValue,
+  getColumnLabel,
   JsonObject,
   QueryFormColumn,
 } from '@superset-ui/core';
+import type { DimensionFieldConfig } from '../types';
 
 export const DEFAULT_COLUMN_PAGE_SIZE = 98;
 export const DEFAULT_GENERATED_COLUMN_WIDTH = 120;
@@ -80,8 +82,45 @@ export function getCurrentColumnPage(ownState?: JsonObject): number {
     : 0;
 }
 
-export function getServerColumnPageColumnSignature(columns: string[]): string {
-  return columns.join('\u001f');
+function getSortSignature(config: DimensionFieldConfig): string {
+  if (!config.sort) {
+    const label = getColumnLabel(config.field);
+    if (!label) {
+      throw new Error(ERR_SERVER_COLUMN_PAGINATION_COLUMNS);
+    }
+
+    return label;
+  }
+
+  const sortBy = config.sort.by === 'self' ? config.field : config.sort.by;
+  const fieldLabel = getColumnLabel(config.field);
+  const sortLabel = getColumnLabel(sortBy);
+
+  if (!fieldLabel || !sortLabel) {
+    throw new Error(ERR_SERVER_COLUMN_PAGINATION_COLUMNS);
+  }
+
+  return [
+    fieldLabel,
+    sortLabel,
+    config.sort.direction ?? 'asc',
+    config.sort.type ?? 'string',
+    config.sort.nulls ?? 'last',
+  ].join('\u001e');
+}
+
+function isDimensionFieldConfig(
+  value: string | DimensionFieldConfig,
+): value is DimensionFieldConfig {
+  return typeof value !== 'string';
+}
+
+export function getServerColumnPageColumnSignature(
+  columns: string[] | DimensionFieldConfig[],
+): string {
+  return columns.some(isDimensionFieldConfig)
+    ? (columns as DimensionFieldConfig[]).map(getSortSignature).join('\u001f')
+    : (columns as string[]).join('\u001f');
 }
 
 export function assertServerColumnPaginationShape(
@@ -107,6 +146,7 @@ export function getServerColumnPageTuples(
   currentPage: number,
   currentPageSize: number,
   columns: string[],
+  columnSignature = getServerColumnPageColumnSignature(columns),
 ): DataRecordValue[][] {
   const state = ownState as CrosstabOwnState | undefined;
 
@@ -124,8 +164,6 @@ export function getServerColumnPageTuples(
   const tuples = Array.isArray(state.serverColumnPageTuples)
     ? state.serverColumnPageTuples
     : [];
-  const columnSignature = getServerColumnPageColumnSignature(columns);
-
   if (
     state.serverColumnPageColumnSignature !== undefined &&
     state.serverColumnPageColumnSignature !== columnSignature

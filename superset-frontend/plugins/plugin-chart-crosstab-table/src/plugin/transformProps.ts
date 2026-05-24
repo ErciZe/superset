@@ -17,7 +17,6 @@
  * under the License.
  */
 import {
-  ensureIsArray,
   getColumnLabel,
   getMetricLabel,
   t,
@@ -50,25 +49,27 @@ import {
   getColumnPageSize,
   getCurrentColumnPage,
   getServerColumnPageColumnSignature,
+  getServerColumnPageTuples,
   recordsToColumnTuples,
 } from './serverColumnPagination';
 import type { CrosstabOwnState as ServerColumnOwnState } from './serverColumnPagination';
 import {
-  getCrosstabColumnColumns,
+  getCrosstabColumnConfigs,
   getEffectiveCrosstabMetricConfigs,
   getCrosstabFieldLabels,
-  getCrosstabRowColumns,
+  getCrosstabRowConfigs,
   getCrosstabRowSubtotalDepths,
+  getCrosstabRowValueSummaries,
   getCrosstabSemanticOverrideField,
   getCrosstabSemanticOverrides,
 } from './fieldConfig';
 import {
-  hasSqlSummarySemanticConfig,
+  hasConfiguredSummarySemantics,
   resolveMetricSemantic,
 } from './metricSemantics';
 import { buildCrosstabQueryPlan } from './summaryQueryPlan';
 import { buildSummaryResultMap } from './summaryResults';
-import { resolveDynamicGroupByDimensions } from './dynamicGroupBy';
+import { resolveDynamicGroupByDimensionConfigs } from './dynamicGroupBy';
 import { resolveDynamicMetricConfigs } from './dynamicMetric';
 import {
   expandCalculatedFieldMetricConfigs,
@@ -163,12 +164,10 @@ function updateServerColumnOwnState(
   setDataMask: CrosstabChartProps['hooks']['setDataMask'] | undefined,
   currentPage: number,
   currentPageSize: number,
-  columnFields: string[],
+  columnSignature: string,
   columnTuples: DataRecordValue[][],
   totalCount: number,
 ) {
-  const columnSignature = getServerColumnPageColumnSignature(columnFields);
-
   if (
     ownState.serverColumnPageTuplesPage === currentPage &&
     ownState.serverColumnPageTuplesPageSize === currentPageSize &&
@@ -340,21 +339,21 @@ export default function transformProps(
     formData.conditionalFormatting,
   );
   const crosstabFormData = formData as CrosstabFormData;
-  const persistedRowDimensions = ensureIsArray<QueryFormColumn>(
-    getCrosstabRowColumns(crosstabFormData),
-  );
-  const persistedColumnDimensions = ensureIsArray<QueryFormColumn>(
-    getCrosstabColumnColumns(crosstabFormData),
-  );
+  const persistedRowConfigs = getCrosstabRowConfigs(crosstabFormData);
+  const persistedColumnConfigs = getCrosstabColumnConfigs(crosstabFormData);
   const crosstabOwnState = (ownState ?? {}) as CrosstabOwnState;
-  const dynamicGroupBy = resolveDynamicGroupByDimensions({
+  const dynamicGroupBy = resolveDynamicGroupByDimensionConfigs({
     formData: crosstabFormData,
     ownState: crosstabOwnState,
-    rowDimensions: persistedRowDimensions,
-    columnDimensions: persistedColumnDimensions,
+    rowConfigs: persistedRowConfigs,
+    columnConfigs: persistedColumnConfigs,
   });
-  const rowFields = dynamicGroupBy.rowDimensions.map(normalizeColumn);
-  const columnFields = dynamicGroupBy.columnDimensions.map(normalizeColumn);
+  const rowFields = dynamicGroupBy.rowConfigs
+    .map(config => config.field)
+    .map(normalizeColumn);
+  const columnFields = dynamicGroupBy.columnConfigs
+    .map(config => config.field)
+    .map(normalizeColumn);
   const baseMetricConfigs = getEffectiveCrosstabMetricConfigs(crosstabFormData);
   const resolvedParameters = resolveCrosstabParameters(
     crosstabFormData,
@@ -387,6 +386,16 @@ export default function transformProps(
   const currentPage = getCurrentColumnPage(crosstabOwnState);
   const columnPageSize = getColumnPageSize(
     crosstabOwnState.currentColumnPageSize ?? formData.columnPageSize,
+  );
+  const columnSignature = getServerColumnPageColumnSignature(
+    dynamicGroupBy.columnConfigs,
+  );
+  const validServerColumnPageTuples = getServerColumnPageTuples(
+    crosstabOwnState,
+    currentPage,
+    columnPageSize,
+    columnFields,
+    columnSignature,
   );
   const resetDynamicGroupByOwnState =
     dynamicGroupBy.config !== undefined &&
@@ -438,14 +447,16 @@ export default function transformProps(
   const semanticOverrideField =
     getCrosstabSemanticOverrideField(crosstabFormData);
   const semanticOverrides = getCrosstabSemanticOverrides(crosstabFormData);
-  const hasNonAdditiveSummary = hasSqlSummarySemanticConfig(
+  const rowValueSummaries = getCrosstabRowValueSummaries(crosstabFormData);
+  const requiresSqlSummary = hasConfiguredSummarySemantics(
     effectiveMetricConfigs,
     semanticOverrides,
+    rowValueSummaries,
   );
   const queryPlan = buildCrosstabQueryPlan({
     rowFields,
     columnFields,
-    requiresSqlSummary: hasNonAdditiveSummary,
+    requiresSqlSummary,
     showRowTotals: formData.showRowTotals ?? true,
     showRowSubtotals: formData.showRowSubtotals ?? true,
     showColumnTotals: formData.showColumnTotals ?? true,
@@ -455,8 +466,7 @@ export default function transformProps(
       ? !resetDynamicGroupByOwnState &&
         !resetDynamicMetricOwnState &&
         !resetDynamicMetricConfigOwnState &&
-        ((crosstabOwnState.serverColumnPageTuples?.length ?? 0) > 0 ||
-          queriesData.length > 2)
+        (validServerColumnPageTuples.length > 0 || queriesData.length > 2)
       : undefined,
   });
   const queriesByPlan = queryDataByPlan(queryPlan, queriesData);
@@ -495,7 +505,7 @@ export default function transformProps(
     'grand_total',
   );
   const legacyServerRowTotalQuery =
-    serverColumnPagination && !hasNonAdditiveSummary
+    serverColumnPagination && !requiresSqlSummary
       ? queriesData[queryPlan.length]
       : undefined;
   const totalCount =
@@ -603,7 +613,7 @@ export default function transformProps(
       setDataMask,
       currentPage,
       columnPageSize,
-      columnFields,
+      columnSignature,
       columnTuples,
       totalCount ?? columnTuples.length,
     );
@@ -635,6 +645,7 @@ export default function transformProps(
         metric,
         row,
         metricConfigs: effectiveMetricConfigs,
+        rowValueSummaries,
         semanticOverrideField,
         semanticOverrides,
       }),

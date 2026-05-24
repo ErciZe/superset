@@ -32,6 +32,7 @@ import {
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT_OVERLAP,
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION,
   getDynamicGroupByConfig,
+  resolveDynamicGroupByDimensionConfigs,
   resolveDynamicGroupByDimensions,
 } from '../../src/plugin/dynamicGroupBy';
 
@@ -202,6 +203,31 @@ describe('crosstab dynamic group by resolver', () => {
     expect(result.signature).toBe(
       'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
     );
+  });
+
+  it('preserves dimension metadata positionally when resolving config slots', () => {
+    const result = resolveDynamicGroupByDimensionConfigs({
+      formData: createFormData(baseConfig),
+      ownState: { selectedDynamicGroupByColumn: 'country' },
+      rowConfigs: [{ field: 'metric_name_with_unit' }],
+      columnConfigs: [
+        { field: 'biz_date', label: 'Date' },
+        {
+          field: 'shop_name',
+          label: 'Shop',
+          sort: { by: 'shop_order', direction: 'desc', type: 'number' },
+        },
+      ],
+    });
+
+    expect(result.columnConfigs).toEqual([
+      { field: 'biz_date', label: 'Date' },
+      {
+        field: 'country',
+        label: 'Shop',
+        sort: { by: 'shop_order', direction: 'desc', type: 'number' },
+      },
+    ]);
   });
 
   it('matches valid object columns and uses their labels in the signature', () => {

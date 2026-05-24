@@ -5,6 +5,7 @@ import type { CrosstabFormData } from '../../src/types';
 import {
   ERR_SERVER_COLUMN_PAGINATION_COLUMNS,
   ERR_SERVER_COLUMN_PAGINATION_SHAPE,
+  getServerColumnPageColumnSignature,
 } from '../../src/plugin/serverColumnPagination';
 import { ERR_CROSSTAB_V4_METRIC_CONFIG } from '../../src/plugin/fieldConfig';
 
@@ -1070,6 +1071,25 @@ describe('crosstab buildQuery', () => {
     );
 
     expect(queryContext.queries[0].orderby).toEqual([['biz_date', false]]);
+  });
+
+  it('changes server column page signature when sort direction changes', () => {
+    const ascendingSignature = getServerColumnPageColumnSignature([
+      {
+        field: 'biz_date',
+        sort: { by: 'biz_date', direction: 'asc', type: 'date' },
+      },
+    ] as never);
+    const descendingSignature = getServerColumnPageColumnSignature([
+      {
+        field: 'biz_date',
+        sort: { by: 'biz_date', direction: 'desc', type: 'date' },
+      },
+    ] as never);
+
+    expect(ascendingSignature).not.toEqual(descendingSignature);
+    expect(ascendingSignature).toContain('biz_date');
+    expect(descendingSignature).toContain('biz_date');
   });
 
   it('keeps server row total summary full range while leaf query is page filtered', () => {

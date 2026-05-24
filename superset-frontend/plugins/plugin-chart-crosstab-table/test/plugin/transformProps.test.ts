@@ -1081,6 +1081,94 @@ describe('crosstab transformProps', () => {
     );
   });
 
+  it('uses row value summaries when reconstructing SQL summary planning', () => {
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }],
+          metrics: [{ metric: '指标值', semantic: 'unknown' }],
+          rowValueSummaries: {
+            field: 'metric_name_with_unit',
+            values: [
+              { value: '销售额（金额）', semantic: 'additive' },
+              { value: '毛利率（%）', semantic: 'ratio' },
+            ],
+          },
+        },
+        showRowTotals: true,
+        showColumnTotals: true,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              metric_name_with_unit: '毛利率（%）',
+              biz_date: '2026-05-01',
+              指标值: -4.1111,
+            },
+            {
+              metric_name_with_unit: '毛利率（%）',
+              biz_date: '2026-05-02',
+              指标值: -5.2222,
+            },
+          ],
+        },
+        {
+          data: [
+            {
+              metric_name_with_unit: '毛利率（%）',
+              指标值: -9.5145,
+            },
+          ],
+        },
+        {
+          data: [
+            {
+              biz_date: '2026-05-01',
+              指标值: -4.1111,
+            },
+            {
+              biz_date: '2026-05-02',
+              指标值: -5.2222,
+            },
+          ],
+        },
+        {
+          data: [
+            {
+              指标值: -9.5145,
+            },
+          ],
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+    const ratioRow = props.rowData.find(
+      row => row.metric_name_with_unit === '毛利率（%）',
+    );
+    const grandTotalRow = props.rowData.find(
+      row => row[CROSSTAB_ROW_TYPE] === 'grand_total',
+    );
+
+    expect(ratioRow).toEqual(
+      expect.objectContaining({
+        [CROSSTAB_TOTAL_COLUMN_ID]: -9.5145,
+      }),
+    );
+    expect(grandTotalRow).toEqual(
+      expect.objectContaining({
+        [CROSSTAB_TOTAL_COLUMN_ID]: -9.5145,
+      }),
+    );
+  });
+
   it('clears stale metric server column caches and preserves expanded rows', () => {
     const setDataMask = jest.fn();
     const chartProps = new ChartProps<CrosstabFormData>({

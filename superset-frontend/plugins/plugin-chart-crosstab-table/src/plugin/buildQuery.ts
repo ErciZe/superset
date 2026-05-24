@@ -44,6 +44,7 @@ import {
   buildColumnTupleWhereClause,
   getColumnPageSize,
   getCurrentColumnPage,
+  getServerColumnPageColumnSignature,
   getServerColumnPageTuples,
 } from './serverColumnPagination';
 import type { CrosstabOwnState as ServerColumnOwnState } from './serverColumnPagination';
@@ -213,11 +214,15 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
           const columnPageSize = getColumnPageSize(
             ownColumnPageSize ?? formData.columnPageSize,
           );
+          const columnSignature = getServerColumnPageColumnSignature(
+            effectiveColumnConfigs,
+          );
           const pageTuples = getServerColumnPageTuples(
             options?.ownState,
             currentPage,
             columnPageSize,
             columnDimensions as string[],
+            columnSignature,
           );
           const domainQuery: QueryObject = {
             ...baseQueryObject,
