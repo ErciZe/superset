@@ -466,7 +466,7 @@ export default function transformProps(
       ? !resetDynamicGroupByOwnState &&
         !resetDynamicMetricOwnState &&
         !resetDynamicMetricConfigOwnState &&
-        (validServerColumnPageTuples.length > 0 || queriesData.length > 2)
+        validServerColumnPageTuples.length > 0
       : undefined,
   });
   const queriesByPlan = queryDataByPlan(queryPlan, queriesData);

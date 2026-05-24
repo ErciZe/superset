@@ -1378,6 +1378,83 @@ describe('crosstab transformProps', () => {
     });
   });
 
+  it('ignores old full server column data when stored page tuple signature is stale', () => {
+    const setDataMask = jest.fn();
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [
+            {
+              field: 'biz_date',
+              sort: { by: 'biz_date', direction: 'desc', type: 'date' },
+            },
+            { field: 'shop_name' },
+          ],
+          metrics: [{ metric: '指标值', semantic: 'additive' }],
+        },
+        serverColumnPagination: true,
+        columnPageSize: 98,
+      },
+      ownState: {
+        currentColumnPage: 0,
+        currentColumnPageSize: 5,
+        serverColumnPageColumnSignature: 'biz_date\u001fshop_name',
+        serverColumnPageTuples: [['2026-05-01', 'Shop A']],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: 5,
+      },
+      hooks: {
+        setDataMask,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              biz_date: '2026-05-02',
+              shop_name: 'Shop B',
+            },
+          ],
+        },
+        {
+          data: [{ rowcount: 1 }],
+        },
+        {
+          data: [
+            {
+              metric_name_with_unit: '旧数据',
+              biz_date: '2026-05-01',
+              shop_name: 'Shop A',
+              指标值: 10,
+            },
+          ],
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    const props = transformProps(chartProps);
+
+    expect(props.isServerColumnLoading).toBe(true);
+    expect(props.rowData).toEqual([]);
+    expect(setDataMask).toHaveBeenCalledWith({
+      ownState: {
+        currentColumnPage: 0,
+        currentColumnPageSize: 5,
+        serverColumnPageColumnSignature:
+          'biz_date\u001ebiz_date\u001edesc\u001edate\u001elast\u001fshop_name',
+        serverColumnPageTuples: [['2026-05-02', 'Shop B']],
+        serverColumnPageTuplesPage: 0,
+        serverColumnPageTuplesPageSize: 5,
+        serverColumnTotalCount: 1,
+      },
+    });
+  });
+
   it('bootstraps server column pagination without existing own state', () => {
     const setDataMask = jest.fn();
     const chartProps = new ChartProps<CrosstabFormData>({
