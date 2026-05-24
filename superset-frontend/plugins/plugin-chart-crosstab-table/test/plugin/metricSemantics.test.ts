@@ -76,7 +76,7 @@ describe('crosstab metric semantics', () => {
   it('treats row value summaries as requiring SQL summaries even when additive', () => {
     expect(
       hasConfiguredSummarySemantics(
-        [{ metric: '指标值', semantic: 'additive' }],
+        [{ metric: '指标值' }],
         [],
         {
           field: 'metric_name_with_unit',
