@@ -1,11 +1,9 @@
 import { Comparator } from '@superset-ui/chart-controls';
 import { GenericDataType } from '@superset-ui/core';
-import officialTransformProps from '../../plugin-chart-ag-grid-table/src/transformProps';
+import officialTransformProps from '../src/table/transformProps';
 import transformProps from '../src/transformProps';
 
-jest.mock('../../plugin-chart-ag-grid-table/src/transformProps', () =>
-  jest.fn(),
-);
+jest.mock('../src/table/transformProps', () => jest.fn());
 
 const mockedOfficialTransformProps = officialTransformProps as jest.Mock;
 

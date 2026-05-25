@@ -16,8 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import AgGridTableChart from '@superset-ui/plugin-chart-ag-grid-table/src/AgGridTableChart';
-import type { AgGridTableChartTransformedProps } from '@superset-ui/plugin-chart-ag-grid-table/src/types';
+import AgGridTableChart from './table/AgGridTableChart';
+import type { AgGridTableChartTransformedProps } from './table/types';
 import type {
   ColDef,
   GridReadyEvent,

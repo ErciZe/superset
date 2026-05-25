@@ -23,8 +23,8 @@ import {
   type QueryFormColumn,
   type QueryFormMetric,
 } from '@superset-ui/core';
-import officialBuildQuery from '../../../plugin-chart-ag-grid-table/src/buildQuery';
-import type { TableChartFormData } from '../../../plugin-chart-ag-grid-table/src/types';
+import officialBuildQuery from '../table/buildQuery';
+import type { TableChartFormData } from '../table/types';
 import { shouldUseMatrixRawTotalSummary } from './summary';
 import type { MatrixFormData } from './types';
 

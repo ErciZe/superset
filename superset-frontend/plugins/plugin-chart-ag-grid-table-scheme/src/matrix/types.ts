@@ -23,7 +23,7 @@ import type {
   QueryFormMetric,
 } from '@superset-ui/core';
 import type { ConditionalFormattingConfig } from '@superset-ui/chart-controls';
-import type { DataColumnMeta } from '../../../plugin-chart-ag-grid-table/src/types';
+import type { DataColumnMeta } from '../table/types';
 
 export type MatrixCalculation =
   | 'raw'

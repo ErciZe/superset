@@ -23,9 +23,9 @@ import {
   type DataRecordValue,
   type TimeFormatter,
 } from '@superset-ui/core';
-import officialTransformProps from '../../plugin-chart-ag-grid-table/src/transformProps';
-import type { TableChartProps } from '../../plugin-chart-ag-grid-table/src/types';
-import DateWithFormatter from '../../plugin-chart-ag-grid-table/src/utils/DateWithFormatter';
+import officialTransformProps from './table/transformProps';
+import type { TableChartProps } from './table/types';
+import DateWithFormatter from './table/utils/DateWithFormatter';
 import {
   createMatrixCellStyle,
   getMatrixCellColorFormatters,

@@ -21,7 +21,7 @@ import type { DataRecordValue } from '@superset-ui/core';
 import type {
   AdditionalCellFormatter,
   AdditionalCellFormatterResult,
-} from '../../../plugin-chart-ag-grid-table/src/types';
+} from '../table/types';
 import { getMatrixRawValueField } from './matrixTransform';
 
 const STYLE_WHITELIST = new Set([

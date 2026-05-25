@@ -17,20 +17,20 @@
  * under the License.
  */
 import { Behavior, ChartMetadata, ChartPlugin, t } from '@superset-ui/core';
-import thumbnail from '../../plugin-chart-ag-grid-table/src/images/thumbnail.png';
-import example1 from '../../plugin-chart-ag-grid-table/src/images/Table.jpg';
-import example2 from '../../plugin-chart-ag-grid-table/src/images/Table2.jpg';
-import example3 from '../../plugin-chart-ag-grid-table/src/images/Table3.jpg';
+import thumbnail from './images/thumbnail.png';
+import example1 from './images/Table.jpg';
+import example2 from './images/Table2.jpg';
+import example3 from './images/Table3.jpg';
 import type {
   TableChartFormData,
   TableChartProps,
-} from '../../plugin-chart-ag-grid-table/src/types';
+} from './table/types';
 import controlPanel from './controlPanel';
 import buildQuery from './matrix/buildQuery';
 import transformProps from './transformProps';
 
-export { default as __hack__ } from '../../plugin-chart-ag-grid-table/src/types';
-export * from '../../plugin-chart-ag-grid-table/src/types';
+export { default as __hack__ } from './table/types';
+export * from './table/types';
 
 const metadata = new ChartMetadata({
   behaviors: [

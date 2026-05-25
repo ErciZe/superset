@@ -21,7 +21,7 @@ import {
   type DataRecord,
   type DataRecordValue,
 } from '@superset-ui/core';
-import type { DataColumnMeta } from '../../../plugin-chart-ag-grid-table/src/types';
+import type { DataColumnMeta } from '../table/types';
 
 import type {
   MatrixCalculation,
