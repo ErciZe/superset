@@ -72,6 +72,7 @@ ModuleRegistry.registerModules([AllCommunityModule, ClientSideRowModelModule]);
 
 const FIRST_ROW_COLUMN_WIDTH = 180;
 const EXTRA_ROW_COLUMN_WIDTH = 120;
+const DYNAMIC_SELECTOR_MIN_WIDTH = 112;
 const DYNAMIC_GROUP_BY_PLACEMENT_ORDER = {
   rows: 0,
   columns: 1,
@@ -1078,10 +1079,11 @@ export default function CrosstabTable({
           gap: theme.sizeUnit,
         }}
       >
-        <span>{selector.label}</span>
+        <span style={{ whiteSpace: 'nowrap' }}>{selector.label}</span>
         <Select
           ariaLabel={t('Select crosstab group by dimension %s', selector.label)}
           allowSelectAll={false}
+          css={{ minWidth: DYNAMIC_SELECTOR_MIN_WIDTH }}
           onChange={(nextOptionId: string) =>
             updateDynamicGroupByOption(selector.slotId, nextOptionId)
           }
@@ -1108,10 +1110,11 @@ export default function CrosstabTable({
         gap: theme.sizeUnit,
       }}
     >
-      <span>{selector.label}</span>
+      <span style={{ whiteSpace: 'nowrap' }}>{selector.label}</span>
       <Select
         ariaLabel={t('Select crosstab metric %s', selector.label)}
         allowSelectAll={false}
+        css={{ minWidth: DYNAMIC_SELECTOR_MIN_WIDTH }}
         onChange={(nextOptionId: string) =>
           updateDynamicMetricOption(selector.slotId, nextOptionId)
         }
@@ -1134,7 +1137,7 @@ export default function CrosstabTable({
             gap: theme.sizeUnit,
           }}
         >
-          <span>{label}</span>
+          <span style={{ whiteSpace: 'nowrap' }}>{label}</span>
           <input
             aria-label={label}
             max={parameter.max}

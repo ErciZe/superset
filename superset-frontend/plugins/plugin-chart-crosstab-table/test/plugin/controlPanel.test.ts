@@ -1367,6 +1367,38 @@ describe('crosstab controlPanel', () => {
     expect(screen.getByText('Add slot')).toBeInTheDocument();
   });
 
+  it('renders dynamic metric control from saved JSON string values', () => {
+    render(
+      createElement(CrosstabDynamicMetricControl, {
+        name: 'dynamicMetric',
+        onChange: jest.fn(),
+        value: JSON.stringify({
+          enabled: true,
+          slots: [
+            {
+              id: 'metric_slot',
+              label: 'Metric slot',
+              slotIndex: 0,
+              defaultOptionId: 'sales',
+              options: [
+                {
+                  id: 'sales',
+                  label: 'Sales',
+                  metrics: [{ metric: 'sales_amount' }],
+                },
+              ],
+            },
+          ],
+        }),
+      }),
+    );
+
+    expect(
+      screen.getByRole('checkbox', { name: 'Enable dynamic metrics' }),
+    ).toBeChecked();
+    expect(screen.getByText('Metric slot')).toBeInTheDocument();
+  });
+
   it('renders dynamic group-by control when saved value omits slots', () => {
     render(
       createElement(CrosstabDynamicGroupByControl, {
@@ -1378,6 +1410,36 @@ describe('crosstab controlPanel', () => {
 
     expect(screen.getByText('Enable dynamic group by')).toBeInTheDocument();
     expect(screen.getByText('Add slot')).toBeInTheDocument();
+  });
+
+  it('renders dynamic group-by control from saved JSON string values', () => {
+    render(
+      createElement(CrosstabDynamicGroupByControl, {
+        name: 'dynamicGroupBy',
+        onChange: jest.fn(),
+        value: JSON.stringify({
+          enabled: true,
+          slots: [
+            {
+              id: 'dimension_1',
+              label: '维度1',
+              placement: 'columns',
+              slotIndex: 0,
+              defaultOptionId: 'biz_date',
+              options: [
+                { id: 'none', label: '无', columns: [] },
+                { id: 'biz_date', label: '日期', columns: ['biz_date'] },
+              ],
+            },
+          ],
+        }),
+      }),
+    );
+
+    expect(
+      screen.getByRole('checkbox', { name: 'Enable dynamic group by' }),
+    ).toBeChecked();
+    expect(screen.getByText('维度1')).toBeInTheDocument();
   });
 
   it('keeps legacy field controls hidden for saved chart compatibility', () => {

@@ -92,7 +92,7 @@ type CrosstabDynamicMetricControlProps = {
   name: string;
   onChange: (value: CrosstabDynamicMetricConfig) => void;
   savedMetrics?: Metric[];
-  value?: CrosstabDynamicMetricConfig;
+  value?: CrosstabDynamicMetricConfig | string;
 };
 
 type PartialDynamicMetricOption = Partial<
@@ -231,12 +231,28 @@ function normalizeSlotForRender(
   };
 }
 
-function getConfig(value?: PartialDynamicMetricConfig) {
+function parseConfigValue(
+  value?: PartialDynamicMetricConfig | string,
+): PartialDynamicMetricConfig | undefined {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  if (value.trim().length === 0) {
+    return undefined;
+  }
+
+  return JSON.parse(value) as PartialDynamicMetricConfig;
+}
+
+function getConfig(value?: PartialDynamicMetricConfig | string) {
+  const parsedValue = parseConfigValue(value);
+
   return {
     ...defaultConfig,
-    ...value,
-    enabled: value?.enabled === true,
-    slots: ensureIsArray(value?.slots).map(normalizeSlotForRender),
+    ...parsedValue,
+    enabled: parsedValue?.enabled === true,
+    slots: ensureIsArray(parsedValue?.slots).map(normalizeSlotForRender),
   };
 }
 

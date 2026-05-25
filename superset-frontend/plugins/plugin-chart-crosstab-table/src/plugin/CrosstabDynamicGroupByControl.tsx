@@ -87,7 +87,7 @@ type CrosstabDynamicGroupByControlProps = {
   label?: string;
   name: string;
   onChange: (value: CrosstabDynamicGroupByConfig) => void;
-  value?: CrosstabDynamicGroupByConfig;
+  value?: CrosstabDynamicGroupByConfig | string;
 };
 
 type PartialDynamicGroupByOption = Partial<
@@ -188,12 +188,28 @@ function normalizeSlotForRender(
   };
 }
 
-function getConfig(value?: PartialDynamicGroupByConfig) {
+function parseConfigValue(
+  value?: PartialDynamicGroupByConfig | string,
+): PartialDynamicGroupByConfig | undefined {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  if (value.trim().length === 0) {
+    return undefined;
+  }
+
+  return JSON.parse(value) as PartialDynamicGroupByConfig;
+}
+
+function getConfig(value?: PartialDynamicGroupByConfig | string) {
+  const parsedValue = parseConfigValue(value);
+
   return {
     ...defaultConfig,
-    ...value,
-    enabled: value?.enabled === true,
-    slots: ensureIsArray(value?.slots).map(normalizeSlotForRender),
+    ...parsedValue,
+    enabled: parsedValue?.enabled === true,
+    slots: ensureIsArray(parsedValue?.slots).map(normalizeSlotForRender),
   };
 }
 
