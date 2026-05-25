@@ -30,6 +30,8 @@ import {
   ThemedAgGridReact,
 } from '@superset-ui/core/components';
 import {
+  GenericDataType,
+  sanitizeHtml,
   t,
   useTheme,
   type DataRecord,
@@ -67,6 +69,10 @@ import {
 } from './crosstab/engine';
 import { getCrosstabParameters } from './plugin/parameters';
 import { getGeneratedColumnWidth } from './plugin/serverColumnPagination';
+import {
+  createCrosstabCellFormatter,
+  type CrosstabCellFormatterResult,
+} from './crosstab/cellFormatter';
 
 ModuleRegistry.registerModules([AllCommunityModule, ClientSideRowModelModule]);
 
@@ -82,6 +88,27 @@ const PRESERVE_SELECT_OPTION_ORDER = () => 0;
 type MeasuredGridWidth = {
   includesRowColumns: boolean;
   width: number;
+};
+
+type CrosstabCellFormatter = NonNullable<
+  ReturnType<typeof createCrosstabCellFormatter>
+>;
+
+type CrosstabCellFormatterParams = Parameters<CrosstabCellFormatter>[0];
+
+type CachedFormatterResult = {
+  formattedValue: DataRecordValue | undefined;
+  result: CrosstabCellFormatterResult | undefined;
+  rowIndex: number | null | undefined;
+  rawValue: DataRecordValue | undefined;
+};
+
+type FormatterHookParams = {
+  colDef?: Pick<ColDef, 'field' | 'headerName'>;
+  data?: DataRecord;
+  rowIndex?: number | null;
+  value?: DataRecordValue;
+  valueFormatted?: DataRecordValue;
 };
 
 type DynamicGroupBySelector = {
@@ -129,6 +156,28 @@ function renderFormattedCell(
   return `${arrow === 'up' ? '↑' : '↓'} ${formattedValue}`;
 }
 
+function renderFormatterResult(
+  formatterResult: CrosstabCellFormatterResult | undefined,
+  defaultContent: DataRecordValue,
+) {
+  if (!formatterResult) {
+    return defaultContent;
+  }
+
+  if (formatterResult.html !== undefined) {
+    return (
+      <span
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{
+          __html: sanitizeHtml(formatterResult.html),
+        }}
+      />
+    );
+  }
+
+  return formatterResult.text ?? defaultContent;
+}
+
 function cellClassName(data?: DataRecord) {
   const rowType = data?.[CROSSTAB_ROW_TYPE];
 
@@ -147,14 +196,124 @@ function cellClassName(data?: DataRecord) {
   return undefined;
 }
 
+function getFormatterResult(
+  cellFormatter: CrosstabCellFormatter | undefined,
+  params: CrosstabCellFormatterParams,
+  columnId: string,
+  headerName: string,
+  metric: string | undefined,
+) {
+  return cellFormatter?.(params, {
+    key: columnId,
+    label: headerName,
+    dataType: GenericDataType.Numeric,
+    metric,
+  });
+}
+
+function buildFormatterParams(
+  params: FormatterHookParams,
+  columnId: string,
+  headerName: string,
+  numberFormat?: string,
+): CrosstabCellFormatterParams {
+  const value = params.value as DataRecordValue;
+
+  return {
+    value,
+    valueFormatted:
+      params.valueFormatted ?? formatCrosstabValue(value, numberFormat),
+    rowIndex: params.rowIndex,
+    data: params.data,
+    colDef: {
+      field: params.colDef?.field ?? columnId,
+      headerName: params.colDef?.headerName ?? headerName,
+    },
+  };
+}
+
+function buildCachedFormatterGetter(
+  cellFormatter: CrosstabCellFormatter | undefined,
+  columnId: string,
+  headerName: string,
+  metric: string | undefined,
+  numberFormat?: string,
+) {
+  const cacheByRow = new WeakMap<
+    DataRecord,
+    Map<string, CachedFormatterResult>
+  >();
+
+  return (params: FormatterHookParams) => {
+    const formatterParams = buildFormatterParams(
+      params,
+      columnId,
+      headerName,
+      numberFormat,
+    );
+
+    if (!cellFormatter || !formatterParams.data) {
+      return getFormatterResult(
+        cellFormatter,
+        formatterParams,
+        columnId,
+        headerName,
+        metric,
+      );
+    }
+
+    let rowCache = cacheByRow.get(formatterParams.data);
+    if (!rowCache) {
+      rowCache = new Map<string, CachedFormatterResult>();
+      cacheByRow.set(formatterParams.data, rowCache);
+    }
+
+    const cached = rowCache.get(columnId);
+    if (
+      cached &&
+      Object.is(cached.rawValue, formatterParams.value) &&
+      Object.is(cached.formattedValue, formatterParams.valueFormatted) &&
+      Object.is(cached.rowIndex, formatterParams.rowIndex)
+    ) {
+      return cached.result;
+    }
+
+    const result = getFormatterResult(
+      cellFormatter,
+      formatterParams,
+      columnId,
+      headerName,
+      metric,
+    );
+    rowCache.set(columnId, {
+      formattedValue: formatterParams.valueFormatted,
+      rawValue: formatterParams.value,
+      result,
+      rowIndex: formatterParams.rowIndex,
+    });
+
+    return result;
+  };
+}
+
 function buildLeafColumnDef(
   columnId: string,
   headerName: string,
+  metric: string | undefined,
   rules: CrosstabConditionalRule[],
   totalBackgroundColor: string,
   columnWidth: number,
+  cellFormatter: CrosstabCellFormatter | undefined,
   numberFormat?: string,
 ): ColDef {
+  const getCachedFormatterResult = buildCachedFormatterGetter(
+    cellFormatter,
+    columnId,
+    headerName,
+    metric,
+    numberFormat,
+  );
+
   return {
     field: columnId,
     colId: columnId,
@@ -163,22 +322,48 @@ function buildLeafColumnDef(
     minWidth: columnWidth,
     valueFormatter: ({ value }: ValueFormatterParams) =>
       formatCrosstabValue(value as DataRecordValue, numberFormat),
-    cellRenderer: (params: CustomCellRendererProps) =>
-      renderFormattedCell(params, rules, numberFormat),
-    cellStyle: ({ value, data }) => {
+    cellRenderer: (params: CustomCellRendererProps) => {
+      const defaultContent = renderFormattedCell(params, rules, numberFormat);
+      const formatterResult = getCachedFormatterResult(
+        params as FormatterHookParams,
+      );
+
+      return renderFormatterResult(formatterResult, defaultContent);
+    },
+    cellStyle: params => {
+      const { value, data } = params;
       const style = resolveConditionalStyle(value as DataRecordValue, rules);
       const isTotalRow =
         data?.[CROSSTAB_ROW_TYPE] === 'subtotal' ||
         data?.[CROSSTAB_ROW_TYPE] === 'grand_total';
+      const formatterResult = getCachedFormatterResult(
+        params as FormatterHookParams,
+      );
 
       return {
         color: style.color ?? '',
         backgroundColor:
           style.backgroundColor ?? (isTotalRow ? totalBackgroundColor : ''),
         ...(isTotalRow ? { fontWeight: 600 } : {}),
+        ...formatterResult?.style,
       };
     },
-    cellClass: ({ data }) => cellClassName(data as DataRecord | undefined),
+    cellClass: params => {
+      const defaultClassName = cellClassName(
+        params.data as DataRecord | undefined,
+      );
+      const formatterResult = getCachedFormatterResult(
+        params as FormatterHookParams,
+      );
+
+      const className = [defaultClassName, formatterResult?.className]
+        .filter(Boolean)
+        .join(' ');
+
+      return className || undefined;
+    },
+    tooltipValueGetter: params =>
+      getCachedFormatterResult(params as FormatterHookParams)?.tooltip,
   };
 }
 
@@ -187,6 +372,7 @@ function buildColumnDefsFromTree(
   rulesByMetric: (metric?: string) => CrosstabConditionalRule[],
   totalBackgroundColor: string,
   columnWidth: number,
+  cellFormatter: CrosstabCellFormatter | undefined,
   numberFormat?: string,
 ): ColDef[] {
   return nodes.map(node => {
@@ -194,9 +380,11 @@ function buildColumnDefsFromTree(
       return buildLeafColumnDef(
         node.field,
         node.label,
+        node.metric,
         rulesByMetric(node.metric),
         totalBackgroundColor,
         columnWidth,
+        cellFormatter,
         numberFormat,
       );
     }
@@ -209,6 +397,7 @@ function buildColumnDefsFromTree(
         rulesByMetric,
         totalBackgroundColor,
         columnWidth,
+        cellFormatter,
         numberFormat,
       ),
     } as ColDef;
@@ -546,6 +735,10 @@ export default function CrosstabTable({
     useState<MeasuredGridWidth>();
   const { conditionalFormatting: conditionalFormattingConfig, numberFormat } =
     formData;
+  const cellFormatter = useMemo(
+    () => createCrosstabCellFormatter(formData.crosstabCellFormatterExpression),
+    [formData.crosstabCellFormatterExpression],
+  );
   const conditionalFormatting: CrosstabConditionalRule[] = useMemo(
     () =>
       Array.isArray(conditionalFormattingConfig)
@@ -982,6 +1175,7 @@ export default function CrosstabTable({
       rulesByMetric,
       totalBackgroundColor,
       generatedColumnWidth,
+      cellFormatter,
       numberFormat,
     );
 
@@ -993,9 +1187,11 @@ export default function CrosstabTable({
             buildLeafColumnDef(
               totalColumn.key,
               totalColumn.label,
+              getMetricFromColumnId(totalColumn.key),
               rulesByMetric(getMetricFromColumnId(totalColumn.key)),
               totalBackgroundColor,
               generatedColumnWidth,
+              cellFormatter,
               numberFormat,
             ),
           ]
@@ -1003,6 +1199,7 @@ export default function CrosstabTable({
     ];
   }, [
     columns,
+    cellFormatter,
     expandedRowPathSet,
     generatedColumnWidth,
     numberFormat,

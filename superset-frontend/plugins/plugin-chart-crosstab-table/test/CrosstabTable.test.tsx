@@ -18,7 +18,7 @@
  */
 import '@testing-library/jest-dom';
 import { GenericDataType } from '@superset-ui/core';
-import type { ComponentProps, CSSProperties } from 'react';
+import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 import ReactDOM from 'react-dom';
 import { act, Simulate } from 'react-dom/test-utils';
 import type { ColDef } from '@superset-ui/core/components/ThemedAgGridReact';
@@ -78,6 +78,13 @@ jest.mock('@superset-ui/core/components', () => {
     options: MockSelectOption[];
     sortComparator?: () => number;
     value?: string | number | null;
+  };
+  type MockCellParams = {
+    value: unknown;
+    valueFormatted: unknown;
+    rowIndex: number;
+    data: Record<string, unknown>;
+    colDef: ColDef;
   };
   const flattenColumnDefs = (
     columnDefs: TestColumnDef[],
@@ -158,29 +165,6 @@ jest.mock('@superset-ui/core/components', () => {
                               context: undefined,
                             } as never)
                           : row[columnDef.field ?? ''];
-                      const style =
-                        typeof columnDef.cellStyle === 'function'
-                          ? columnDef.cellStyle({
-                              value,
-                              data: row,
-                              node: undefined,
-                              column: undefined,
-                              colDef: columnDef,
-                              api: undefined,
-                              context: undefined,
-                            } as never)
-                          : columnDef.cellStyle;
-                      const rendered =
-                        typeof columnDef.cellRenderer === 'function'
-                          ? columnDef.cellRenderer({
-                              value,
-                              data: row,
-                              node: undefined,
-                              colDef: columnDef,
-                              api: undefined,
-                              context: undefined,
-                            } as never)
-                          : undefined;
                       const formatted =
                         typeof columnDef.valueFormatter === 'function'
                           ? columnDef.valueFormatter({
@@ -193,10 +177,63 @@ jest.mock('@superset-ui/core/components', () => {
                               context: undefined,
                             } as never)
                           : value;
+                      const cellParams: MockCellParams = {
+                        value,
+                        valueFormatted: formatted,
+                        rowIndex,
+                        data: row,
+                        colDef: columnDef,
+                      };
+                      const style =
+                        typeof columnDef.cellStyle === 'function'
+                          ? columnDef.cellStyle({
+                              ...cellParams,
+                              node: undefined,
+                              column: undefined,
+                              api: undefined,
+                              context: undefined,
+                            } as never)
+                          : columnDef.cellStyle;
+                      const cellClass =
+                        typeof columnDef.cellClass === 'function'
+                          ? columnDef.cellClass({
+                              ...cellParams,
+                              node: undefined,
+                              column: undefined,
+                              api: undefined,
+                              context: undefined,
+                            } as never)
+                          : columnDef.cellClass;
+                      const title =
+                        typeof columnDef.tooltipValueGetter === 'function'
+                          ? columnDef.tooltipValueGetter({
+                              ...cellParams,
+                              node: undefined,
+                              column: undefined,
+                              api: undefined,
+                              context: undefined,
+                              location: 'cell',
+                            } as never)
+                          : undefined;
+                      const rendered =
+                        typeof columnDef.cellRenderer === 'function'
+                          ? columnDef.cellRenderer({
+                              ...cellParams,
+                              node: undefined,
+                              column: undefined,
+                              api: undefined,
+                              context: undefined,
+                            } as never)
+                          : undefined;
 
                       return (
-                        <td key={columnDef.colId} style={style as never}>
-                          {(rendered ?? formatted) as string}
+                        <td
+                          className={cellClass as string | undefined}
+                          key={columnDef.colId}
+                          style={style as CSSProperties}
+                          title={title as string | undefined}
+                        >
+                          {(rendered ?? formatted) as ReactNode}
                         </td>
                       );
                     })}
@@ -312,6 +349,14 @@ describe('CrosstabTable', () => {
       throw new Error('Unable to find table');
     }
     return table;
+  }
+
+  function getCellByText(text: string) {
+    const cell = getByText(text).closest('td');
+    if (!(cell instanceof HTMLTableCellElement)) {
+      throw new Error(`Unable to find table cell for text: ${text}`);
+    }
+    return cell;
   }
 
   function getDynamicGroupBySelect(slotId: string) {
@@ -489,6 +534,55 @@ describe('CrosstabTable', () => {
     } as unknown as CrosstabChartProps;
   }
 
+  function baseFormatterProps(
+    crosstabCellFormatterExpression: string,
+    overrides: Partial<CrosstabChartProps> = {},
+  ) {
+    return {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+        numberFormat: ',.1f',
+        crosstabCellFormatterExpression,
+      },
+      rowData: [
+        {
+          [CROSSTAB_ROW_PATH]: encodeCrosstabRowPath(['A']),
+          [CROSSTAB_ROW_LABEL]: 'A',
+          [CROSSTAB_ROW_TYPE]: 'leaf',
+          contract_type: 'A',
+          '__crosstab_col__string:4:Cash__metric__amount': 1234.56,
+        },
+      ],
+      columns: [
+        {
+          key: 'contract_type',
+          label: 'contract_type',
+          dataType: GenericDataType.String,
+        },
+        {
+          key: '__crosstab_col__string:4:Cash__metric__amount',
+          label: 'Cash amount',
+          dataType: GenericDataType.Numeric,
+          isMetric: true,
+          isNumeric: true,
+        },
+      ],
+      columnTree: [
+        {
+          id: 'string:4:Cash',
+          label: 'Cash',
+          field: '__crosstab_col__string:4:Cash__metric__amount',
+          metric: 'amount',
+        },
+      ],
+      generatedColumnIds: ['__crosstab_col__string:4:Cash__metric__amount'],
+      ...overrides,
+    } as unknown as CrosstabChartProps;
+  }
+
   it('renders row dimension values and formatted generated cells', () => {
     const props = {
       height: 400,
@@ -663,6 +757,262 @@ describe('CrosstabTable', () => {
       backgroundColor: 'rgba(0, 0, 0, 0.06)',
       fontWeight: '600',
     });
+  });
+
+  it('uses formatter text for generated matrix value cells and exposes column metric', () => {
+    renderChart(
+      baseFormatterProps(
+        `({ value, column }) => ({
+          text: column.metric + ":" + value,
+        })`,
+      ),
+    );
+
+    expect(getByText('amount:1,234.6')).toBeInTheDocument();
+    expect(() => getByText('1,234.6')).toThrow('Unable to find text: 1,234.6');
+  });
+
+  it('sanitizes formatter html before rendering generated matrix value cells', () => {
+    renderChart(
+      baseFormatterProps(
+        `() => ({
+          html: "<strong>Safe</strong><img src=x onerror='window.__unsafe = true'>",
+        })`,
+      ),
+    );
+
+    const cell = getCellByText('Safe');
+    expect(cell.querySelector('strong')).toHaveTextContent('Safe');
+    expect(cell.innerHTML).not.toContain('onerror');
+  });
+
+  it('applies formatter style, tooltip, and className to generated matrix value cells', () => {
+    renderChart(
+      baseFormatterProps(
+        `({ rowIndex }) => ({
+          text: "row-" + rowIndex,
+          tooltip: "formatted tooltip",
+          className: "formatter-highlight",
+          style: {
+            color: "rgb(10, 20, 30)",
+            fontWeight: "700",
+          },
+        })`,
+      ),
+    );
+
+    const cell = getCellByText('row-0');
+    expect(cell).toHaveAttribute('title', 'formatted tooltip');
+    expect(cell).toHaveClass('formatter-highlight');
+    expect(cell).toHaveStyle({
+      color: 'rgb(10, 20, 30)',
+      fontWeight: '700',
+    });
+  });
+
+  it('reuses one formatter result for generated cell rendering, style, class, and tooltip', () => {
+    renderChart(
+      baseFormatterProps(
+        `(() => {
+          let count = 0;
+
+          return () => {
+            count += 1;
+
+            return {
+              text: "value-" + count,
+              tooltip: "tooltip-" + count,
+              className: "formatter-count-" + count,
+              style: {
+                color: "rgb(10, 20, " + count + ")",
+              },
+            };
+          };
+        })()`,
+      ),
+    );
+
+    const cell = getCellByText('value-1');
+    expect(cell).toHaveAttribute('title', 'tooltip-1');
+    expect(cell).toHaveClass('formatter-count-1');
+    expect(cell).toHaveStyle({ color: 'rgb(10, 20, 1)' });
+  });
+
+  it('recomputes formatter output when the same row object moves to a different rowIndex', () => {
+    const formData = {
+      datasource: '1__table',
+      viz_type: 'crosstab_table',
+      numberFormat: ',.1f',
+      crosstabCellFormatterExpression: `({ rowIndex }) => ({
+        text: "row-" + rowIndex,
+      })`,
+    };
+    const columns = [
+      {
+        key: 'contract_type',
+        label: 'contract_type',
+        dataType: GenericDataType.String,
+      },
+      {
+        key: '__crosstab_col__string:4:Cash__metric__amount',
+        label: 'Cash amount',
+        dataType: GenericDataType.Numeric,
+        isMetric: true,
+        isNumeric: true,
+      },
+    ];
+    const columnTree = [
+      {
+        id: 'string:4:Cash',
+        label: 'Cash',
+        field: '__crosstab_col__string:4:Cash__metric__amount',
+        metric: 'amount',
+      },
+    ];
+    const targetRow = {
+      [CROSSTAB_ROW_PATH]: encodeCrosstabRowPath(['A']),
+      [CROSSTAB_ROW_LABEL]: 'A',
+      [CROSSTAB_ROW_TYPE]: 'leaf',
+      contract_type: 'A',
+      '__crosstab_col__string:4:Cash__metric__amount': 1234.56,
+    };
+    const leadingRow = {
+      [CROSSTAB_ROW_PATH]: encodeCrosstabRowPath(['B']),
+      [CROSSTAB_ROW_LABEL]: 'B',
+      [CROSSTAB_ROW_TYPE]: 'leaf',
+      contract_type: 'B',
+      '__crosstab_col__string:4:Cash__metric__amount': 1234.56,
+    };
+    const baseProps = {
+      height: 400,
+      width: 800,
+      formData,
+      columns,
+      columnTree,
+      generatedColumnIds: ['__crosstab_col__string:4:Cash__metric__amount'],
+    } as unknown as CrosstabChartProps;
+
+    renderChart({
+      ...baseProps,
+      rowData: [targetRow],
+    } as CrosstabChartProps);
+    expect(getByText('row-0')).toBeInTheDocument();
+
+    renderChart({
+      ...baseProps,
+      rowData: [leadingRow, targetRow],
+    } as CrosstabChartProps);
+
+    expect(getByText('row-1')).toBeInTheDocument();
+  });
+
+  it('keeps default display, conditional formatting, and arrows when formatter returns undefined or null', () => {
+    renderChart(
+      baseFormatterProps(
+        `({ rowIndex }) => (rowIndex === 0 ? undefined : null)`,
+        {
+          formData: {
+            datasource: '1__table',
+            viz_type: 'crosstab_table',
+            numberFormat: ',.1f',
+            crosstabCellFormatterExpression: `({ rowIndex }) => (
+              rowIndex === 0 ? undefined : null
+            )`,
+            conditionalFormatting: [
+              {
+                metric: 'amount',
+                operator: '>=',
+                value: 1000,
+                color: 'green',
+                backgroundColor: 'white',
+                arrow: 'up',
+              },
+            ],
+          },
+          rowData: [
+            {
+              [CROSSTAB_ROW_PATH]: encodeCrosstabRowPath(['A']),
+              [CROSSTAB_ROW_LABEL]: 'A',
+              [CROSSTAB_ROW_TYPE]: 'leaf',
+              contract_type: 'A',
+              '__crosstab_col__string:4:Cash__metric__amount': 1234.56,
+            },
+            {
+              [CROSSTAB_ROW_PATH]: encodeCrosstabRowPath(['B']),
+              [CROSSTAB_ROW_LABEL]: 'B',
+              [CROSSTAB_ROW_TYPE]: 'leaf',
+              contract_type: 'B',
+              '__crosstab_col__string:4:Cash__metric__amount': 2345.67,
+            },
+          ],
+        },
+      ),
+    );
+
+    expect(getCellByText('↑ 1,234.6')).toHaveStyle({
+      color: 'green',
+      backgroundColor: 'white',
+    });
+    expect(getCellByText('↑ 2,345.7')).toHaveStyle({
+      color: 'green',
+      backgroundColor: 'white',
+    });
+  });
+
+  it('lets formatter style override conditional formatting colors', () => {
+    renderChart(
+      baseFormatterProps(
+        `() => ({
+          text: "styled",
+          style: {
+            color: "purple",
+            backgroundColor: "yellow",
+          },
+        })`,
+        {
+          formData: {
+            datasource: '1__table',
+            viz_type: 'crosstab_table',
+            numberFormat: ',.1f',
+            crosstabCellFormatterExpression: `() => ({
+              text: "styled",
+              style: {
+                color: "purple",
+                backgroundColor: "yellow",
+              },
+            })`,
+            conditionalFormatting: [
+              {
+                metric: 'amount',
+                operator: '>=',
+                value: 1000,
+                color: 'green',
+                backgroundColor: 'white',
+              },
+            ],
+          },
+        },
+      ),
+    );
+
+    expect(getCellByText('styled')).toHaveStyle({
+      color: 'purple',
+      backgroundColor: 'yellow',
+    });
+  });
+
+  it('does not apply the cell formatter to row dimension cells', () => {
+    renderChart(
+      baseFormatterProps(
+        `() => ({
+          text: "formatted",
+        })`,
+      ),
+    );
+
+    expect(getByText('A')).toBeInTheDocument();
+    expect(getByText('formatted')).toBeInTheDocument();
+    expect(container.querySelectorAll('td')).toHaveLength(2);
   });
 
   it('renders pinned row columns and nested column group headers', () => {
