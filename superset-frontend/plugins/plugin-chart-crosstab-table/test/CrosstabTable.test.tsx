@@ -33,7 +33,6 @@ import {
 } from '../src/crosstab/engine';
 import type { CrosstabChartProps } from '../src/types';
 
-const mockExportDataAsCsv = jest.fn();
 let container: HTMLDivElement;
 type TestColumnDef = ColDef & {
   children?: TestColumnDef[];
@@ -108,8 +107,6 @@ jest.mock('@superset-ui/core/components', () => {
 
   // eslint-disable-next-line react-prefer-function-component/react-prefer-function-component
   class MockAgGridReact extends ReactActual.Component<MockGridProps> {
-    api = { exportDataAsCsv: mockExportDataAsCsv };
-
     render() {
       const {
         autoGroupColumnDef,
@@ -286,7 +283,6 @@ describe('CrosstabTable', () => {
   beforeEach(() => {
     container = document.createElement('div');
     document.body.appendChild(container);
-    mockExportDataAsCsv.mockClear();
   });
 
   afterEach(() => {
@@ -316,16 +312,6 @@ describe('CrosstabTable', () => {
       throw new Error('Unable to find table');
     }
     return table;
-  }
-
-  function getExportButton() {
-    const button = container.querySelector(
-      'button[aria-label="Export crosstab CSV"]',
-    );
-    if (!(button instanceof HTMLButtonElement)) {
-      throw new Error('Unable to find export button');
-    }
-    return button;
   }
 
   function getDynamicGroupBySelect(slotId: string) {
@@ -852,7 +838,7 @@ describe('CrosstabTable', () => {
     });
     expect(
       container.querySelector('[data-test="crosstab-table-toolbar"]'),
-    ).toHaveTextContent('CSV');
+    ).not.toHaveTextContent('CSV');
     expect(getByText('指标项')).toBeInTheDocument();
     expect(getByText('Total')).toBeInTheDocument();
     expect(getByText('D1')).toBeInTheDocument();
@@ -2549,28 +2535,5 @@ describe('CrosstabTable', () => {
         'select[aria-label="Select crosstab group by dimension"]',
       ),
     ).not.toBeInTheDocument();
-  });
-
-  it('exports rendered CSV through the grid API', () => {
-    const props = {
-      height: 400,
-      width: 800,
-      formData: {
-        datasource: '1__table',
-        viz_type: 'crosstab_table',
-      },
-      rowData: [],
-      columns: [],
-      columnTree: [],
-      generatedColumnIds: [],
-    } as unknown as CrosstabChartProps;
-
-    renderChart(props);
-    getExportButton().click();
-
-    expect(mockExportDataAsCsv).toHaveBeenCalledWith({
-      allColumns: false,
-      skipColumnGroupHeaders: false,
-    });
   });
 });

@@ -1020,12 +1020,6 @@ export default function CrosstabTable({
     }),
     [],
   );
-  const exportCsv = useCallback(() => {
-    gridRef.current?.api.exportDataAsCsv({
-      allColumns: false,
-      skipColumnGroupHeaders: false,
-    });
-  }, []);
   const columnPagination =
     columnPageCount > 1 ? (
       <div
@@ -1177,14 +1171,6 @@ export default function CrosstabTable({
           gap: theme.sizeUnit,
         }}
       >
-        <Button
-          buttonSize="small"
-          onClick={exportCsv}
-          htmlType="button"
-          aria-label={t('Export crosstab CSV')}
-        >
-          CSV
-        </Button>
         {dynamicGroupBySelects}
         {dynamicMetricSelects}
         {runtimeParameterControls}
