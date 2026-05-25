@@ -17,10 +17,7 @@
  * under the License.
  */
 import { useEffect, useRef, useState, cloneElement } from 'react';
-import {
-  PopoverContainer,
-  PopoverWrapper,
-} from '../../styles';
+import { PopoverContainer, PopoverWrapper } from '../../styles';
 
 interface Props {
   content: React.ReactNode;

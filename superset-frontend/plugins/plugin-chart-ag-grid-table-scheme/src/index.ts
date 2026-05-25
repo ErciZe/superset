@@ -21,10 +21,7 @@ import thumbnail from './images/thumbnail.png';
 import example1 from './images/Table.jpg';
 import example2 from './images/Table2.jpg';
 import example3 from './images/Table3.jpg';
-import type {
-  TableChartFormData,
-  TableChartProps,
-} from './table/types';
+import type { TableChartFormData, TableChartProps } from './table/types';
 import controlPanel from './controlPanel';
 import buildQuery from './matrix/buildQuery';
 import transformProps from './transformProps';

@@ -16,13 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import AgGridTableChart from './table/AgGridTableChart';
-import type { AgGridTableChartTransformedProps } from './table/types';
 import type {
   ColDef,
   GridReadyEvent,
 } from '@superset-ui/core/components/ThemedAgGridReact';
 import ColumnViewSchemeToolbar from './columnViewSchemes/ColumnViewSchemeToolbar';
+import AgGridTableChart from './table/AgGridTableChart';
+import type { AgGridTableChartTransformedProps } from './table/types';
 
 const COLUMN_VIEW_TOOLBAR_HEIGHT = 48;
 

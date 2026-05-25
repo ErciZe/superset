@@ -116,7 +116,7 @@ const createCachedAdditionalCellFormatter = (
     const { data } = params;
     const cache =
       data && typeof data === 'object'
-        ? rowCache.get(data) ?? new Map()
+        ? (rowCache.get(data) ?? new Map())
         : fallbackCache;
 
     if (data && typeof data === 'object' && !rowCache.has(data)) {
@@ -127,7 +127,9 @@ const createCachedAdditionalCellFormatter = (
       return cache.get(cacheKey);
     }
 
-    const result = additionalCellFormatter(normalizeFormatterParams(params, col));
+    const result = additionalCellFormatter(
+      normalizeFormatterParams(params, col),
+    );
     cache.set(cacheKey, result);
     return result;
   };

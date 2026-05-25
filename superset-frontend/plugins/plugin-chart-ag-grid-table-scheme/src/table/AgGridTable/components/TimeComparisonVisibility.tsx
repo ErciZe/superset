@@ -21,11 +21,7 @@ import { useState } from 'react';
 import { Dropdown } from 'antd';
 import { TableOutlined, DownOutlined, CheckOutlined } from '@ant-design/icons';
 import { t } from '@superset-ui/core';
-import {
-  InfoText,
-  ColumnLabel,
-  CheckIconWrapper,
-} from '../../styles';
+import { InfoText, ColumnLabel, CheckIconWrapper } from '../../styles';
 
 interface ComparisonColumn {
   key: string;
