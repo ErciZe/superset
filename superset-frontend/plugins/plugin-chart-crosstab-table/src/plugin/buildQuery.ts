@@ -77,10 +77,14 @@ function appendWhere(queryObject: QueryObject, whereClause: string) {
 }
 
 function getDashboardContextFormData(formData: CrosstabFormData) {
-  return {
+  const queryFormData = {
     ...formData,
     time_range: undefined,
   };
+
+  delete queryFormData.crosstabCellFormatterExpression;
+
+  return queryFormData;
 }
 
 function assertNoBusinessMatrixCalculatedFields(

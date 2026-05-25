@@ -708,7 +708,7 @@ describe('crosstab buildQuery', () => {
     expect(queryContext.queries[0].time_range).toBe('2026-05-01 : 2026-05-31');
   });
 
-  it('keeps cell formatter expressions out of query payloads', () => {
+  it('keeps cell formatter expressions out of the full query payload', () => {
     const formatterExpression =
       "({ value }) => (value == null ? 'formatterSentinelEmpty' : value)";
     const queryContext = buildQuery({
@@ -720,11 +720,14 @@ describe('crosstab buildQuery', () => {
       crosstabCellFormatterExpression: formatterExpression,
     } as never);
 
-    const queriesPayload = JSON.stringify(queryContext.queries);
+    const queryPayload = JSON.stringify(queryContext);
 
-    expect(queriesPayload).not.toContain('crosstabCellFormatterExpression');
-    expect(queriesPayload).not.toContain(formatterExpression);
-    expect(queriesPayload).not.toContain('formatterSentinelEmpty');
+    expect(queryContext.form_data).not.toHaveProperty(
+      'crosstabCellFormatterExpression',
+    );
+    expect(queryPayload).not.toContain('crosstabCellFormatterExpression');
+    expect(queryPayload).not.toContain(formatterExpression);
+    expect(queryPayload).not.toContain('formatterSentinelEmpty');
   });
 
   it('de-duplicates overlapping row and column dimensions while preserving order', () => {
