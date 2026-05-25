@@ -26,6 +26,7 @@ import {
   type QueryFormColumn,
   type QueryFormMetric,
 } from '@superset-ui/core';
+import { Button } from '@superset-ui/core/components';
 import { Icons } from '@superset-ui/core/components/Icons';
 import type { ColumnMeta, Metric } from '@superset-ui/chart-controls';
 import { DndColumnSelect } from '../../../../src/explore/components/controls/DndColumnSelectControl/DndColumnSelect';
@@ -33,15 +34,16 @@ import { DndMetricSelect } from '../../../../src/explore/components/controls/Dnd
 import type {
   CrosstabFieldConfig,
   CrosstabFormData,
-  CrosstabNullSort,
-  CrosstabSortDirection,
-  CrosstabSortType,
   DimensionFieldConfig,
   DimensionSortConfig,
   MetricFieldConfig,
   MetricSemantic,
   MetricSemanticOverride,
 } from '../types';
+import DimensionSortModal, {
+  getColumnMetaLabel,
+  getDimensionSortSummary,
+} from './DimensionSortModal';
 import { getMetricSemanticLabel } from './metricSemantics';
 import { hasCanonicalV4Definitions } from './v4Contract';
 
@@ -81,18 +83,15 @@ const SortOption = styled.div`
   padding-top: ${({ theme }) => theme.sizeUnit * 2}px;
 `;
 
-const SortGrid = styled.div`
-  display: grid;
-  gap: ${({ theme }) => theme.sizeUnit}px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-`;
-
-const SortField = styled.label`
-  display: grid;
-  gap: ${({ theme }) => theme.sizeUnit / 2}px;
-`;
-
 const FieldLabel = styled.span`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const SortSummary = styled.span`
+  color: ${({ theme }) => theme.colorTextSecondary};
+  font-size: ${({ theme }) => theme.fontSizeSM}px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -155,9 +154,6 @@ const SEMANTIC_OPTIONS: MetricSemantic[] = [
   'average',
   'distinct',
 ];
-const SORT_DIRECTIONS: CrosstabSortDirection[] = ['asc', 'desc'];
-const SORT_TYPES: CrosstabSortType[] = ['string', 'number', 'date'];
-const NULL_SORTS: CrosstabNullSort[] = ['last', 'first'];
 
 type NormalizedCrosstabFieldConfig = {
   rows: DimensionFieldConfig[];
@@ -180,6 +176,13 @@ type CrosstabFieldConfigControlProps = {
   onControlChange?: (control: string, value: unknown) => void;
   savedMetrics?: Metric[];
   value?: CrosstabFieldConfig;
+};
+
+type SortEditorTarget = {
+  area: 'rows' | 'columns';
+  field: QueryFormColumn;
+  fieldLabel: string;
+  sort?: DimensionSortConfig;
 };
 
 function hasConfig(value?: CrosstabFieldConfig) {
@@ -226,22 +229,6 @@ function columnValues(fields: DimensionFieldConfig[]) {
 
 function optionalColumnLabel(field?: QueryFormColumn) {
   return field ? getColumnLabel(field) : '';
-}
-
-function getColumnMetaLabel(column: ColumnMeta) {
-  return (
-    column.verbose_name ||
-    column.column_name ||
-    column.name ||
-    column.type ||
-    ''
-  );
-}
-
-function getSortByValue(sort?: DimensionSortConfig) {
-  return sort?.by === undefined || sort.by === 'self'
-    ? 'self'
-    : getColumnLabel(sort.by);
 }
 
 function metricValues(fields: MetricFieldConfig[]) {
@@ -371,6 +358,7 @@ export default function CrosstabFieldConfigControl({
   const [semanticOverridesError, setSemanticOverridesError] = useState<
     string | undefined
   >();
+  const [sortEditorTarget, setSortEditorTarget] = useState<SortEditorTarget>();
   const calculatedMetricConfigs = useMemo(
     () => config.metrics.filter(isCalculatedMetricConfig),
     [config.metrics],
@@ -558,7 +546,6 @@ export default function CrosstabFieldConfigControl({
         const canShowSubtotal =
           area === 'rows' && index < config.rows.length - 1;
         const subtotalId = `${name}-${area}-${index}-subtotal`;
-        const sort = item.sort ?? { by: 'self', direction: 'asc' as const };
 
         return (
           <SortOption key={fieldLabel}>
@@ -576,95 +563,32 @@ export default function CrosstabFieldConfigControl({
                 </label>
               ) : null}
             </FieldOption>
-            <SortGrid>
-              <SortField>
-                {t('Sort by')}
-                <SemanticSelect
-                  aria-label={t('Sort by')}
-                  value={getSortByValue(sort)}
-                  onChange={event =>
-                    updateDimensionSort(area, item.field, {
-                      ...sort,
-                      by:
-                        event.target.value === 'self'
-                          ? 'self'
-                          : event.target.value,
-                    })
-                  }
-                >
-                  <option value="self">{t('Self')}</option>
-                  {sortFieldOptions.map(option => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </SemanticSelect>
-              </SortField>
-              <SortField>
-                {t('Sort direction')}
-                <SemanticSelect
-                  aria-label={t('Sort direction')}
-                  value={sort.direction}
-                  onChange={event =>
-                    updateDimensionSort(area, item.field, {
-                      ...sort,
-                      direction: event.target.value as CrosstabSortDirection,
-                    })
-                  }
-                >
-                  {SORT_DIRECTIONS.map(direction => (
-                    <option key={direction} value={direction}>
-                      {direction}
-                    </option>
-                  ))}
-                </SemanticSelect>
-              </SortField>
-              <SortField>
-                {t('Sort type')}
-                <SemanticSelect
-                  aria-label={t('Sort type')}
-                  value={sort.type ?? 'string'}
-                  onChange={event =>
-                    updateDimensionSort(area, item.field, {
-                      ...sort,
-                      type: event.target.value as CrosstabSortType,
-                    })
-                  }
-                >
-                  {SORT_TYPES.map(sortType => (
-                    <option key={sortType} value={sortType}>
-                      {sortType}
-                    </option>
-                  ))}
-                </SemanticSelect>
-              </SortField>
-              <SortField>
-                {t('Null sort')}
-                <SemanticSelect
-                  aria-label={t('Null sort')}
-                  value={sort.nulls ?? 'last'}
-                  onChange={event =>
-                    updateDimensionSort(area, item.field, {
-                      ...sort,
-                      nulls: event.target.value as CrosstabNullSort,
-                    })
-                  }
-                >
-                  {NULL_SORTS.map(nullSort => (
-                    <option key={nullSort} value={nullSort}>
-                      {nullSort}
-                    </option>
-                  ))}
-                </SemanticSelect>
-              </SortField>
-            </SortGrid>
+            <FieldOption>
+              <SortSummary title={getDimensionSortSummary(item.sort)}>
+                {getDimensionSortSummary(item.sort)}
+              </SortSummary>
+              <Button
+                buttonSize="xsmall"
+                buttonStyle="secondary"
+                onClick={() =>
+                  setSortEditorTarget({
+                    area,
+                    field: item.field,
+                    fieldLabel,
+                    sort: item.sort,
+                  })
+                }
+              >
+                {t('排序设置')}
+              </Button>
+            </FieldOption>
           </SortOption>
         );
       });
 
       return options.length > 0 ? <FieldOptions>{options}</FieldOptions> : null;
     },
-    [config, name, sortFieldOptions, toggleSubtotal, updateDimensionSort],
+    [config, name, toggleSubtotal],
   );
   const renderCalculatedMetricChips = useCallback(
     () =>
@@ -736,6 +660,23 @@ export default function CrosstabFieldConfigControl({
 
   return (
     <div data-test="crosstab-field-config-control">
+      {sortEditorTarget && (
+        <DimensionSortModal
+          fieldLabel={sortEditorTarget.fieldLabel}
+          show
+          sort={sortEditorTarget.sort}
+          sortFieldOptions={sortFieldOptions}
+          onHide={() => setSortEditorTarget(undefined)}
+          onSave={sort => {
+            updateDimensionSort(
+              sortEditorTarget.area,
+              sortEditorTarget.field,
+              sort,
+            );
+            setSortEditorTarget(undefined);
+          }}
+        />
+      )}
       <Zone data-test="crosstab-field-zone-rows">
         <ZoneHeader>{t('Rows')}</ZoneHeader>
         <DndColumnSelect

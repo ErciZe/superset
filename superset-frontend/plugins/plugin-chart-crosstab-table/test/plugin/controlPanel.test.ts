@@ -23,6 +23,7 @@ import {
   fireEvent,
   render,
   screen,
+  selectOption,
 } from '../../../../spec/helpers/testing-library';
 import controlPanel from '../../src/plugin/controlPanel';
 import CrosstabCalculatedFieldsControl from '../../src/plugin/CrosstabCalculatedFieldsControl';
@@ -1473,7 +1474,7 @@ describe('crosstab controlPanel', () => {
     expect(screen.queryByText('To rows')).not.toBeInTheDocument();
   });
 
-  it('renders and updates field sort controls', () => {
+  it('opens a field sort modal and saves sort changes', async () => {
     const onChange = jest.fn();
 
     render(
@@ -1499,9 +1500,21 @@ describe('crosstab controlPanel', () => {
       }),
     );
 
-    fireEvent.change(screen.getByLabelText('Sort direction'), {
-      target: { value: 'desc' },
-    });
+    expect(
+      screen.getByText('biz_date · asc · date · nulls last'),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Sort direction')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('排序设置'));
+
+    expect(screen.getByText('Sort settings: biz_date')).toBeInTheDocument();
+    expect(screen.getByText('Sort by')).toBeInTheDocument();
+    expect(screen.getByText('Direction')).toBeInTheDocument();
+    expect(screen.getByText('Type')).toBeInTheDocument();
+    expect(screen.getByText('Nulls')).toBeInTheDocument();
+
+    await selectOption('desc', 'Sort direction');
+    fireEvent.click(screen.getByText('Save'));
 
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -1520,12 +1533,47 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('renders dynamic group-by option sort controls', () => {
+  it('cancels field sort modal changes without emitting', async () => {
+    const onChange = jest.fn();
+
+    render(
+      createElement(CrosstabFieldConfigControl, {
+        columns: [{ column_name: 'biz_date' }],
+        name: 'crosstabFieldConfig',
+        onChange,
+        value: {
+          columns: [
+            {
+              field: 'biz_date',
+              sort: {
+                by: 'biz_date',
+                direction: 'asc',
+                type: 'date',
+                nulls: 'last',
+              },
+            },
+          ],
+          metrics: [],
+          rows: [],
+        },
+      }),
+    );
+
+    fireEvent.click(screen.getByText('排序设置'));
+    await selectOption('desc', 'Sort direction');
+    fireEvent.click(screen.getByText('Cancel'));
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('opens dynamic group-by option sort modal and saves changes', async () => {
+    const onChange = jest.fn();
+
     render(
       createElement(CrosstabDynamicGroupByControl, {
         columns: [{ column_name: 'biz_date' }],
         name: 'dynamicGroupBy',
-        onChange: jest.fn(),
+        onChange,
         value: {
           enabled: true,
           slots: [
@@ -1558,10 +1606,44 @@ describe('crosstab controlPanel', () => {
       }),
     );
 
+    expect(
+      screen.getByText('biz_date: biz_date · desc · date · nulls last'),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Sort direction')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('排序设置'));
+
     expect(screen.getByText('Sort by')).toBeInTheDocument();
-    expect(screen.getByText('Sort direction')).toBeInTheDocument();
-    expect(screen.getByText('Sort type')).toBeInTheDocument();
-    expect(screen.getByText('Null sort')).toBeInTheDocument();
+    expect(screen.getByText('Direction')).toBeInTheDocument();
+    expect(screen.getByText('Type')).toBeInTheDocument();
+    expect(screen.getByText('Nulls')).toBeInTheDocument();
+
+    await selectOption('asc', 'Sort direction');
+    fireEvent.click(screen.getByText('Save'));
+
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        slots: [
+          expect.objectContaining({
+            options: [
+              expect.objectContaining({
+                columnConfigs: [
+                  {
+                    field: 'biz_date',
+                    sort: {
+                      by: 'biz_date',
+                      direction: 'asc',
+                      type: 'date',
+                      nulls: 'last',
+                    },
+                  },
+                ],
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
   });
 
   it('renders one visible field-zone heading per zone', () => {

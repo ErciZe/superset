@@ -32,13 +32,14 @@ import type {
   CrosstabDynamicGroupByConfig,
   CrosstabDynamicGroupByOption,
   CrosstabDynamicGroupBySlot,
-  CrosstabNullSort,
-  CrosstabSortDirection,
-  CrosstabSortType,
   DimensionFieldConfig,
   DimensionSortConfig,
   DynamicGroupByPlacement,
 } from '../types';
+import DimensionSortModal, {
+  getColumnMetaLabel,
+  getDimensionSortSummary,
+} from './DimensionSortModal';
 import {
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG,
   normalizeDynamicGroupByConfig,
@@ -69,16 +70,25 @@ const FieldGrid = styled.div`
   margin-top: ${({ theme }) => theme.sizeUnit * 2}px;
 `;
 
-const SortGrid = styled.div`
-  display: grid;
-  gap: ${({ theme }) => theme.sizeUnit}px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-top: ${({ theme }) => theme.sizeUnit * 2}px;
-`;
-
 const Field = styled.label`
   display: grid;
   gap: ${({ theme }) => theme.sizeUnit}px;
+  min-width: 0;
+`;
+
+const SortRow = styled.div`
+  display: grid;
+  gap: ${({ theme }) => theme.sizeUnit}px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: ${({ theme }) => theme.sizeUnit * 2}px;
+`;
+
+const SortSummary = styled.span`
+  color: ${({ theme }) => theme.colorTextSecondary};
+  font-size: ${({ theme }) => theme.fontSizeSM}px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 const OptionCard = styled.div`
@@ -93,9 +103,6 @@ const ErrorText = styled.div`
 `;
 
 const EMPTY_ACTIONS = {} as never;
-const SORT_DIRECTIONS: CrosstabSortDirection[] = ['asc', 'desc'];
-const SORT_TYPES: CrosstabSortType[] = ['string', 'number', 'date'];
-const NULL_SORTS: CrosstabNullSort[] = ['last', 'first'];
 
 type CrosstabDynamicGroupByControlProps = {
   columns?: ColumnMeta[];
@@ -122,6 +129,15 @@ type PartialDynamicGroupByConfig = Partial<
   Omit<CrosstabDynamicGroupByConfig, 'slots'>
 > & {
   slots?: PartialDynamicGroupBySlot[];
+};
+
+type SortEditorTarget = {
+  field: QueryFormColumn;
+  fieldLabel: string;
+  option: CrosstabDynamicGroupByOption;
+  slot: CrosstabDynamicGroupBySlot;
+  sort?: DimensionSortConfig;
+  sortFieldOptions: string[];
 };
 
 const defaultConfig: CrosstabDynamicGroupByConfig = {
@@ -237,22 +253,6 @@ function columnValues(option: CrosstabDynamicGroupByOption) {
   return option.columns;
 }
 
-function getColumnMetaLabel(column: ColumnMeta) {
-  return (
-    column.verbose_name ||
-    column.column_name ||
-    column.name ||
-    column.type ||
-    ''
-  );
-}
-
-function getSortByValue(sort?: DimensionSortConfig) {
-  return sort?.by === undefined || sort.by === 'self'
-    ? 'self'
-    : getColumnLabel(sort.by);
-}
-
 function mergeOptionColumnConfigs(
   nextColumns: QueryFormColumn[],
   previousConfigs: DimensionFieldConfig[] = [],
@@ -277,6 +277,7 @@ export default function CrosstabDynamicGroupByControl({
 }: CrosstabDynamicGroupByControlProps) {
   const config = useMemo(() => getConfig(value), [value]);
   const [error, setError] = useState<string | undefined>();
+  const [sortEditorTarget, setSortEditorTarget] = useState<SortEditorTarget>();
   const sortFieldOptions = useMemo(
     () => Array.from(new Set(columns.map(getColumnMetaLabel).filter(Boolean))),
     [columns],
@@ -356,6 +357,24 @@ export default function CrosstabDynamicGroupByControl({
 
   return (
     <Editor data-test="crosstab-dynamic-group-by-control">
+      {sortEditorTarget && (
+        <DimensionSortModal
+          fieldLabel={sortEditorTarget.fieldLabel}
+          show
+          sort={sortEditorTarget.sort}
+          sortFieldOptions={sortEditorTarget.sortFieldOptions}
+          onHide={() => setSortEditorTarget(undefined)}
+          onSave={sort => {
+            updateOptionSort(
+              sortEditorTarget.slot,
+              sortEditorTarget.option,
+              sortEditorTarget.field,
+              sort,
+            );
+            setSortEditorTarget(undefined);
+          }}
+        />
+      )}
       <ControlHeader
         hovered={hovered}
         label={label}
@@ -553,10 +572,6 @@ export default function CrosstabDynamicGroupByControl({
                 option.columnConfigs,
               ).map(config => {
                 const fieldLabel = getColumnLabel(config.field);
-                const sort = config.sort ?? {
-                  by: 'self',
-                  direction: 'asc' as const,
-                };
                 const fieldSortOptions = Array.from(
                   new Set([
                     ...option.columns.map(getColumnLabel).filter(Boolean),
@@ -565,82 +580,27 @@ export default function CrosstabDynamicGroupByControl({
                 );
 
                 return (
-                  <SortGrid key={fieldLabel}>
-                    <Field>
-                      {t('Sort by')}
-                      <Select
-                        ariaLabel={t('Sort by')}
-                        options={[
-                          { label: t('Self'), value: 'self' },
-                          ...fieldSortOptions.map(sortOption => ({
-                            label: sortOption,
-                            value: sortOption,
-                          })),
-                        ]}
-                        value={getSortByValue(sort)}
-                        onChange={nextSortBy =>
-                          updateOptionSort(slot, option, config.field, {
-                            ...sort,
-                            by:
-                              nextSortBy === 'self'
-                                ? 'self'
-                                : String(nextSortBy),
-                          })
-                        }
-                      />
-                    </Field>
-                    <Field>
-                      {t('Sort direction')}
-                      <Select
-                        ariaLabel={t('Sort direction')}
-                        options={SORT_DIRECTIONS.map(direction => ({
-                          label: direction,
-                          value: direction,
-                        }))}
-                        value={sort.direction}
-                        onChange={nextDirection =>
-                          updateOptionSort(slot, option, config.field, {
-                            ...sort,
-                            direction: nextDirection as CrosstabSortDirection,
-                          })
-                        }
-                      />
-                    </Field>
-                    <Field>
-                      {t('Sort type')}
-                      <Select
-                        ariaLabel={t('Sort type')}
-                        options={SORT_TYPES.map(sortType => ({
-                          label: sortType,
-                          value: sortType,
-                        }))}
-                        value={sort.type ?? 'string'}
-                        onChange={nextSortType =>
-                          updateOptionSort(slot, option, config.field, {
-                            ...sort,
-                            type: nextSortType as CrosstabSortType,
-                          })
-                        }
-                      />
-                    </Field>
-                    <Field>
-                      {t('Null sort')}
-                      <Select
-                        ariaLabel={t('Null sort')}
-                        options={NULL_SORTS.map(nullSort => ({
-                          label: nullSort,
-                          value: nullSort,
-                        }))}
-                        value={sort.nulls ?? 'last'}
-                        onChange={nextNullSort =>
-                          updateOptionSort(slot, option, config.field, {
-                            ...sort,
-                            nulls: nextNullSort as CrosstabNullSort,
-                          })
-                        }
-                      />
-                    </Field>
-                  </SortGrid>
+                  <SortRow key={fieldLabel}>
+                    <SortSummary title={getDimensionSortSummary(config.sort)}>
+                      {fieldLabel}: {getDimensionSortSummary(config.sort)}
+                    </SortSummary>
+                    <Button
+                      buttonSize="xsmall"
+                      buttonStyle="secondary"
+                      onClick={() =>
+                        setSortEditorTarget({
+                          field: config.field,
+                          fieldLabel,
+                          option,
+                          slot,
+                          sort: config.sort,
+                          sortFieldOptions: fieldSortOptions,
+                        })
+                      }
+                    >
+                      {t('排序设置')}
+                    </Button>
+                  </SortRow>
                 );
               })}
             </OptionCard>
