@@ -28,6 +28,11 @@ import CrosstabDynamicGroupByControl from './CrosstabDynamicGroupByControl';
 import CrosstabDynamicMetricControl from './CrosstabDynamicMetricControl';
 import CrosstabFieldConfigControl from './CrosstabFieldConfigControl';
 import CrosstabParametersControl from './CrosstabParametersControl';
+import {
+  CROSSTAB_CELL_FORMATTER_CALLBACK_DEFAULT,
+  formatCrosstabCellFormatterCallback,
+  validateCrosstabCellFormatterCallback,
+} from '../crosstab/cellFormatter';
 
 Object.assign(sharedControlComponents as Record<string, unknown>, {
   CrosstabCalculatedFieldsControl,
@@ -35,6 +40,30 @@ Object.assign(sharedControlComponents as Record<string, unknown>, {
   CrosstabDynamicMetricControl,
   CrosstabParametersControl,
 });
+
+const validateCrosstabCellFormatterCallbackControl = (value: string) => {
+  try {
+    validateCrosstabCellFormatterCallback(value);
+    return false;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+};
+
+const formatCrosstabCellFormatterEditor = (editor: {
+  getValue: () => string;
+  setValue: (value: string, cursorPosition?: number) => void;
+}) => {
+  const source = editor.getValue();
+
+  return formatCrosstabCellFormatterCallback(source)
+    .then(formattedValue => {
+      if (editor.getValue() === source && formattedValue !== source) {
+        editor.setValue(formattedValue, -1);
+      }
+    })
+    .catch(() => {});
+};
 
 const config: ControlPanelConfig = {
   controlPanelSections: [
@@ -325,6 +354,50 @@ const config: ControlPanelConfig = {
             config: {
               ...sharedControls.y_axis_format,
               label: t('Number format'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'crosstabCellFormatterExpression',
+            config: {
+              type: 'TextAreaControl',
+              label: t('Crosstab 单元格 JS 回调函数'),
+              default: CROSSTAB_CELL_FORMATTER_CALLBACK_DEFAULT,
+              renderTrigger: true,
+              resetOnHide: false,
+              language: 'javascript',
+              validators: [validateCrosstabCellFormatterCallbackControl],
+              formatValue: formatCrosstabCellFormatterCallback,
+              description: t(
+                'Use a JavaScript callback to format Crosstab matrix value cells. Return undefined/null to keep the default rendering, or return text/html/tooltip/className/style.',
+              ),
+              aboveEditorSection: (
+                <div>
+                  <p>
+                    {t(
+                      'Callback signature: ({ row, cell, value, rawValue, column, rowIndex, colDef }) => { ... }',
+                    )}
+                  </p>
+                  <p>
+                    {t(
+                      'Allowed style fields: backgroundColor, color, fontWeight, fontStyle, textAlign, textDecoration, opacity.',
+                    )}
+                  </p>
+                </div>
+              ),
+              hotkeys: [
+                {
+                  name: 'formatCrosstabCellFormatterCallback',
+                  key: 'Ctrl-Shift-F',
+                  func: formatCrosstabCellFormatterEditor,
+                },
+                {
+                  name: 'formatCrosstabCellFormatterCallbackMac',
+                  key: 'Command-Shift-F',
+                  func: formatCrosstabCellFormatterEditor,
+                },
+              ],
             },
           },
         ],

@@ -165,6 +165,7 @@ export interface CrosstabFormData extends QueryFormData {
   generatedColumnWidth?: number;
   defaultRowExpandedDepth?: number;
   numberFormat?: string;
+  crosstabCellFormatterExpression?: string;
   conditionalFormatting?: CrosstabConditionalRule[] | string;
   serverPagination?: boolean;
 }

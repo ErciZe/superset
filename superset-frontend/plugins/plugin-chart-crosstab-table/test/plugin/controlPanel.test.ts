@@ -173,6 +173,7 @@ describe('crosstab controlPanel', () => {
         'columnPageSize',
         'defaultRowExpandedDepth',
         'numberFormat',
+        'crosstabCellFormatterExpression',
         'conditionalFormatting',
       ]),
     );
@@ -292,6 +293,34 @@ describe('crosstab controlPanel', () => {
         default: [],
         renderTrigger: true,
       }),
+    );
+  });
+
+  it('exposes crosstab cell formatter as a JavaScript editor control', () => {
+    expect(getControlConfig('crosstabCellFormatterExpression')).toEqual(
+      expect.objectContaining({
+        type: 'TextAreaControl',
+        label: 'Crosstab 单元格 JS 回调函数',
+        renderTrigger: true,
+        resetOnHide: false,
+        language: 'javascript',
+      }),
+    );
+  });
+
+  it('validates crosstab cell formatter callback source', () => {
+    const config = getControlConfig('crosstabCellFormatterExpression') as {
+      validators?: Array<(value: string) => false | string>;
+    };
+    const validator = config.validators?.[0];
+
+    expect(validator).toBeDefined();
+    expect(validator?.('({ value }) => ({ text: value })')).toBe(false);
+    expect(validator?.('({ unsupported: true })')).toContain(
+      'Crosstab cell formatter callback must be a function.',
+    );
+    expect(validator?.('() => ({ unsupported: true })')).toContain(
+      'unsupported result field "unsupported"',
     );
   });
 
