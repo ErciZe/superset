@@ -123,7 +123,17 @@ function normalizeNumber(value: DataRecordValue): bigint | number {
   }
 
   if (typeof value === 'string' && value.trim() !== '') {
-    const numericValue = Number(value);
+    const trimmedValue = value.trim();
+
+    if (/^[+-]?\d+$/.test(trimmedValue)) {
+      const numericValue = Number(trimmedValue);
+
+      return Number.isSafeInteger(numericValue)
+        ? numericValue
+        : BigInt(trimmedValue);
+    }
+
+    const numericValue = Number(trimmedValue);
     if (Number.isFinite(numericValue)) {
       return numericValue;
     }

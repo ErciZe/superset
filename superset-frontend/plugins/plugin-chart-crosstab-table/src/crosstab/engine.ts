@@ -618,6 +618,15 @@ function getSqlRowTotal(
   options: CrosstabBuildOptions,
 ): number | null | undefined {
   if (options.metricFields.length !== 1) {
+    if (
+      options.summaryValueRequirements?.row_total &&
+      options.metricFields.some(metric =>
+        isSqlSemantic(options.resolveSemantic?.({ row, metric }) ?? 'additive'),
+      )
+    ) {
+      throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
+    }
+
     return undefined;
   }
 
@@ -649,6 +658,19 @@ function getSqlGrandTotal(
   options: CrosstabBuildOptions,
 ): number | null | undefined {
   if (options.metricFields.length !== 1) {
+    if (
+      options.summaryValueRequirements?.grand_total &&
+      options.metricFields.some(metric =>
+        leafRows.some(row =>
+          isSqlSemantic(
+            options.resolveSemantic?.({ row, metric }) ?? 'additive',
+          ),
+        ),
+      )
+    ) {
+      throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
+    }
+
     return undefined;
   }
 

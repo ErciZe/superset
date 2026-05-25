@@ -63,6 +63,21 @@ test('sorts records by configured date and number fields', () => {
   );
 });
 
+test('sorts large integer numeric strings without losing precision', () => {
+  const records = [{ id: '9007199254740993' }, { id: '9007199254740992' }];
+
+  expect(
+    [...records].sort(
+      compareDataRecordsByDimensionSort([
+        {
+          field: 'id',
+          sort: { by: 'id', direction: 'asc', type: 'number' },
+        },
+      ]),
+    ),
+  ).toEqual([{ id: '9007199254740992' }, { id: '9007199254740993' }]);
+});
+
 test('uses the dimension field as the default self sort', () => {
   const selfConfigs: DimensionFieldConfig[] = [
     { field: 'country' },

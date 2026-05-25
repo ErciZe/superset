@@ -33,6 +33,7 @@ import {
 } from '../../src/crosstab/engine';
 import { getMetricConfigSignature } from '../../src/plugin/dynamicMetric';
 import { ERR_CROSSTAB_V4_METRIC_CONFIG } from '../../src/plugin/fieldConfig';
+import { ERR_SERVER_COLUMN_PAGINATION_ROW_LIMIT } from '../../src/plugin/serverColumnPagination';
 
 const dynamicColumnGroupBy: Exclude<
   CrosstabFormData['dynamicGroupBy'],
@@ -1245,6 +1246,54 @@ describe('crosstab transformProps', () => {
         metric_name_with_unit: '销量（件）',
         [CROSSTAB_TOTAL_COLUMN_ID]: 100,
       }),
+    );
+  });
+
+  it('fails when required summary queries reach the row limit', () => {
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        row_limit: 1,
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }],
+          metrics: [{ metric: '指标值', semantic: 'additive' }],
+          rowValueSummaries: {
+            field: 'metric_name_with_unit',
+            values: [{ value: '销量（件）', semantic: 'additive' }],
+          },
+        },
+        showRowTotals: false,
+        showColumnTotals: true,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              metric_name_with_unit: '销量（件）',
+              biz_date: '2025-01-01',
+              指标值: 10,
+            },
+          ],
+        },
+        {
+          data: [
+            {
+              metric_name_with_unit: '销量（件）',
+              指标值: 100,
+            },
+          ],
+          rowcount: 1,
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    expect(() => transformProps(chartProps)).toThrow(
+      ERR_SERVER_COLUMN_PAGINATION_ROW_LIMIT,
     );
   });
 

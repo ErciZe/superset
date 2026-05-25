@@ -241,6 +241,36 @@ function assertServerColumnRowLimit(
   }
 }
 
+function assertRequiredSummaryRowLimits(
+  queryPlan: CrosstabQueryPlanItem[],
+  queriesByPlan: Map<string, CrosstabQueryData>,
+  summaryValueRequirements:
+    | Partial<Record<CrosstabSummaryKind, boolean>>
+    | undefined,
+  rowLimit: unknown,
+) {
+  if (!summaryValueRequirements) {
+    return;
+  }
+
+  queryPlan.forEach(queryPlanItem => {
+    if (
+      queryPlanItem.role === 'summary' &&
+      queryPlanItem.summaryKind &&
+      summaryValueRequirements[queryPlanItem.summaryKind]
+    ) {
+      assertServerColumnRowLimit(
+        queriesByPlan.get(queryPlanItem.queryId)?.rowcount,
+        rowLimit,
+      );
+    }
+  });
+}
+
+function getFormDataRowLimit(formData: CrosstabFormData) {
+  return formData.row_limit ?? (formData as { rowLimit?: unknown }).rowLimit;
+}
+
 function queryDataByPlan(
   queryPlan: CrosstabQueryPlanItem[],
   queriesData: ChartProps<CrosstabFormData>['queriesData'],
@@ -637,6 +667,13 @@ export default function transformProps(
         }
       : undefined;
 
+  assertRequiredSummaryRowLimits(
+    queryPlan,
+    queriesByPlan,
+    summaryValueRequirements,
+    getFormDataRowLimit(crosstabFormData),
+  );
+
   if (
     serverColumnPagination &&
     !resetDynamicGroupByOwnState &&
@@ -661,7 +698,10 @@ export default function transformProps(
     }
 
     if (dataQuery) {
-      assertServerColumnRowLimit(dataQuery.rowcount, formData.row_limit);
+      assertServerColumnRowLimit(
+        dataQuery.rowcount,
+        getFormDataRowLimit(crosstabFormData),
+      );
     }
   }
 

@@ -303,6 +303,35 @@ describe('buildCrosstab', () => {
     ).toThrow(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   });
 
+  it('fails when multi-metric row totals require SQL summary values', () => {
+    expect(() =>
+      buildCrosstab(
+        [
+          {
+            product: 'A',
+            biz_date: '2025-01-01',
+            amount: 10,
+            margin_rate: 0.25,
+          },
+        ],
+        {
+          rowFields: ['product'],
+          columnFields: ['biz_date'],
+          metricFields: ['amount', 'margin_rate'],
+          showColumnTotals: true,
+          showRowTotals: false,
+          showRowSubtotals: false,
+          showColumnSubtotals: false,
+          maxGeneratedColumns: 100,
+          defaultRowExpandedDepth: 0,
+          summaryValueRequirements: { row_total: true },
+          resolveSemantic: ({ metric }) =>
+            metric === 'margin_rate' ? 'ratio' : 'additive',
+        },
+      ),
+    ).toThrow(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
+  });
+
   it('orders rows by optional row comparator without exposing hidden sort fields', () => {
     const result = buildCrosstab(
       [
