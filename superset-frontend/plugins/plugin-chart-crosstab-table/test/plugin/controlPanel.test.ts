@@ -1473,6 +1473,97 @@ describe('crosstab controlPanel', () => {
     expect(screen.queryByText('To rows')).not.toBeInTheDocument();
   });
 
+  it('renders and updates field sort controls', () => {
+    const onChange = jest.fn();
+
+    render(
+      createElement(CrosstabFieldConfigControl, {
+        columns: [{ column_name: 'biz_date' }, { column_name: 'shop_order' }],
+        name: 'crosstabFieldConfig',
+        onChange,
+        value: {
+          columns: [
+            {
+              field: 'biz_date',
+              sort: {
+                by: 'biz_date',
+                direction: 'asc',
+                type: 'date',
+                nulls: 'last',
+              },
+            },
+          ],
+          metrics: [],
+          rows: [],
+        },
+      }),
+    );
+
+    fireEvent.change(screen.getByLabelText('Sort direction'), {
+      target: { value: 'desc' },
+    });
+
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        columns: [
+          {
+            field: 'biz_date',
+            sort: {
+              by: 'biz_date',
+              direction: 'desc',
+              type: 'date',
+              nulls: 'last',
+            },
+          },
+        ],
+      }),
+    );
+  });
+
+  it('renders dynamic group-by option sort controls', () => {
+    render(
+      createElement(CrosstabDynamicGroupByControl, {
+        columns: [{ column_name: 'biz_date' }],
+        name: 'dynamicGroupBy',
+        onChange: jest.fn(),
+        value: {
+          enabled: true,
+          slots: [
+            {
+              id: 'dimension_1',
+              defaultOptionId: 'biz_date',
+              options: [
+                {
+                  id: 'biz_date',
+                  label: '日期',
+                  columns: ['biz_date'],
+                  columnConfigs: [
+                    {
+                      field: 'biz_date',
+                      sort: {
+                        by: 'biz_date',
+                        direction: 'desc',
+                        type: 'date',
+                        nulls: 'last',
+                      },
+                    },
+                  ],
+                },
+              ],
+              placement: 'columns',
+              slotIndex: 0,
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(screen.getByText('Sort by')).toBeInTheDocument();
+    expect(screen.getByText('Sort direction')).toBeInTheDocument();
+    expect(screen.getByText('Sort type')).toBeInTheDocument();
+    expect(screen.getByText('Null sort')).toBeInTheDocument();
+  });
+
   it('renders one visible field-zone heading per zone', () => {
     render(
       createElement(CrosstabFieldConfigControl, {

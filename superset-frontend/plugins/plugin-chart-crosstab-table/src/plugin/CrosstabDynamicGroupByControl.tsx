@@ -19,6 +19,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   ensureIsArray,
+  getColumnLabel,
   styled,
   t,
   type QueryFormColumn,
@@ -31,6 +32,11 @@ import type {
   CrosstabDynamicGroupByConfig,
   CrosstabDynamicGroupByOption,
   CrosstabDynamicGroupBySlot,
+  CrosstabNullSort,
+  CrosstabSortDirection,
+  CrosstabSortType,
+  DimensionFieldConfig,
+  DimensionSortConfig,
   DynamicGroupByPlacement,
 } from '../types';
 import {
@@ -63,6 +69,13 @@ const FieldGrid = styled.div`
   margin-top: ${({ theme }) => theme.sizeUnit * 2}px;
 `;
 
+const SortGrid = styled.div`
+  display: grid;
+  gap: ${({ theme }) => theme.sizeUnit}px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: ${({ theme }) => theme.sizeUnit * 2}px;
+`;
+
 const Field = styled.label`
   display: grid;
   gap: ${({ theme }) => theme.sizeUnit}px;
@@ -80,6 +93,9 @@ const ErrorText = styled.div`
 `;
 
 const EMPTY_ACTIONS = {} as never;
+const SORT_DIRECTIONS: CrosstabSortDirection[] = ['asc', 'desc'];
+const SORT_TYPES: CrosstabSortType[] = ['string', 'number', 'date'];
+const NULL_SORTS: CrosstabNullSort[] = ['last', 'first'];
 
 type CrosstabDynamicGroupByControlProps = {
   columns?: ColumnMeta[];
@@ -221,6 +237,36 @@ function columnValues(option: CrosstabDynamicGroupByOption) {
   return option.columns;
 }
 
+function getColumnMetaLabel(column: ColumnMeta) {
+  return (
+    column.verbose_name ||
+    column.column_name ||
+    column.name ||
+    column.type ||
+    ''
+  );
+}
+
+function getSortByValue(sort?: DimensionSortConfig) {
+  return sort?.by === undefined || sort.by === 'self'
+    ? 'self'
+    : getColumnLabel(sort.by);
+}
+
+function mergeOptionColumnConfigs(
+  nextColumns: QueryFormColumn[],
+  previousConfigs: DimensionFieldConfig[] = [],
+) {
+  return nextColumns.map(field => {
+    const key = getColumnLabel(field);
+    const previous = previousConfigs.find(
+      config => getColumnLabel(config.field) === key,
+    );
+
+    return previous ? { ...previous, field } : { field };
+  });
+}
+
 export default function CrosstabDynamicGroupByControl({
   columns = [],
   hovered,
@@ -231,6 +277,10 @@ export default function CrosstabDynamicGroupByControl({
 }: CrosstabDynamicGroupByControlProps) {
   const config = useMemo(() => getConfig(value), [value]);
   const [error, setError] = useState<string | undefined>();
+  const sortFieldOptions = useMemo(
+    () => Array.from(new Set(columns.map(getColumnMetaLabel).filter(Boolean))),
+    [columns],
+  );
 
   const emit = useCallback(
     (nextConfig: CrosstabDynamicGroupByConfig) => {
@@ -279,6 +329,29 @@ export default function CrosstabDynamicGroupByControl({
       });
     },
     [updateSlot],
+  );
+  const updateOptionSort = useCallback(
+    (
+      slot: CrosstabDynamicGroupBySlot,
+      option: CrosstabDynamicGroupByOption,
+      field: QueryFormColumn,
+      sort: DimensionSortConfig,
+    ) => {
+      const nextConfigs = mergeOptionColumnConfigs(
+        option.columns,
+        option.columnConfigs,
+      ).map(config =>
+        getColumnLabel(config.field) === getColumnLabel(field)
+          ? { ...config, sort }
+          : config,
+      );
+
+      updateOption(slot, option, {
+        ...option,
+        columnConfigs: nextConfigs,
+      });
+    },
+    [updateOption],
   );
 
   return (
@@ -459,16 +532,117 @@ export default function CrosstabDynamicGroupByControl({
                 label={t('Columns')}
                 multi
                 name={`${name}-${slot.id}-${option.id}-columns`}
-                onChange={nextColumns =>
+                onChange={nextColumns => {
+                  const normalizedColumns =
+                    ensureIsArray<QueryFormColumn>(nextColumns);
                   updateOption(slot, option, {
                     ...option,
-                    columns: ensureIsArray<QueryFormColumn>(nextColumns),
-                  })
-                }
+                    columns: normalizedColumns,
+                    columnConfigs: mergeOptionColumnConfigs(
+                      normalizedColumns,
+                      option.columnConfigs,
+                    ),
+                  });
+                }}
                 options={columns}
                 type="DndColumnSelect"
                 value={columnValues(option)}
               />
+              {mergeOptionColumnConfigs(
+                option.columns,
+                option.columnConfigs,
+              ).map(config => {
+                const fieldLabel = getColumnLabel(config.field);
+                const sort = config.sort ?? {
+                  by: 'self',
+                  direction: 'asc' as const,
+                };
+                const fieldSortOptions = Array.from(
+                  new Set([
+                    ...option.columns.map(getColumnLabel).filter(Boolean),
+                    ...sortFieldOptions,
+                  ]),
+                );
+
+                return (
+                  <SortGrid key={fieldLabel}>
+                    <Field>
+                      {t('Sort by')}
+                      <Select
+                        ariaLabel={t('Sort by')}
+                        options={[
+                          { label: t('Self'), value: 'self' },
+                          ...fieldSortOptions.map(sortOption => ({
+                            label: sortOption,
+                            value: sortOption,
+                          })),
+                        ]}
+                        value={getSortByValue(sort)}
+                        onChange={nextSortBy =>
+                          updateOptionSort(slot, option, config.field, {
+                            ...sort,
+                            by:
+                              nextSortBy === 'self'
+                                ? 'self'
+                                : String(nextSortBy),
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      {t('Sort direction')}
+                      <Select
+                        ariaLabel={t('Sort direction')}
+                        options={SORT_DIRECTIONS.map(direction => ({
+                          label: direction,
+                          value: direction,
+                        }))}
+                        value={sort.direction}
+                        onChange={nextDirection =>
+                          updateOptionSort(slot, option, config.field, {
+                            ...sort,
+                            direction: nextDirection as CrosstabSortDirection,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      {t('Sort type')}
+                      <Select
+                        ariaLabel={t('Sort type')}
+                        options={SORT_TYPES.map(sortType => ({
+                          label: sortType,
+                          value: sortType,
+                        }))}
+                        value={sort.type ?? 'string'}
+                        onChange={nextSortType =>
+                          updateOptionSort(slot, option, config.field, {
+                            ...sort,
+                            type: nextSortType as CrosstabSortType,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      {t('Null sort')}
+                      <Select
+                        ariaLabel={t('Null sort')}
+                        options={NULL_SORTS.map(nullSort => ({
+                          label: nullSort,
+                          value: nullSort,
+                        }))}
+                        value={sort.nulls ?? 'last'}
+                        onChange={nextNullSort =>
+                          updateOptionSort(slot, option, config.field, {
+                            ...sort,
+                            nulls: nextNullSort as CrosstabNullSort,
+                          })
+                        }
+                      />
+                    </Field>
+                  </SortGrid>
+                );
+              })}
             </OptionCard>
           ))}
           <Button
