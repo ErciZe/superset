@@ -49,8 +49,6 @@ import { SearchOption, SortByItem } from '../types';
 import getInitialSortState, { shouldSort } from '../utils/getInitialSortState';
 import { PAGE_SIZE_OPTIONS } from '../consts';
 
-type GridApi = GridReadyEvent['api'];
-
 export interface AgGridTableProps {
   gridTheme?: string;
   isDarkMode?: boolean;
@@ -58,10 +56,6 @@ export interface AgGridTableProps {
   updateInterval?: number;
   data?: any[];
   onGridReady?: (params: GridReadyEvent) => void;
-  renderColumnViewToolbar?: (params: {
-    gridApi?: GridApi;
-    colDefs: ColDef[];
-  }) => JSX.Element | null;
   colDefsFromProps: any[];
   includeSearch: boolean;
   allowRearrangeColumns: boolean;
@@ -92,15 +86,6 @@ ModuleRegistry.registerModules([AllCommunityModule, ClientSideRowModelModule]);
 
 const isSearchFocused = new Map<string, boolean>();
 
-const getColumnDefKey = (colDef: ColDef): string => {
-  if ('children' in colDef && Array.isArray(colDef.children)) {
-    return `${colDef.headerName ?? ''}(${colDef.children
-      .map(getColumnDefKey)
-      .join(',')})`;
-  }
-  return String(colDef.colId ?? colDef.field ?? colDef.headerName ?? '');
-};
-
 const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
   ({
     gridHeight,
@@ -129,18 +114,11 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
     cleanedTotals,
     showTotals,
     width,
-    onGridReady: onGridReadyFromProps,
-    renderColumnViewToolbar,
   }) => {
     const gridRef = useRef<AgGridReact>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const rowData = useMemo(() => data, [data]);
     const containerRef = useRef<HTMLDivElement>(null);
-    const [gridApi, setGridApi] = useState<GridApi>();
-    const columnDefsKey = useMemo(
-      () => colDefsFromProps.map(getColumnDefKey).join('|'),
-      [colDefsFromProps],
-    );
 
     const searchId = `search-${id}`;
     const gridInitialState: GridState = {
@@ -153,7 +131,10 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
 
     const defaultColDef = useMemo<ColDef>(
       () => ({
+        flex: 1,
         filter: true,
+        enableRowGroup: true,
+        enableValue: true,
         sortable: true,
         resizable: true,
         minWidth: 100,
@@ -270,24 +251,13 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
       }
     }, [hasServerPageLengthChanged]);
 
-    useEffect(() => {
-      if (gridRef.current?.api) {
-        gridRef.current.api.sizeColumnsToFit();
-      }
-    }, [width]);
-
     const onGridReady = (params: GridReadyEvent) => {
       // This will make columns fill the grid width
       params.api.sizeColumnsToFit();
-      if (renderColumnViewToolbar) {
-        setGridApi(params.api);
-      }
-      onGridReadyFromProps?.(params);
     };
 
     return (
       <div style={containerStyles} ref={containerRef}>
-        {renderColumnViewToolbar?.({ gridApi, colDefs: colDefsFromProps })}
         <div className="dropdown-controls-container">
           {renderTimeComparisonDropdown && (
             <div className="time-comparison-dropdown">
@@ -328,7 +298,6 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
         </div>
 
         <ThemedAgGridReact
-          key={columnDefsKey}
           ref={gridRef}
           onGridReady={onGridReady}
           className="ag-container"
@@ -343,6 +312,7 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
           onCellClicked={handleCrossFilter}
           initialState={gridInitialState}
           suppressAggFuncInHeader
+          rowGroupPanelShow="always"
           enableCellTextSelection
           quickFilterText={serverPagination ? '' : quickFilterText}
           suppressMovableColumns={!allowRearrangeColumns}

@@ -36,30 +36,23 @@ import {
   SearchOption,
   SortByItem,
 } from './types';
-import AgGridDataTable, { type AgGridTableProps } from './AgGridTable';
+import AgGridDataTable from './AgGridTable';
 import { updateTableOwnState } from './utils/externalAPIs';
 import TimeComparisonVisibility from './AgGridTable/components/TimeComparisonVisibility';
 import { useColDefs } from './utils/useColDefs';
 import { getCrossFilterDataMask } from './utils/getCrossFilterDataMask';
 import { StyledChartContainer } from './styles';
 
-const getGridHeight = (
-  height: number,
-  includeSearch: boolean | undefined,
-  columnViewToolbarHeight: number,
-) => {
+const getGridHeight = (height: number, includeSearch: boolean | undefined) => {
   let calculatedGridHeight = height;
   if (includeSearch) {
     calculatedGridHeight -= 16;
   }
-  return calculatedGridHeight - 80 - columnViewToolbarHeight;
+  return calculatedGridHeight - 80;
 };
 
 export default function TableChart<D extends DataRecord = DataRecord>(
-  props: AgGridTableChartTransformedProps<D> &
-    Pick<AgGridTableProps, 'onGridReady' | 'renderColumnViewToolbar'> & {
-      columnViewToolbarHeight?: number;
-    },
+  props: AgGridTableChartTransformedProps<D> & {},
 ) {
   const {
     height,
@@ -88,27 +81,8 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     showTotals,
     columnColorFormatters,
     basicColorFormatters,
-    additionalCellStyle,
-    additionalCellFormatter,
     width,
-    onGridReady,
-    renderColumnViewToolbar,
-    columnViewToolbarHeight,
   } = props;
-
-  let effectiveColumnViewToolbarHeight = 0;
-  if (renderColumnViewToolbar) {
-    if (
-      typeof columnViewToolbarHeight !== 'number' ||
-      !Number.isFinite(columnViewToolbarHeight) ||
-      columnViewToolbarHeight <= 0
-    ) {
-      throw new Error(
-        'columnViewToolbarHeight must be a positive finite number when renderColumnViewToolbar is provided.',
-      );
-    }
-    effectiveColumnViewToolbarHeight = columnViewToolbarHeight;
-  }
 
   const [searchOptions, setSearchOptions] = useState<SearchOption[]>([]);
 
@@ -169,8 +143,6 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     colorPositiveNegative,
     totals,
     columnColorFormatters,
-    additionalCellStyle,
-    additionalCellFormatter,
     allowRearrangeColumns,
     basicColorFormatters,
     isUsingTimeComparison,
@@ -179,11 +151,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     slice_id,
   });
 
-  const gridHeight = getGridHeight(
-    height,
-    includeSearch,
-    effectiveColumnViewToolbarHeight,
-  );
+  const gridHeight = getGridHeight(height, includeSearch);
 
   const isActiveFilterValue = useCallback(
     function isActiveFilterValue(key: string, val: DataRecordValue) {
@@ -321,8 +289,6 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         cleanedTotals={totals || {}}
         showTotals={showTotals}
         width={width}
-        onGridReady={onGridReady}
-        renderColumnViewToolbar={renderColumnViewToolbar}
       />
     </StyledChartContainer>
   );

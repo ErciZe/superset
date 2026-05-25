@@ -17,7 +17,6 @@
  * under the License.
  */
 import { ColorFormatters } from '@superset-ui/chart-controls';
-import type { CSSProperties } from 'react';
 import {
   NumberFormatter,
   TimeFormatter,
@@ -38,7 +37,6 @@ import {
   Metric,
 } from '@superset-ui/core';
 import {
-  CellClassParams,
   ColDef,
   Column,
   IHeaderParams,
@@ -142,29 +140,6 @@ export interface ServerPaginationData {
   searchColumn?: string;
 }
 
-export type AdditionalCellStyle = (
-  params: CellClassParams & { col: InputColumn },
-) => Partial<CSSProperties> | undefined;
-
-export type AdditionalCellFormatterResult = {
-  text?: DataRecordValue;
-  html?: string;
-  style?: Partial<CSSProperties>;
-  className?: string;
-  tooltip?: string;
-};
-
-export type AdditionalCellFormatterParams = Partial<
-  Pick<CellClassParams, 'data' | 'value' | 'rowIndex' | 'colDef' | 'node'>
-> & {
-  col: InputColumn;
-  valueFormatted?: DataRecordValue;
-};
-
-export type AdditionalCellFormatter = (
-  params: AdditionalCellFormatterParams,
-) => AdditionalCellFormatterResult | undefined;
-
 export interface AgGridTableChartTransformedProps<
   D extends DataRecord = DataRecord,
 > {
@@ -200,8 +175,6 @@ export interface AgGridTableChartTransformedProps<
   columnColorFormatters: ColorFormatters;
   basicColorFormatters?: { [Key: string]: BasicColorFormatterType }[];
   basicColorColumnFormatters?: { [Key: string]: BasicColorFormatterType }[];
-  additionalCellStyle?: AdditionalCellStyle;
-  additionalCellFormatter?: AdditionalCellFormatter;
   formData: TableChartFormData;
 }
 
@@ -267,7 +240,6 @@ export type CellRendererProps = CustomCellRendererProps & {
   colorPositiveNegative: boolean;
   allowRenderHtml: boolean;
   columns: InputColumn[];
-  additionalCellFormatter?: AdditionalCellFormatter;
 };
 
 export type Dataset = {

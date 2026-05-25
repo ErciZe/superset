@@ -16,13 +16,9 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { sanitizeHtml, styled } from '@superset-ui/core';
+import { styled } from '@superset-ui/core';
 import { CustomCellRendererProps } from '@superset-ui/core/components/ThemedAgGridReact';
-import {
-  AdditionalCellFormatter,
-  BasicColorFormatterType,
-  InputColumn,
-} from '../types';
+import { BasicColorFormatterType, InputColumn } from '../types';
 import { useIsDark } from '../utils/useTableTheme';
 
 const StyledTotalCell = styled.div`
@@ -139,7 +135,6 @@ export const NumericCellRenderer = (
     valueRange: any;
     alignPositiveNegative: boolean;
     colorPositiveNegative: boolean;
-    additionalCellFormatter?: AdditionalCellFormatter;
   },
 ) => {
   const {
@@ -160,29 +155,6 @@ export const NumericCellRenderer = (
     return <StyledTotalCell>{valueFormatted ?? value}</StyledTotalCell>;
   }
 
-  const additionalFormatting = params.additionalCellFormatter?.({
-    ...params,
-    col: params.col,
-  });
-  const additionalContentProps = {
-    className: additionalFormatting?.className,
-    title: additionalFormatting?.tooltip,
-  };
-
-  if (additionalFormatting?.html) {
-    return (
-      <div
-        {...additionalContentProps}
-        dangerouslySetInnerHTML={{
-          __html: sanitizeHtml(additionalFormatting.html),
-        }}
-      />
-    );
-  }
-  if (additionalFormatting && 'text' in additionalFormatting) {
-    return <div {...additionalContentProps}>{additionalFormatting.text}</div>;
-  }
-
   let arrow = '';
   let arrowColor = '';
   if (hasBasicColorFormatters && col?.metricName) {
@@ -200,7 +172,7 @@ export const NumericCellRenderer = (
 
   if (!valueRange) {
     return (
-      <CellContainer align={alignment} {...additionalContentProps}>
+      <CellContainer align={alignment}>
         {arrow && (
           <ArrowContainer arrowColor={arrowColor}>{arrow}</ArrowContainer>
         )}
@@ -226,7 +198,7 @@ export const NumericCellRenderer = (
   });
 
   return (
-    <div {...additionalContentProps}>
+    <div>
       <Bar offset={CellOffset} percentage={CellWidth} background={background} />
       {valueFormatted ?? value}
     </div>

@@ -50,63 +50,22 @@ export const TextCellRenderer = (params: CellRendererProps) => {
     }
   }
 
-  const additionalFormatting = params.additionalCellFormatter?.({
-    ...params,
-    col: params.col,
-  });
-  const additionalContentProps = {
-    className: additionalFormatting?.className,
-    title: additionalFormatting?.tooltip,
-  };
-  const hasAdditionalContentProps = Boolean(
-    additionalFormatting?.className || additionalFormatting?.tooltip,
-  );
-
-  if (additionalFormatting?.html) {
-    return (
-      <div
-        {...additionalContentProps}
-        dangerouslySetInnerHTML={{
-          __html: sanitizeHtml(additionalFormatting.html),
-        }}
-      />
-    );
-  }
-  if (additionalFormatting && 'text' in additionalFormatting) {
-    return <div {...additionalContentProps}>{additionalFormatting.text}</div>;
-  }
-
   if (!(typeof value === 'string' || value instanceof Date)) {
-    const content = valueFormatted ?? value;
-    return hasAdditionalContentProps ? (
-      <div {...additionalContentProps}>{content}</div>
-    ) : (
-      content
-    );
+    return valueFormatted ?? value;
   }
 
   if (typeof value === 'string') {
     if (value.startsWith('http://') || value.startsWith('https://')) {
       return (
-        <a
-          href={value}
-          target="_blank"
-          rel="noopener noreferrer"
-          {...additionalContentProps}
-        >
+        <a href={value} target="_blank" rel="noopener noreferrer">
           {value}
         </a>
       );
     }
     if (allowRenderHtml && isProbablyHTML(value)) {
-      return (
-        <div
-          {...additionalContentProps}
-          dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }}
-        />
-      );
+      return <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(value) }} />;
     }
   }
 
-  return <div {...additionalContentProps}>{valueFormatted ?? value}</div>;
+  return <div>{valueFormatted ?? value}</div>;
 };
