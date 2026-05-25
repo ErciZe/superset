@@ -708,6 +708,25 @@ describe('crosstab buildQuery', () => {
     expect(queryContext.queries[0].time_range).toBe('2026-05-01 : 2026-05-31');
   });
 
+  it('keeps cell formatter expressions out of query payloads', () => {
+    const formatterExpression =
+      "({ value }) => (value == null ? 'formatterSentinelEmpty' : value)";
+    const queryContext = buildQuery({
+      datasource: '11__table',
+      viz_type: 'crosstab-table',
+      groupbyRows: ['contract_type'],
+      groupbyColumns: ['pay_type'],
+      metrics: ['amount'],
+      crosstabCellFormatterExpression: formatterExpression,
+    } as never);
+
+    const queriesPayload = JSON.stringify(queryContext.queries);
+
+    expect(queriesPayload).not.toContain('crosstabCellFormatterExpression');
+    expect(queriesPayload).not.toContain(formatterExpression);
+    expect(queriesPayload).not.toContain('formatterSentinelEmpty');
+  });
+
   it('de-duplicates overlapping row and column dimensions while preserving order', () => {
     const queryContext = buildQuery({
       datasource: '11__table',

@@ -332,6 +332,34 @@ describe('crosstab transformProps', () => {
     });
   });
 
+  it('passes cell formatter expressions through to renderer props unchanged', () => {
+    const formatterExpression =
+      "({ value }) => (value == null ? 'formatterSentinelEmpty' : value)";
+    const props = transformProps(
+      createProps({
+        formData: {
+          datasource: '11__table',
+          viz_type: 'crosstab-table',
+          groupbyRows: ['contract_type'],
+          groupbyColumns: ['pay_type'],
+          metrics: ['amount'],
+          crosstabCellFormatterExpression: formatterExpression,
+        } as never,
+        queriesData: [
+          {
+            data: [],
+            colnames: [],
+            coltypes: [],
+          },
+        ],
+      }),
+    );
+
+    expect(props.formData.crosstabCellFormatterExpression).toBe(
+      formatterExpression,
+    );
+  });
+
   it('rejects v4 charts when render-time metrics only exist under legacy formData.metrics', () => {
     expect(() =>
       transformProps(
