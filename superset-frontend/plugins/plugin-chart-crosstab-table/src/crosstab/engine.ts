@@ -14,6 +14,7 @@ import {
   ERR_CROSSTAB_MISSING_SQL_SUMMARY,
   getRequiredSummaryValue,
 } from '../plugin/summaryResults';
+import { ERR_CROSSTAB_UNKNOWN_METRIC_SEMANTIC } from '../plugin/metricSemantics';
 import { buildColumnTuples, ERR_COLUMN_LIMIT } from './domain';
 import { encodeTuple } from './keys';
 import { addNumeric } from './totals';
@@ -513,8 +514,10 @@ function isSqlSemantic(semantic: MetricSemantic) {
   );
 }
 
-function normalizeGrandTotalSemantic(semantic: MetricSemantic) {
-  return semantic === 'unknown' ? 'additive' : semantic;
+function assertKnownSemantic(semantic: MetricSemantic | undefined) {
+  if (semantic === 'unknown') {
+    throw new Error(ERR_CROSSTAB_UNKNOWN_METRIC_SEMANTIC);
+  }
 }
 
 function getRowSqlSummaryValue({
@@ -534,6 +537,9 @@ function getRowSqlSummaryValue({
   map?: Map<string, number | null>;
   requireSummary?: boolean;
 }): number | null | undefined {
+  const semantic = options.resolveSemantic?.({ row, metric });
+  assertKnownSemantic(semantic);
+
   if (map) {
     return getRequiredSummaryValue(map, {
       rowValues: rowLookupFields.map(field => row[field]),
@@ -546,9 +552,7 @@ function getRowSqlSummaryValue({
     throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   }
 
-  const semantic = options.resolveSemantic?.({ row, metric }) ?? 'additive';
-
-  if (!isSqlSemantic(semantic)) {
+  if (!semantic || !isSqlSemantic(semantic)) {
     return undefined;
   }
 
@@ -565,12 +569,12 @@ function getColumnSqlSemantic(
   }
 
   const semantics = new Set(
-    leafRows.map(row =>
-      normalizeGrandTotalSemantic(
-        options.resolveSemantic?.({ row, metric }) ?? 'additive',
-      ),
-    ),
+    leafRows
+      .map(row => options.resolveSemantic?.({ row, metric }))
+      .filter((semantic): semantic is MetricSemantic => semantic !== undefined),
   );
+
+  semantics.forEach(assertKnownSemantic);
 
   if (semantics.size > 1) {
     throw new Error(ERR_CROSSTAB_MIXED_GRAND_TOTAL_SEMANTICS);
@@ -618,6 +622,10 @@ function getSqlRowTotal(
   options: CrosstabBuildOptions,
 ): number | null | undefined {
   if (options.metricFields.length !== 1) {
+    options.metricFields.forEach(metric =>
+      assertKnownSemantic(options.resolveSemantic?.({ row, metric })),
+    );
+
     if (
       options.summaryValueRequirements?.row_total &&
       options.metricFields.some(metric =>
@@ -631,6 +639,8 @@ function getSqlRowTotal(
   }
 
   const [metric] = options.metricFields;
+  const semantic = options.resolveSemantic?.({ row, metric });
+  assertKnownSemantic(semantic);
 
   if (options.summaryValues?.rowTotal) {
     return getRequiredSummaryValue(options.summaryValues.rowTotal, {
@@ -644,9 +654,7 @@ function getSqlRowTotal(
     throw new Error(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   }
 
-  const semantic = options.resolveSemantic?.({ row, metric }) ?? 'additive';
-
-  if (!isSqlSemantic(semantic)) {
+  if (!semantic || !isSqlSemantic(semantic)) {
     return undefined;
   }
 
@@ -658,6 +666,12 @@ function getSqlGrandTotal(
   options: CrosstabBuildOptions,
 ): number | null | undefined {
   if (options.metricFields.length !== 1) {
+    options.metricFields.forEach(metric =>
+      leafRows.forEach(row =>
+        assertKnownSemantic(options.resolveSemantic?.({ row, metric })),
+      ),
+    );
+
     if (
       options.summaryValueRequirements?.grand_total &&
       options.metricFields.some(metric =>

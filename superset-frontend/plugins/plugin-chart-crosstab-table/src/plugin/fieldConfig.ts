@@ -119,6 +119,15 @@ export function getCrosstabRowValueSummaries(
   return formData.crosstabFieldConfig?.rowValueSummaries;
 }
 
+export function hasCrosstabTotalSurface(formData: CrosstabFormData) {
+  return (
+    (formData.showColumnTotals ?? true) ||
+    (formData.showRowTotals ?? true) ||
+    (formData.showRowSubtotals ?? true) ||
+    (formData.showColumnSubtotals ?? false)
+  );
+}
+
 export function getCrosstabFieldLabels(formData: CrosstabFormData) {
   if (!hasFieldConfig(formData.crosstabFieldConfig)) {
     return {};

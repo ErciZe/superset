@@ -34,6 +34,7 @@ import {
 import { getMetricConfigSignature } from '../../src/plugin/dynamicMetric';
 import { ERR_CROSSTAB_V4_METRIC_CONFIG } from '../../src/plugin/fieldConfig';
 import { ERR_SERVER_COLUMN_PAGINATION_ROW_LIMIT } from '../../src/plugin/serverColumnPagination';
+import { ERR_CROSSTAB_MISSING_SQL_SUMMARY } from '../../src/plugin/summaryResults';
 
 const dynamicColumnGroupBy: Exclude<
   CrosstabFormData['dynamicGroupBy'],
@@ -1249,6 +1250,40 @@ describe('crosstab transformProps', () => {
     );
   });
 
+  it('requires SQL column totals when grand total rows are enabled', () => {
+    const chartProps = new ChartProps<CrosstabFormData>({
+      width: 800,
+      height: 400,
+      formData: {
+        datasource: '7__table',
+        viz_type: 'crosstab_table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }],
+          metrics: [{ metric: '指标值', semantic: 'additive' }],
+        },
+        showRowTotals: true,
+        showColumnTotals: false,
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              metric_name_with_unit: '销量（件）',
+              biz_date: '2025-01-01',
+              指标值: 10,
+            },
+          ],
+        },
+      ],
+      theme: supersetTheme,
+    });
+
+    expect(() => transformProps(chartProps)).toThrow(
+      ERR_CROSSTAB_MISSING_SQL_SUMMARY,
+    );
+  });
+
   it('fails when required summary queries reach the row limit', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
@@ -1801,6 +1836,15 @@ describe('crosstab transformProps', () => {
         groupbyRows: ['metric_name_with_unit'],
         groupbyColumns: ['biz_date', 'shop_name', 'country'],
         metrics: ['指标值'],
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [
+            { field: 'biz_date' },
+            { field: 'shop_name' },
+            { field: 'country' },
+          ],
+          metrics: [{ metric: '指标值', semantic: 'additive' }],
+        },
         serverColumnPagination: true,
         columnPageSize: 98,
         showColumnTotals: true,
@@ -1841,6 +1885,23 @@ describe('crosstab transformProps', () => {
           data: [
             {
               metric_name_with_unit: '销售额',
+              指标值: 1000,
+            },
+          ],
+        },
+        {
+          data: [
+            {
+              biz_date: '2026-05-01',
+              shop_name: 'Shop A',
+              country: 'US',
+              指标值: 10,
+            },
+          ],
+        },
+        {
+          data: [
+            {
               指标值: 1000,
             },
           ],

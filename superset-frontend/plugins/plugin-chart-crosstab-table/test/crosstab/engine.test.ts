@@ -16,6 +16,7 @@ import {
   ERR_CROSSTAB_MISSING_SQL_SUMMARY,
   buildSummaryResultMap,
 } from '../../src/plugin/summaryResults';
+import { ERR_CROSSTAB_UNKNOWN_METRIC_SEMANTIC } from '../../src/plugin/metricSemantics';
 
 const records = [
   { contract_type: 'A', year: '2026', pay_type: 'Cash', amount: 10, profit: 3 },
@@ -301,6 +302,32 @@ describe('buildCrosstab', () => {
         },
       ),
     ).toThrow(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
+  });
+
+  it('fails when totals are enabled for rows with unknown semantics', () => {
+    expect(() =>
+      buildCrosstab(
+        [
+          {
+            metric_name_with_unit: '未配置指标',
+            biz_date: '2025-01-01',
+            指标值: 10,
+          },
+        ],
+        {
+          rowFields: ['metric_name_with_unit'],
+          columnFields: ['biz_date'],
+          metricFields: ['指标值'],
+          showColumnTotals: true,
+          showRowTotals: false,
+          showRowSubtotals: false,
+          showColumnSubtotals: false,
+          maxGeneratedColumns: 100,
+          defaultRowExpandedDepth: 0,
+          resolveSemantic: () => 'unknown',
+        },
+      ),
+    ).toThrow(ERR_CROSSTAB_UNKNOWN_METRIC_SEMANTIC);
   });
 
   it('fails when multi-metric row totals require SQL summary values', () => {

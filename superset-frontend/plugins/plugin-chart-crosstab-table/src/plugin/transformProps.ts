@@ -26,12 +26,7 @@ import {
   type QueryFormColumn,
   type QueryFormMetric,
 } from '@superset-ui/core';
-import {
-  buildCrosstab,
-  CROSSTAB_ROW_KEY,
-  CROSSTAB_ROW_TYPE,
-  CROSSTAB_TOTAL_COLUMN_ID,
-} from '../crosstab/engine';
+import { buildCrosstab } from '../crosstab/engine';
 import { parseConditionalFormatting } from '../crosstab/formatting';
 import type {
   CrosstabChartProps,
@@ -41,8 +36,6 @@ import type {
   CrosstabSummaryKind,
   CrosstabSummaryValues,
 } from '../types';
-import { encodeTuple } from '../crosstab/keys';
-import { addNumeric } from '../crosstab/totals';
 import {
   areColumnTuplesEqual,
   ERR_SERVER_COLUMN_PAGINATION_ROW_LIMIT,
@@ -62,6 +55,7 @@ import {
   getCrosstabRowValueSummaries,
   getCrosstabSemanticOverrideField,
   getCrosstabSemanticOverrides,
+  hasCrosstabTotalSurface,
 } from './fieldConfig';
 import {
   hasConfiguredSummarySemantics,
@@ -105,59 +99,6 @@ function normalizeMetric(value: QueryFormMetric): string {
   }
 
   return label;
-}
-
-function rowKey(record: DataRecord, rowFields: string[]) {
-  return encodeTuple(rowFields.map(field => record[field]));
-}
-
-function metricTotal(record: DataRecord, metricFields: string[]) {
-  return metricFields.reduce<number | null>(
-    (total, metric) => addNumeric(total, record[metric]),
-    null,
-  );
-}
-
-function applyRowTotals(
-  rowData: DataRecord[],
-  rowTotalRecords: DataRecord[],
-  rowFields: string[],
-  metricFields: string[],
-): DataRecord[] {
-  if (!rowTotalRecords.length) {
-    return rowData;
-  }
-
-  const totalsByRowKey = new Map(
-    rowTotalRecords.map(record => [
-      rowKey(record, rowFields),
-      metricTotal(record, metricFields),
-    ]),
-  );
-  const withLeafTotals = rowData.map(row => {
-    if (row[CROSSTAB_ROW_TYPE] !== 'leaf') {
-      return row;
-    }
-
-    const total = totalsByRowKey.get(String(row[CROSSTAB_ROW_KEY]));
-
-    return total === undefined
-      ? row
-      : { ...row, [CROSSTAB_TOTAL_COLUMN_ID]: total };
-  });
-  const grandTotal = withLeafTotals.reduce<number | null>(
-    (total, row) =>
-      row[CROSSTAB_ROW_TYPE] === 'leaf'
-        ? addNumeric(total, row[CROSSTAB_TOTAL_COLUMN_ID])
-        : total,
-    null,
-  );
-
-  return withLeafTotals.map(row =>
-    row[CROSSTAB_ROW_TYPE] === 'grand_total'
-      ? { ...row, [CROSSTAB_TOTAL_COLUMN_ID]: grandTotal }
-      : row,
-  );
 }
 
 function updateServerColumnOwnState(
@@ -479,11 +420,13 @@ export default function transformProps(
     getCrosstabSemanticOverrideField(crosstabFormData);
   const semanticOverrides = getCrosstabSemanticOverrides(crosstabFormData);
   const rowValueSummaries = getCrosstabRowValueSummaries(crosstabFormData);
-  const requiresSqlSummary = hasConfiguredSummarySemantics(
+  const hasConfiguredSemantics = hasConfiguredSummarySemantics(
     effectiveMetricConfigs,
     semanticOverrides,
     rowValueSummaries,
   );
+  const requiresSqlSummary =
+    hasCrosstabTotalSurface(crosstabFormData) && hasConfiguredSemantics;
   const queryPlan = buildCrosstabQueryPlan({
     rowFields,
     columnFields,
@@ -543,10 +486,6 @@ export default function transformProps(
     queriesByPlan,
     'grand_total',
   );
-  const legacyServerRowTotalQuery =
-    serverColumnPagination && !requiresSqlSummary
-      ? queriesData[queryPlan.length]
-      : undefined;
   const totalCount =
     serverColumnPagination &&
     typeof countQuery?.data?.[0]?.rowcount === 'number'
@@ -647,16 +586,17 @@ export default function transformProps(
     requiresSqlSummary && shouldRenderData
       ? {
           ...((formData.showColumnTotals ?? true) ? { row_total: true } : {}),
-          ...((formData.showRowTotals ?? true) ? { grand_total: true } : {}),
+          ...((formData.showRowTotals ?? true) &&
+          (formData.showColumnTotals ?? true)
+            ? { grand_total: true }
+            : {}),
           ...((formData.showRowSubtotals ?? true)
             ? {
                 row_subtotal_cells: true,
                 row_subtotal_total: formData.showColumnTotals ?? true,
               }
             : {}),
-          ...((formData.showColumnTotals ?? true)
-            ? { column_total: true }
-            : {}),
+          ...((formData.showRowTotals ?? true) ? { column_total: true } : {}),
           ...((formData.showColumnSubtotals ?? false)
             ? {
                 column_subtotal_cells: true,
@@ -725,15 +665,19 @@ export default function transformProps(
     summaryValueRequirements,
     rowComparator,
     columnComparator,
-    resolveSemantic: ({ row, metric }) =>
-      resolveMetricSemantic({
-        metric,
-        row,
-        metricConfigs: effectiveMetricConfigs,
-        rowValueSummaries,
-        semanticOverrideField,
-        semanticOverrides,
-      }),
+    ...(hasConfiguredSemantics
+      ? {
+          resolveSemantic: ({ row, metric }) =>
+            resolveMetricSemantic({
+              metric,
+              row,
+              metricConfigs: effectiveMetricConfigs,
+              rowValueSummaries,
+              semanticOverrideField,
+              semanticOverrides,
+            }),
+        }
+      : {}),
   });
   const rowData =
     serverColumnPagination &&
@@ -742,14 +686,7 @@ export default function transformProps(
       resetDynamicMetricConfigOwnState ||
       !dataQuery)
       ? []
-      : serverColumnPagination && legacyServerRowTotalQuery?.data
-        ? applyRowTotals(
-            result.rowData,
-            legacyServerRowTotalQuery.data as DataRecord[],
-            rowFields,
-            metricFields,
-          )
-        : result.rowData;
+      : result.rowData;
 
   return {
     ...chartProps,

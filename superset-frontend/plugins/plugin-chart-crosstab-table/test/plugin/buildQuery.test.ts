@@ -1,5 +1,6 @@
 import buildQuery, {
   ERR_CROSSTAB_BUSINESS_MATRIX_CALCULATED_FIELD,
+  ERR_CROSSTAB_ROW_VALUE_SUMMARY_METRIC,
 } from '../../src/plugin/buildQuery';
 import type { CrosstabFormData } from '../../src/types';
 import {
@@ -1231,6 +1232,68 @@ describe('crosstab buildQuery', () => {
     ]);
     expect(queryContext.queries[4].extras?.where ?? '').toContain('Shop A');
     expect(queryContext.queries[5].extras?.where ?? '').toBe('');
+  });
+
+  it('plans SQL summaries for additive totals without row-value overrides', () => {
+    const queryContext = buildQuery(
+      {
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }],
+          metrics: [{ metric: '指标值', semantic: 'additive' }],
+        },
+        serverColumnPagination: true,
+        showRowTotals: false,
+        showColumnTotals: true,
+        showRowSubtotals: false,
+        showColumnSubtotals: false,
+        columnPageSize: 98,
+        row_limit: 10000,
+      } as never,
+      {
+        ownState: {
+          currentColumnPage: 0,
+          currentColumnPageSize: 98,
+          serverColumnPageTuplesPage: 0,
+          serverColumnPageTuplesPageSize: 98,
+          serverColumnPageColumnSignature: 'biz_date',
+          serverColumnPageTuples: [['2026-05-01']],
+        },
+      } as never,
+    );
+
+    expect(queryContext.queries.map(query => query.columns)).toEqual([
+      ['biz_date'],
+      ['biz_date'],
+      ['metric_name_with_unit', 'biz_date'],
+      ['metric_name_with_unit'],
+    ]);
+  });
+
+  it('rejects row value summary metrics that the current query path cannot represent', () => {
+    expect(() =>
+      buildQuery({
+        datasource: '7__table',
+        viz_type: 'crosstab-table',
+        crosstabFieldConfig: {
+          rows: [{ field: 'metric_name_with_unit' }],
+          columns: [{ field: 'biz_date' }],
+          metrics: [{ metric: '指标值', semantic: 'additive' }],
+          rowValueSummaries: {
+            field: 'metric_name_with_unit',
+            values: [
+              {
+                value: '毛利率（%）',
+                semantic: 'ratio',
+                summaryMetric: '毛利率汇总',
+              },
+            ],
+          },
+        },
+      } as never),
+    ).toThrow(ERR_CROSSTAB_ROW_VALUE_SUMMARY_METRIC);
   });
 
   it('reloads column domain when cached server column tuples no longer match selected columns', () => {

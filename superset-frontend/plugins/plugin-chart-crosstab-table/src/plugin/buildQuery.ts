@@ -36,9 +36,10 @@ import {
   getCrosstabRowConfigs,
   getCrosstabRowValueSummaries,
   getCrosstabSemanticOverrides,
+  hasCrosstabTotalSurface,
 } from './fieldConfig';
-import { hasConfiguredSummarySemantics } from './metricSemantics';
 import { buildDimensionOrderBy, getDimensionSortFields } from './sortConfig';
+import { hasConfiguredSummarySemantics } from './metricSemantics';
 import {
   assertServerColumnPaginationShape,
   buildColumnTupleWhereClause,
@@ -63,6 +64,8 @@ const BUSINESS_MATRIX_ROW_FIELDS = new Set([
 
 export const ERR_CROSSTAB_BUSINESS_MATRIX_CALCULATED_FIELD =
   'Crosstab calculated fields do not support business matrix row dimensions.';
+export const ERR_CROSSTAB_ROW_VALUE_SUMMARY_METRIC =
+  'Crosstab row value summaryMetric is not supported by the current query path.';
 
 function appendWhere(queryObject: QueryObject, whereClause: string) {
   const existingWhere = queryObject.extras?.where;
@@ -89,6 +92,16 @@ function assertNoBusinessMatrixCalculatedFields(
 
   if (getCalculatedFields(formData).length > 0) {
     throw new Error(ERR_CROSSTAB_BUSINESS_MATRIX_CALCULATED_FIELD);
+  }
+}
+
+function assertNoRowValueSummaryMetric(formData: CrosstabFormData) {
+  if (
+    getCrosstabRowValueSummaries(formData)?.values.some(
+      summary => summary.summaryMetric !== undefined,
+    )
+  ) {
+    throw new Error(ERR_CROSSTAB_ROW_VALUE_SUMMARY_METRIC);
   }
 }
 
@@ -175,6 +188,7 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
   const columnSortFields = getDimensionSortFields(effectiveColumnConfigs);
   const baseMetricConfigs = getEffectiveCrosstabMetricConfigs(formData);
   assertNoBusinessMatrixCalculatedFields(formData, rowDimensions);
+  assertNoRowValueSummaryMetric(formData);
   const resolvedParameters = resolveCrosstabParameters(
     formData,
     options?.ownState as DynamicOwnState | undefined,
@@ -192,11 +206,14 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
   });
   const effectiveMetricConfigs = dynamicMetricResult.metricConfigs;
   const metrics = effectiveMetricConfigs.map(config => config.metric);
-  const requiresSqlSummary = hasConfiguredSummarySemantics(
-    effectiveMetricConfigs,
-    getCrosstabSemanticOverrides(formData),
-    getCrosstabRowValueSummaries(formData),
-  );
+  const rowValueSummaries = getCrosstabRowValueSummaries(formData);
+  const requiresSqlSummary =
+    hasCrosstabTotalSurface(formData) &&
+    hasConfiguredSummarySemantics(
+      effectiveMetricConfigs,
+      getCrosstabSemanticOverrides(formData),
+      rowValueSummaries,
+    );
 
   return buildQueryContext(formData, baseQueryObject => [
     ...(formData.serverColumnPagination
