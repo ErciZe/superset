@@ -1191,7 +1191,7 @@ export default function CrosstabTable({
               rulesByMetric(getMetricFromColumnId(totalColumn.key)),
               totalBackgroundColor,
               generatedColumnWidth,
-              cellFormatter,
+              undefined,
               numberFormat,
             ),
           ]

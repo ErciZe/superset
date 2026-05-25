@@ -1015,6 +1015,48 @@ describe('CrosstabTable', () => {
     expect(container.querySelectorAll('td')).toHaveLength(2);
   });
 
+  it('does not apply the cell formatter to the total column', () => {
+    renderChart(
+      baseFormatterProps(`() => ({ text: "formatted" })`, {
+        rowData: [
+          {
+            [CROSSTAB_ROW_PATH]: encodeCrosstabRowPath(['A']),
+            [CROSSTAB_ROW_LABEL]: 'A',
+            [CROSSTAB_ROW_TYPE]: 'leaf',
+            contract_type: 'A',
+            '__crosstab_col__string:4:Cash__metric__amount': 1234.56,
+            [CROSSTAB_TOTAL_COLUMN_ID]: 9999,
+          },
+        ],
+        columns: [
+          {
+            key: 'contract_type',
+            label: 'contract_type',
+            dataType: GenericDataType.String,
+          },
+          {
+            key: '__crosstab_col__string:4:Cash__metric__amount',
+            label: 'Cash amount',
+            dataType: GenericDataType.Numeric,
+            isMetric: true,
+            isNumeric: true,
+          },
+          {
+            key: CROSSTAB_TOTAL_COLUMN_ID,
+            label: 'Total',
+            dataType: GenericDataType.Numeric,
+            isMetric: true,
+            isNumeric: true,
+          },
+        ],
+      }),
+    );
+
+    expect(getByText('formatted')).toBeInTheDocument();
+    expect(getByText('9,999.0')).toBeInTheDocument();
+    expect(container.querySelectorAll('td')).toHaveLength(3);
+  });
+
   it('renders pinned row columns and nested column group headers', () => {
     const props = {
       height: 400,
