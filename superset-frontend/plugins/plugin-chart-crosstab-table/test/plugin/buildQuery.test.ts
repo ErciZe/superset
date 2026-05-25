@@ -676,6 +676,38 @@ describe('crosstab buildQuery', () => {
     );
   });
 
+  it('ignores hidden chart-local time range so dashboard filters can control time', () => {
+    const queryContext = buildQuery({
+      datasource: '11__table',
+      viz_type: 'crosstab-table',
+      groupbyRows: ['contract_type'],
+      groupbyColumns: ['biz_date'],
+      metrics: ['amount'],
+      row_limit: 10000,
+      time_range: '2025-01-01 : 2025-01-20',
+    } as never);
+
+    expect(queryContext.queries[0].time_range).toBeUndefined();
+    expect(queryContext.form_data?.time_range).toBeUndefined();
+  });
+
+  it('preserves dashboard-provided time range from extra form data', () => {
+    const queryContext = buildQuery({
+      datasource: '11__table',
+      viz_type: 'crosstab-table',
+      groupbyRows: ['contract_type'],
+      groupbyColumns: ['biz_date'],
+      metrics: ['amount'],
+      row_limit: 10000,
+      time_range: '2025-01-01 : 2025-01-20',
+      extra_form_data: {
+        time_range: '2026-05-01 : 2026-05-31',
+      },
+    } as never);
+
+    expect(queryContext.queries[0].time_range).toBe('2026-05-01 : 2026-05-31');
+  });
+
   it('de-duplicates overlapping row and column dimensions while preserving order', () => {
     const queryContext = buildQuery({
       datasource: '11__table',

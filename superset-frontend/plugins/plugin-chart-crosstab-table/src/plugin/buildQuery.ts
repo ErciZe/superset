@@ -76,6 +76,13 @@ function appendWhere(queryObject: QueryObject, whereClause: string) {
   };
 }
 
+function getDashboardContextFormData(formData: CrosstabFormData) {
+  return {
+    ...formData,
+    time_range: undefined,
+  };
+}
+
 function assertNoBusinessMatrixCalculatedFields(
   formData: CrosstabFormData,
   rowDimensions: QueryFormColumn[],
@@ -214,8 +221,9 @@ const buildQuery: BuildQuery<CrosstabFormData> = (formData, options) => {
       getCrosstabSemanticOverrides(formData),
       rowValueSummaries,
     );
+  const queryFormData = getDashboardContextFormData(formData);
 
-  return buildQueryContext(formData, baseQueryObject => [
+  return buildQueryContext(queryFormData, baseQueryObject => [
     ...(formData.serverColumnPagination
       ? (() => {
           assertServerColumnPaginationShape(
