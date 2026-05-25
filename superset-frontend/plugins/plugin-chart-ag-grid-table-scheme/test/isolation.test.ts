@@ -3,10 +3,11 @@ import path from 'path';
 
 const sourceRoot = path.resolve(__dirname, '../src');
 
+const officialTablePackage = 'plugin-chart-ag-grid-table';
 const disallowedImports = [
-  '../../plugin-chart-ag-grid-table/src/',
-  '../../../plugin-chart-ag-grid-table/src/',
-  '@superset-ui/plugin-chart-ag-grid-table/src/',
+  `../../${officialTablePackage}/src/`,
+  `../../../${officialTablePackage}/src/`,
+  `@superset-ui/${officialTablePackage}/src/`,
 ];
 
 const collectSourceFiles = (directory: string): string[] =>

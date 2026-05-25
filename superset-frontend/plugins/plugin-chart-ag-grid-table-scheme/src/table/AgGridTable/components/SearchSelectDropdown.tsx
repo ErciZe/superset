@@ -16,12 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import {
-  SearchOption,
-} from '@superset-ui/plugin-chart-ag-grid-table-scheme/table/types';
-import {
-  StyledSelect,
-} from '@superset-ui/plugin-chart-ag-grid-table-scheme/table/styles';
+import { SearchOption } from '../../types';
+import { StyledSelect } from '../../styles';
 
 interface SearchSelectDropdownProps {
   /** The currently selected search column value */

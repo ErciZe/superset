@@ -29,7 +29,7 @@ import {
   CustomHeaderParams,
   SortState,
   UserProvidedColDef,
-} from '@superset-ui/plugin-chart-ag-grid-table-scheme/table/types';
+} from '../../types';
 import CustomPopover from './CustomPopover';
 import {
   Container,
@@ -38,7 +38,7 @@ import {
   HeaderLabel,
   MenuContainer,
   SortIconWrapper,
-} from '@superset-ui/plugin-chart-ag-grid-table-scheme/table/styles';
+} from '../../styles';
 
 const getSortIcon = (sortState: SortState[], colId: string | null) => {
   if (!sortState?.length || !colId) return null;

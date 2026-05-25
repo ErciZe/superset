@@ -32,7 +32,7 @@ import {
   PageCount,
   PageButton,
   ButtonGroup,
-} from '@superset-ui/plugin-chart-ag-grid-table-scheme/table/styles';
+} from '../../styles';
 
 interface PaginationProps {
   currentPage: number;

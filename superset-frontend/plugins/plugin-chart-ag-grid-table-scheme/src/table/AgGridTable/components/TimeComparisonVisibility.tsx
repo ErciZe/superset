@@ -25,7 +25,7 @@ import {
   InfoText,
   ColumnLabel,
   CheckIconWrapper,
-} from '@superset-ui/plugin-chart-ag-grid-table-scheme/table/styles';
+} from '../../styles';
 
 interface ComparisonColumn {
   key: string;

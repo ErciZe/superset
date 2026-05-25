@@ -20,7 +20,7 @@ import { useEffect, useRef, useState, cloneElement } from 'react';
 import {
   PopoverContainer,
   PopoverWrapper,
-} from '@superset-ui/plugin-chart-ag-grid-table-scheme/table/styles';
+} from '../../styles';
 
 interface Props {
   content: React.ReactNode;
