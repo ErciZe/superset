@@ -3,7 +3,8 @@
 ## Local Source
 
 - Branch: `noway-release`
-- Commit: `4be32d1fcc33768e617b10b5e91cee4f47caf231`
+- Deployed source commit: `4be32d1fcc33768e617b10b5e91cee4f47caf231`
+- Closeout report commit: `f6ca06f1b267eeb3c3d780728cf7f1b4d21a280a`
 - Divergence before closeout report: `HEAD...fork/noway-release` = `17 0`
 - Release commits:
   - `4be32d1fcc chore(i18n): update zh translations for noway release`
@@ -38,7 +39,9 @@
 - Asset backup: `backups/assets-20260525183945`
 - zh runtime backup: `backups/zh-LC_MESSAGES-20260525183945`
 - zh builder-source backup: `backups/superset-zh-messages-20260525184939.json`, `backups/superset-zh-messages-20260525184939.po`
-- Deployment note: production Dockerfile overlays zh output from `superset-zh`; the release synced both `superset-source/superset/translations/zh/LC_MESSAGES/*` and `superset-zh` before the final image rebuild.
+- zh builder source: `/home/ubuntu/superset-docker/superset-zh` was at detached `HEAD` `a364634b07343297967eb34dc4c482ee3c08c748` with dirty `messages.json` and `translations/zh/LC_MESSAGES/messages.po`.
+- zh builder checksums: `messages.json` = `2477cd38a8b9d52d53f0e5425dee5217254f176b1e3343b164a498c192f237b5`; `translations/zh/LC_MESSAGES/messages.po` = `a67b9121420996b3f04c70fbf0c68e449a00707d8c3fdfdaa34180ab7e6c5062`.
+- Deployment note: production Dockerfile overlays zh output from `superset-zh`; the release synced both `superset-source/superset/translations/zh/LC_MESSAGES/*` and `superset-zh` before the final image rebuild. Because the remote `superset-zh` tree is dirty, rebuild provenance depends on the recorded checksums, not only on its git commit.
 
 ## Browser Acceptance
 

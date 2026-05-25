@@ -95,3 +95,29 @@ Date: 2026-05-21
 - Dynamic slot disabled-value hotfix is production-tested complete.
 - Copied-chart V3.1.1/V3.2 browser acceptance is still pending because authenticated Explore access is required and no copied-chart URL has been recorded yet.
 - Formal slice 10 metadata update remains gated until copied-chart acceptance passes.
+
+## Current Slice Temporary Browser Acceptance
+
+- Date: 2026-05-21.
+- Target: `http://111.230.91.24:8088/explore/?dashboard_page_id=46-PPo9Im44OCNY7jp1J9&slice_id=10`.
+- Scope boundary: used a temporary Explore `form_data_key`; did not save, copy, or mutate formal slice 10 metadata.
+- Browser result: PASS for temporary V3.2 dynamic metric acceptance.
+  - Fresh Chrome Explore load had no `TypeError: Cannot read properties of undefined (reading 'map')`.
+  - `定制化配置` renders `Dynamic metrics`.
+  - Temporary `dynamicMetric` slot `primary_metric` rendered chart toolbar selector `data-test="crosstab-dynamic-metric-control--primary_metric"`.
+  - Selector options `销售额`, `毛利率`, and `平均售价` all switched without alert or console error.
+- Screenshots:
+  - `docs/superpowers/reports/2026-05-21-crosstab-v3-2-temp-sales.png`
+  - `docs/superpowers/reports/2026-05-21-crosstab-v3-2-temp-margin-rate.png`
+  - `docs/superpowers/reports/2026-05-21-crosstab-v3-2-temp-average-price.png`
+- Visible current-page values under existing server-column pagination (`列 1-8 / 389`):
+  - `销售额（金额）` visible total: `3,142.64`.
+  - `毛利率（%）` visible total: `-9.51`.
+  - `平均售价（金额）` visible total: `98.70`.
+- Baseline caveat: the full SQL baseline `销售额=567999.82`, `毛利率=-9.5145`, `平均售价=98.6968` is not fully visible on the first paginated browser column page. The browser evidence confirms the rendered visible totals round consistently for ratio/average (`-9.51`, `98.70`) and preserves the paginated sales row, but this temporary current-slice check should not be recorded as copied-chart/full-total acceptance.
+- State isolation:
+  - URL did not include `selectedDynamicMetric` or `selectedDynamicGroupBy`.
+  - Formal slice 10 metadata still has no `dynamicMetric`.
+- Logs:
+  - Strict post-check scan for `TypeError`, `Cannot read`, `ERR_CROSSTAB`, `:ERROR:`, and `:CRITICAL:` returned no entries.
+  - Broad `ERROR` substring scan can match the logger name `superset.views.error_handling`; those entries were WARNING-level `HTTPException` noise, not `ERROR`/`CRITICAL`.
