@@ -995,7 +995,7 @@ msgid "Additional text to add before or after the value, e.g. unit"
 msgstr "附加文本到数据前(后)，例如：单位"
 
 msgid "Additive"
-msgstr "附加"
+msgstr "可加"
 
 msgid ""
 "Adds color to the chart symbols based on the positive or negative change "
@@ -4203,7 +4203,7 @@ msgid "Did you mean:"
 msgstr "您的意思是："
 
 msgid "Difference"
-msgstr "差异"
+msgstr "差值"
 
 #, fuzzy
 msgid "Dim Gray"
@@ -14686,3 +14686,233 @@ msgstr "显示用于切换、保存和重置列配置方案的工具栏。"
 
 msgid "Table V2 with Column Schemes"
 msgstr "列配置表格 V2"
+
+msgid "Add option"
+msgstr "添加选项"
+
+msgid "Add slot"
+msgstr "添加槽位"
+
+msgid "Adjustment rate"
+msgstr "调整系数"
+
+msgid "Calculated field"
+msgstr "计算字段"
+
+msgid "Calculated field name"
+msgstr "计算字段名称"
+
+msgid "Calculated field template"
+msgstr "计算字段模板"
+
+msgid "Calculated fields"
+msgstr "计算字段"
+
+msgid "Calculated fields require crosstab field config updates."
+msgstr "计算字段需要更新交叉表字段配置。"
+
+msgid "Calculated fields require two saved metrics."
+msgstr "计算字段需要两个已保存指标。"
+
+msgid "Column page size"
+msgstr "列分页大小"
+
+msgid "Column subtotals"
+msgstr "列小计"
+
+msgid "Column totals"
+msgstr "列总计"
+
+msgid "Columns to use as crosstab columns."
+msgstr "用作交叉表列的维度。"
+
+#, python-format
+msgid "Columns %s-%s / %s"
+msgstr "列 %s-%s / %s"
+
+msgid "Configure chart-local dynamic group-by slots."
+msgstr "配置图表内动态分组槽位。"
+
+msgid "Configure chart-local dynamic metric slots."
+msgstr "配置图表内动态指标槽位。"
+
+msgid "Configure chart-local numeric parameters."
+msgstr "配置图表内数字参数。"
+
+msgid "Configure crosstab rows, columns, and metrics."
+msgstr "配置交叉表行、列和指标。"
+
+msgid "Create SQL-backed crosstab calculated fields."
+msgstr "创建基于 SQL 的交叉表计算字段。"
+
+msgid "Crosstab"
+msgstr "交叉表"
+
+msgid "Crosstab Table"
+msgstr "交叉表"
+
+msgid "Crosstab parameter numeric fields require finite numbers."
+msgstr "交叉表参数数字字段必须是有限数字。"
+
+msgid "Crosstab table chart."
+msgstr "交叉表图表。"
+
+msgid "Default"
+msgstr "默认值"
+
+msgid "Default option"
+msgstr "默认选项"
+
+msgid "Default row expanded depth"
+msgstr "默认行展开深度"
+
+msgid "Delete option"
+msgstr "删除选项"
+
+msgid "Delete slot"
+msgstr "删除槽位"
+
+msgid "Dimensions to use as crosstab rows."
+msgstr "用作交叉表行的维度。"
+
+msgid "Distinct count"
+msgstr "去重计数"
+
+msgid "Dynamic group by"
+msgstr "动态分组"
+
+msgid "Dynamic metrics"
+msgstr "动态指标"
+
+msgid "Enable dynamic group by"
+msgstr "启用动态分组"
+
+msgid "Enable dynamic metrics"
+msgstr "启用动态指标"
+
+msgid "Export crosstab CSV"
+msgstr "导出交叉表 CSV"
+
+msgid "Fields"
+msgstr "字段"
+
+msgid "Generated column width"
+msgstr "生成列宽度"
+
+msgid "Group dimension"
+msgstr "分组维度"
+
+msgid "JSON rules for crosstab numeric cell formatting."
+msgstr "用于交叉表数值单元格格式化的 JSON 规则。"
+
+msgid "Max generated columns"
+msgstr "最大生成列数"
+
+msgid "Metric A"
+msgstr "指标 A"
+
+msgid "Metric B"
+msgstr "指标 B"
+
+msgid "Metric semantic"
+msgstr "指标语义"
+
+msgid "Metric semantic overrides"
+msgstr "指标语义覆盖"
+
+msgid "New calculated field"
+msgstr "新增计算字段"
+
+msgid "Next crosstab columns"
+msgstr "下一页交叉表列"
+
+msgid "Number parameter"
+msgstr "数字参数"
+
+#, python-format
+msgid "Option %s"
+msgstr "选项 %s"
+
+msgid "Option id"
+msgstr "选项 ID"
+
+msgid "Option label"
+msgstr "选项标签"
+
+msgid "Parameter default"
+msgstr "参数默认值"
+
+msgid "Parameter label"
+msgstr "参数标签"
+
+msgid "Parameter max"
+msgstr "参数最大值"
+
+msgid "Parameter min"
+msgstr "参数最小值"
+
+msgid "Parameter name"
+msgstr "参数名称"
+
+msgid "Parameter step"
+msgstr "参数步长"
+
+msgid "Parameterized profit ratio"
+msgstr "含参毛利率"
+
+msgid "Parameterized ratio"
+msgstr "含参比率"
+
+msgid "Placement"
+msgstr "放置位置"
+
+msgid "Previous crosstab columns"
+msgstr "上一页交叉表列"
+
+msgid "Query one page of generated crosstab columns at a time."
+msgstr "每次查询一页生成的交叉表列。"
+
+msgid "Row subtotals"
+msgstr "行小计"
+
+msgid "Row totals"
+msgstr "行总计"
+
+#, python-format
+msgid "Select crosstab group by dimension %s"
+msgstr "选择交叉表分组维度 %s"
+
+#, python-format
+msgid "Select crosstab metric %s"
+msgstr "选择交叉表指标 %s"
+
+msgid "Semantic override field"
+msgstr "语义覆盖字段"
+
+msgid "Semantic overrides"
+msgstr "语义覆盖"
+
+msgid "Server column pagination"
+msgstr "服务端列分页"
+
+#, python-format
+msgid "Slot %s"
+msgstr "槽位 %s"
+
+msgid "Slot id"
+msgstr "槽位 ID"
+
+msgid "Slot index"
+msgstr "槽位索引"
+
+msgid "Slot label"
+msgstr "槽位标签"
+
+msgid "Splice count"
+msgstr "替换数量"
+
+msgid "Step"
+msgstr "步长"
+
+msgid "Unsupported calculated field template."
+msgstr "不支持的计算字段模板。"
