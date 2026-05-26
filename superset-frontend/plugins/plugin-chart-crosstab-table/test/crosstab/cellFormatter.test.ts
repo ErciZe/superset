@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { GenericDataType } from '@superset-ui/core';
+import { GenericDataType } from '@apache-superset/core/common';
 import {
   CROSSTAB_CELL_FORMATTER_CALLBACK_DEFAULT,
   createCrosstabCellFormatter,

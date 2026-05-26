@@ -40,7 +40,8 @@ import {
   IMenuActionParams,
 } from '@superset-ui/core/components/ThemedAgGridReact';
 import { type FunctionComponent } from 'react';
-import { JsonObject, DataRecordValue, DataRecord, t } from '@superset-ui/core';
+import { t } from '@apache-superset/core/translation';
+import { JsonObject, DataRecordValue, DataRecord } from '@superset-ui/core';
 import { SearchOutlined } from '@ant-design/icons';
 import { debounce, isEqual } from 'lodash';
 import Pagination from './components/Pagination';

@@ -19,10 +19,10 @@
 import {
   DataRecord,
   DataRecordValue,
-  GenericDataType,
   getTimeFormatterForGranularity,
-  t,
 } from '@superset-ui/core';
+import { GenericDataType } from '@apache-superset/core/common';
+import { t } from '@apache-superset/core/translation';
 import { useCallback, useEffect, useState, useMemo } from 'react';
 import { isEqual } from 'lodash';
 

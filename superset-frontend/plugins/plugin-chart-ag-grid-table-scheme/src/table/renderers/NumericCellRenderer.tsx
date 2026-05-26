@@ -16,7 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { sanitizeHtml, styled } from '@superset-ui/core';
+import { styled } from '@apache-superset/core/theme';
+import { sanitizeHtml } from '@superset-ui/core';
 import { CustomCellRendererProps } from '@superset-ui/core/components/ThemedAgGridReact';
 import {
   AdditionalCellFormatter,

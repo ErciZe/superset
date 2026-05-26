@@ -43,7 +43,6 @@ import {
 import {
   ensureIsArray,
   FeatureFlag,
-  GenericDataType,
   isAdhocColumn,
   isFeatureEnabled,
   isPhysicalColumn,
@@ -51,10 +50,11 @@ import {
   QueryFormColumn,
   QueryMode,
   SMART_DATE_ID,
-  t,
   validateMaxValue,
   validateServerPagination,
 } from '@superset-ui/core';
+import { GenericDataType } from '@apache-superset/core/common';
+import { t } from '@apache-superset/core/translation';
 
 import { isEmpty, last } from 'lodash';
 import { PAGE_SIZE_OPTIONS, SERVER_PAGE_SIZE_OPTIONS } from './consts';

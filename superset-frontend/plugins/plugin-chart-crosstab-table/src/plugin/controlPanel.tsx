@@ -22,7 +22,8 @@ import {
   sharedControls,
   sharedControlComponents,
 } from '@superset-ui/chart-controls';
-import { t, validateInteger } from '@superset-ui/core';
+import { t } from '@apache-superset/core/translation';
+import { validateInteger } from '@superset-ui/core';
 import CrosstabCalculatedFieldsControl from './CrosstabCalculatedFieldsControl';
 import CrosstabDynamicGroupByControl from './CrosstabDynamicGroupByControl';
 import CrosstabDynamicMetricControl from './CrosstabDynamicMetricControl';

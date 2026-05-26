@@ -742,12 +742,11 @@ describe('CrosstabTable', () => {
 
     renderChart(props);
 
-    expect(getByText('↑ 12')).toHaveStyle({
-      color: 'green',
-      backgroundColor: 'white',
-    });
+    expect(getByText('↑ 12')).toHaveStyle(`
+      color: rgb(0, 128, 0);
+      background-color: rgb(255, 255, 255);
+    `);
     expect(getByText('2')).toHaveStyle({
-      color: '',
       backgroundColor: 'rgba(0, 0, 0, 0.06)',
     });
 
@@ -949,14 +948,14 @@ describe('CrosstabTable', () => {
       ),
     );
 
-    expect(getCellByText('↑ 1,234.6')).toHaveStyle({
-      color: 'green',
-      backgroundColor: 'white',
-    });
-    expect(getCellByText('↑ 2,345.7')).toHaveStyle({
-      color: 'green',
-      backgroundColor: 'white',
-    });
+    expect(getCellByText('↑ 1,234.6')).toHaveStyle(`
+      color: rgb(0, 128, 0);
+      background-color: rgb(255, 255, 255);
+    `);
+    expect(getCellByText('↑ 2,345.7')).toHaveStyle(`
+      color: rgb(0, 128, 0);
+      background-color: rgb(255, 255, 255);
+    `);
   });
 
   it('lets formatter style override conditional formatting colors', () => {
@@ -995,10 +994,10 @@ describe('CrosstabTable', () => {
       ),
     );
 
-    expect(getCellByText('styled')).toHaveStyle({
-      color: 'purple',
-      backgroundColor: 'yellow',
-    });
+    expect(getCellByText('styled')).toHaveStyle(`
+      color: rgb(128, 0, 128);
+      background-color: rgb(255, 255, 0);
+    `);
   });
 
   it('does not apply the cell formatter to row dimension cells', () => {

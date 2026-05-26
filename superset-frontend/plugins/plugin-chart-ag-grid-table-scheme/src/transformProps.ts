@@ -18,11 +18,11 @@
  */
 import {
   ensureIsArray,
-  GenericDataType,
   getMetricLabel,
   type DataRecordValue,
   type TimeFormatter,
 } from '@superset-ui/core';
+import { GenericDataType } from '@apache-superset/core/common';
 import officialTransformProps from './table/transformProps';
 import type { TableChartProps } from './table/types';
 import DateWithFormatter from './table/utils/DateWithFormatter';

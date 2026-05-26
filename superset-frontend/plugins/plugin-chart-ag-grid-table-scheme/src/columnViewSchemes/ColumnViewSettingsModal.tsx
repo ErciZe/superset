@@ -5,7 +5,8 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { styled, t } from '@superset-ui/core';
+import { styled } from '@apache-superset/core/theme';
+import { t } from '@apache-superset/core/translation';
 import { Button, Checkbox, Input, Modal, Space } from 'antd';
 import {
   SortableContainer,
