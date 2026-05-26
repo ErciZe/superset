@@ -21,11 +21,11 @@ import {
   ensureIsArray,
   getColumnLabel,
   getMetricLabel,
-  styled,
-  t,
   type QueryFormColumn,
   type QueryFormMetric,
 } from '@superset-ui/core';
+import { styled } from '@apache-superset/core/theme';
+import { t } from '@apache-superset/core/translation';
 import { Button } from '@superset-ui/core/components';
 import { Icons } from '@superset-ui/core/components/Icons';
 import type { ColumnMeta, Metric } from '@superset-ui/chart-controls';
@@ -188,9 +188,9 @@ type SortEditorTarget = {
 function hasConfig(value?: CrosstabFieldConfig) {
   return Boolean(
     value &&
-      ((value.rows?.length ?? 0) > 0 ||
-        (value.columns?.length ?? 0) > 0 ||
-        (value.metrics?.length ?? 0) > 0),
+    ((value.rows?.length ?? 0) > 0 ||
+      (value.columns?.length ?? 0) > 0 ||
+      (value.metrics?.length ?? 0) > 0),
   );
 }
 

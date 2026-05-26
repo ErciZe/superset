@@ -17,7 +17,8 @@
  * under the License.
  */
 import { useCallback, useState } from 'react';
-import { styled, t } from '@superset-ui/core';
+import { styled } from '@apache-superset/core/theme';
+import { t } from '@apache-superset/core/translation';
 import { Button, Input } from '@superset-ui/core/components';
 import ControlHeader from '../../../../src/explore/components/ControlHeader';
 import type { CrosstabFormData, CrosstabParameter } from '../types';

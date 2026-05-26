@@ -22,17 +22,10 @@ import configureStore from 'redux-mock-store';
 
 import { render, screen, userEvent } from 'spec/helpers/testing-library';
 
-import { NO_TIME_RANGE, fetchTimeRange } from '@superset-ui/core';
+import { NO_TIME_RANGE } from '@superset-ui/core';
 import DateFilterLabel from '..';
 import { DateFilterControlProps } from '../types';
 import { DateFilterTestKey } from '../utils';
-
-jest.mock('@superset-ui/core', () => ({
-  ...jest.requireActual('@superset-ui/core'),
-  fetchTimeRange: jest.fn(),
-}));
-
-const mockedFetchTimeRange = fetchTimeRange as jest.Mock;
 
 const mockStore = configureStore([thunk]);
 
@@ -41,15 +34,6 @@ const defaultProps = {
   onClosePopover: jest.fn(),
   onOpenPopover: jest.fn(),
 };
-
-beforeEach(() => {
-  jest.clearAllMocks();
-  mockedFetchTimeRange.mockImplementation(async (timeRange: string) => ({
-    value: timeRange,
-    since: '2024-01-15T00:00:00',
-    until: '2024-02-01T00:00:00',
-  }));
-});
 
 function setup(
   props: Omit<DateFilterControlProps, 'name'> = defaultProps,
@@ -110,26 +94,45 @@ test('Open and close popover', () => {
   expect(screen.queryByText('Edit time range')).not.toBeInTheDocument();
 });
 
-test('DateFilter blocks applying a range outside chart filter bounds', async () => {
-  mockedFetchTimeRange.mockResolvedValue({
-    value: '2023-12-31 ≤ col < 2024-02-01',
-    since: '2023-12-31T00:00:00',
-    until: '2024-02-01T00:00:00',
-  });
+test('DateFilter popover should attach to document.body when not overflowing', () => {
+  render(setup({ ...defaultProps, isOverflowingFilterBar: false }));
 
-  render(
-    setup({
-      ...defaultProps,
-      value: '2023-12-31 : 2024-02-01',
-      timeRangeBounds: {
-        min: '2024-01-01T00:00:00',
-        max: '2024-04-01T00:00:00',
-      },
-    }),
+  userEvent.click(screen.getByText(NO_TIME_RANGE));
+
+  const popover = document.querySelector('.time-range-popover');
+  expect(popover?.parentElement).toBe(document.body);
+});
+
+test('DateFilter popover should attach to parent node when overflowing in filter bar', () => {
+  render(setup({ ...defaultProps, isOverflowingFilterBar: true }));
+
+  userEvent.click(screen.getByText(NO_TIME_RANGE));
+
+  const popover = document.querySelector('.time-range-popover');
+  const trigger = screen.getByTestId(DateFilterTestKey.PopoverOverlay);
+
+  expect(popover?.parentElement).toBe(trigger.parentElement);
+});
+
+test('DateFilter should properly handle isOverflowingFilterBar prop changes', () => {
+  const { rerender } = render(
+    setup({ ...defaultProps, isOverflowingFilterBar: false }),
   );
 
-  userEvent.click(screen.getByText('2023-12-31 : 2024-02-01'));
+  // When not overflowing, popover should attach to document.body
+  userEvent.click(screen.getByText(NO_TIME_RANGE));
+  const popover = document.querySelector('.time-range-popover');
+  expect(popover?.parentElement).toBe(document.body);
 
-  expect(await screen.findByText(/chart filter bounds/i)).toBeInTheDocument();
-  expect(screen.getByTestId(DateFilterTestKey.ApplyButton)).toBeDisabled();
+  userEvent.click(screen.getByText('CANCEL'));
+
+  // When overflowing, popover should attach to parent node
+  rerender(setup({ ...defaultProps, isOverflowingFilterBar: true }));
+  userEvent.click(screen.getByText(NO_TIME_RANGE));
+
+  const popoverAfterRerender = document.querySelector('.time-range-popover');
+  const trigger = screen.getByTestId(DateFilterTestKey.PopoverOverlay);
+
+  expect(popoverAfterRerender?.parentElement).toBe(trigger.parentElement);
+  expect(popoverAfterRerender?.parentElement).not.toBe(document.body);
 });

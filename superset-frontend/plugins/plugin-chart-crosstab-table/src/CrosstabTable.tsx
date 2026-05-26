@@ -29,11 +29,11 @@ import {
   Select,
   ThemedAgGridReact,
 } from '@superset-ui/core/components';
+import { GenericDataType } from '@apache-superset/core/common';
+import { t } from '@apache-superset/core/translation';
+import { useTheme } from '@apache-superset/core/theme';
 import {
-  GenericDataType,
   sanitizeHtml,
-  t,
-  useTheme,
   type DataRecord,
   type DataRecordValue,
 } from '@superset-ui/core';

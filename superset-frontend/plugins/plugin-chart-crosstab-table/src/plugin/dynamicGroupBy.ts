@@ -16,7 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { getColumnLabel, t, type QueryFormColumn } from '@superset-ui/core';
+import { t } from '@apache-superset/core/translation';
+import { getColumnLabel, type QueryFormColumn } from '@superset-ui/core';
 import type {
   CrosstabDynamicGroupByConfig,
   CrosstabDynamicGroupByInput,

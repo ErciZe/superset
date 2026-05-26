@@ -17,7 +17,8 @@
  * under the License.
  */
 import { useState } from 'react';
-import { styled, t } from '@superset-ui/core';
+import { styled } from '@apache-superset/core/theme';
+import { t } from '@apache-superset/core/translation';
 import { Button, Input, Modal, Popconfirm, Select, Space } from 'antd';
 import type {
   ColDef,

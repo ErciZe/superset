@@ -27,7 +27,6 @@ import {
   DataRecord,
   DataRecordValue,
   DataRecordFilters,
-  GenericDataType,
   QueryMode,
   ChartDataResponseResult,
   QueryFormData,
@@ -37,6 +36,7 @@ import {
   JsonObject,
   Metric,
 } from '@superset-ui/core';
+import { GenericDataType } from '@apache-superset/core/common';
 import {
   CellClassParams,
   ColDef,

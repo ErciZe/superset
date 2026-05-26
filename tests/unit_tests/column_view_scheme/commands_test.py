@@ -138,6 +138,7 @@ def test_find_default_prefers_dashboard_scope_over_chart_level(
 
     result = ColumnViewSchemeDAO.find_default(10, 20, 1)
 
+    assert result is not None
     assert result.name == "dashboard default"
 
 

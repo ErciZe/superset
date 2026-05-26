@@ -16,17 +16,19 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { ReactNode, useCallback, useState, useEffect, useMemo } from 'react';
+import { ReactNode, useState, useEffect, useMemo } from 'react';
+import { t } from '@apache-superset/core/translation';
 import {
-  css,
-  styled,
-  t,
-  useTheme,
   NO_TIME_RANGE,
-  SupersetTheme,
   useCSSTextTruncation,
   fetchTimeRange,
 } from '@superset-ui/core';
+import {
+  css,
+  styled,
+  useTheme,
+  SupersetTheme,
+} from '@apache-superset/core/theme';
 import {
   Button,
   Constants,
@@ -43,10 +45,8 @@ import ControlPopover from '../ControlPopover/ControlPopover';
 import { DateFilterControlProps, FrameType } from './types';
 import {
   DateFilterTestKey,
-  formatTimeRangeBounds,
   FRAME_OPTIONS,
   guessFrame,
-  isTimeRangeWithinBounds,
   useDefaultTimeFilter,
 } from './utils';
 import {
@@ -125,7 +125,7 @@ const getTooltipTitle = (
 ) =>
   isLabelTruncated ? (
     <div>
-      {label && <strong>{label}</strong>}
+      {label && <strong>{t(label)}</strong>}
       {range && (
         <div
           css={(theme: SupersetTheme) => css`
@@ -147,7 +147,6 @@ export default function DateFilterLabel(props: DateFilterControlProps) {
     onOpenPopover = noOp,
     onClosePopover = noOp,
     isOverflowingFilterBar = false,
-    timeRangeBounds,
   } = props;
   const defaultTimeFilter = useDefaultTimeFilter();
 
@@ -161,21 +160,9 @@ export default function DateFilterLabel(props: DateFilterControlProps) {
   const [timeRangeValue, setTimeRangeValue] = useState(value);
   const [validTimeRange, setValidTimeRange] = useState<boolean>(false);
   const [evalResponse, setEvalResponse] = useState<string>(value);
-  const [tooltipTitle, setTooltipTitle] = useState<ReactNode | null>(value);
+  const [tooltipTitle, setTooltipTitle] = useState<ReactNode | null>(t(value));
   const theme = useTheme();
   const [labelRef, labelIsTruncated] = useCSSTextTruncation<HTMLSpanElement>();
-
-  const getBoundsError = useCallback(
-    (since?: string, until?: string) =>
-      timeRangeBounds &&
-      !isTimeRangeWithinBounds({ since, until }, timeRangeBounds)
-        ? t(
-            'Time range must be within chart filter bounds: %s',
-            formatTimeRangeBounds(timeRangeBounds),
-          )
-        : undefined,
-    [timeRangeBounds],
-  );
 
   useEffect(() => {
     if (value === NO_TIME_RANGE) {
@@ -184,15 +171,13 @@ export default function DateFilterLabel(props: DateFilterControlProps) {
       setValidTimeRange(true);
       return;
     }
-    fetchTimeRange(value).then(
-      ({ value: actualRange, error, since, until }) => {
-        if (error) {
-          setEvalResponse(error || '');
-          setValidTimeRange(false);
-          setTooltipTitle(value || null);
-        } else {
-          const boundsError = getBoundsError(since, until);
-          /*
+    fetchTimeRange(value).then(({ value: actualRange, error }) => {
+      if (error) {
+        setEvalResponse(error || '');
+        setValidTimeRange(false);
+        setTooltipTitle(t(value) || null);
+      } else {
+        /*
           HRT == human readable text
           ADR == actual datetime range
           +--------------+------+----------+--------+----------+-----------+
@@ -203,29 +188,28 @@ export default function DateFilterLabel(props: DateFilterControlProps) {
           | tooltip      | ADR  | ADR      | HRT    | HRT      |   ADR     |
           +--------------+------+----------+--------+----------+-----------+
         */
-          if (
-            guessedFrame === 'Common' ||
-            guessedFrame === 'Calendar' ||
-            guessedFrame === 'Current' ||
-            guessedFrame === 'No filter'
-          ) {
-            setActualTimeRange(value);
-            setTooltipTitle(
-              getTooltipTitle(labelIsTruncated, value, actualRange),
-            );
-          } else {
-            setActualTimeRange(actualRange || '');
-            setTooltipTitle(
-              getTooltipTitle(labelIsTruncated, actualRange, value),
-            );
-          }
-          setEvalResponse(boundsError || actualRange || '');
-          setValidTimeRange(!boundsError);
+        if (
+          guessedFrame === 'Common' ||
+          guessedFrame === 'Calendar' ||
+          guessedFrame === 'Current' ||
+          guessedFrame === 'No filter'
+        ) {
+          setActualTimeRange(value);
+          setTooltipTitle(
+            getTooltipTitle(labelIsTruncated, value, actualRange),
+          );
+        } else {
+          setActualTimeRange(actualRange || '');
+          setTooltipTitle(
+            getTooltipTitle(labelIsTruncated, actualRange, value),
+          );
         }
-        setLastFetchedTimeRange(value);
-      },
-    );
-  }, [getBoundsError, guessedFrame, labelIsTruncated, labelRef, value]);
+        setValidTimeRange(true);
+      }
+      setLastFetchedTimeRange(value);
+      setEvalResponse(actualRange || value);
+    });
+  }, [guessedFrame, labelIsTruncated, labelRef, value]);
 
   useDebouncedEffect(
     () => {
@@ -236,23 +220,20 @@ export default function DateFilterLabel(props: DateFilterControlProps) {
         return;
       }
       if (lastFetchedTimeRange !== timeRangeValue) {
-        fetchTimeRange(timeRangeValue).then(
-          ({ value: actualRange, error, since, until }) => {
-            if (error) {
-              setEvalResponse(error || '');
-              setValidTimeRange(false);
-            } else {
-              const boundsError = getBoundsError(since, until);
-              setEvalResponse(boundsError || actualRange || '');
-              setValidTimeRange(!boundsError);
-            }
-            setLastFetchedTimeRange(timeRangeValue);
-          },
-        );
+        fetchTimeRange(timeRangeValue).then(({ value: actualRange, error }) => {
+          if (error) {
+            setEvalResponse(error || '');
+            setValidTimeRange(false);
+          } else {
+            setEvalResponse(actualRange || '');
+            setValidTimeRange(true);
+          }
+          setLastFetchedTimeRange(timeRangeValue);
+        });
       }
     },
     Constants.SLOW_DEBOUNCE,
-    [getBoundsError, timeRangeValue],
+    [timeRangeValue],
   );
 
   function onSave() {
@@ -379,7 +360,7 @@ export default function DateFilterLabel(props: DateFilterControlProps) {
       open={show}
       onOpenChange={toggleOverlay}
       overlayStyle={{ width: '600px' }}
-      destroyTooltipOnHide
+      destroyOnHidden
       getPopupContainer={nodeTrigger =>
         isOverflowingFilterBar
           ? (nodeTrigger.parentNode as HTMLElement)

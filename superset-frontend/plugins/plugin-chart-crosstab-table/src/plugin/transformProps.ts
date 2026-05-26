@@ -19,13 +19,13 @@
 import {
   getColumnLabel,
   getMetricLabel,
-  t,
   type ChartProps,
   type DataRecord,
   type DataRecordValue,
   type QueryFormColumn,
   type QueryFormMetric,
 } from '@superset-ui/core';
+import { t } from '@apache-superset/core/translation';
 import { buildCrosstab } from '../crosstab/engine';
 import { parseConditionalFormatting } from '../crosstab/formatting';
 import type {

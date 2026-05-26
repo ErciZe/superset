@@ -25,7 +25,6 @@ import {
   ensureIsArray,
   extractTimegrain,
   FeatureFlag,
-  GenericDataType,
   getMetricLabel,
   getNumberFormatter,
   getTimeFormatter,
@@ -34,10 +33,11 @@ import {
   NumberFormats,
   QueryMode,
   SMART_DATE_ID,
-  t,
   TimeFormats,
   TimeFormatter,
 } from '@superset-ui/core';
+import { GenericDataType } from '@apache-superset/core/common';
+import { t } from '@apache-superset/core/translation';
 
 import { isEmpty, isEqual } from 'lodash';
 import {

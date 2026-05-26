@@ -16,7 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { GenericDataType, type DataRecordValue } from '@superset-ui/core';
+import { GenericDataType } from '@apache-superset/core/common';
+import { type DataRecordValue } from '@superset-ui/core';
 import type { DataColumnMeta } from '@superset-ui/plugin-chart-ag-grid-table/src/types';
 import type { ColDef } from '@superset-ui/core/components/ThemedAgGridReact';
 import type { CSSProperties } from 'react';

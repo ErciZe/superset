@@ -17,7 +17,9 @@
  * under the License.
  */
 import { useEffect, useState } from 'react';
-import { getColumnLabel, styled, t } from '@superset-ui/core';
+import { styled } from '@apache-superset/core/theme';
+import { t } from '@apache-superset/core/translation';
+import { getColumnLabel } from '@superset-ui/core';
 import type { ColumnMeta } from '@superset-ui/chart-controls';
 import { Modal, Select } from '@superset-ui/core/components';
 import type {
