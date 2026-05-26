@@ -17,7 +17,7 @@
  * under the License.
  */
 import '@testing-library/jest-dom';
-import { GenericDataType } from '@superset-ui/core';
+import { GenericDataType } from '@apache-superset/core/common';
 import type { ComponentProps, CSSProperties, ReactNode } from 'react';
 import ReactDOM from 'react-dom';
 import { act, Simulate } from 'react-dom/test-utils';

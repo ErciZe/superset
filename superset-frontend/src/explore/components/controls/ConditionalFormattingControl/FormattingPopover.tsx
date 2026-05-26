@@ -28,9 +28,7 @@ export const FormattingPopover = ({
   config,
   children,
   extraColorChoices,
-  rowScopeOptions,
-  rowScopeLabel,
-  rowValueLabel,
+  allColumns,
   ...props
 }: FormattingPopoverProps) => {
   const [visible, setVisible] = useState(false);
@@ -52,9 +50,7 @@ export const FormattingPopover = ({
           config={config}
           columns={columns}
           extraColorChoices={extraColorChoices}
-          rowScopeOptions={rowScopeOptions}
-          rowScopeLabel={rowScopeLabel}
-          rowValueLabel={rowValueLabel}
+          allColumns={allColumns}
         />
       }
       open={visible}

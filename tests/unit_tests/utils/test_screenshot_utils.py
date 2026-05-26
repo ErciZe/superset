@@ -181,9 +181,11 @@ class TestTakeTiledScreenshot:
             with patch("superset.utils.screenshot_utils.combine_screenshot_tiles"):
                 take_tiled_screenshot(mock_page, "dashboard", tile_height=2000)
 
-                # Should log dashboard dimensions
-                mock_logger.info.assert_any_call("Dashboard: 800x5000px at (50, 100)")
-                # Should log number of tiles
+                # Should log dashboard dimensions with lazy logging format
+                mock_logger.info.assert_any_call(
+                    "Dashboard: %sx%spx at (%s, %s)", 800, 5000, 50, 100
+                )
+                # Should log number of tiles with lazy logging format
                 mock_logger.info.assert_any_call("Taking %s screenshot tiles", 3)
 
     def test_exception_handling_returns_none(self):
@@ -195,9 +197,10 @@ class TestTakeTiledScreenshot:
             result = take_tiled_screenshot(mock_page, "dashboard", tile_height=2000)
 
             assert result is None
-            mock_logger.exception.assert_called_once_with(
-                "Tiled screenshot failed: Unexpected error"
-            )
+            # The exception object is passed, not the string
+            call_args = mock_logger.exception.call_args
+            assert call_args[0][0] == "Tiled screenshot failed: %s"
+            assert str(call_args[0][1]) == "Unexpected error"
 
     def test_screenshot_clip_parameters(self, mock_page):
         """Test that screenshot clipping parameters are correct."""
@@ -317,3 +320,54 @@ class TestTakeTiledScreenshot:
             # Each wait should use the scroll settle timeout constant
             for call in mock_page.wait_for_timeout.call_args_list:
                 assert call[0][0] == SCROLL_SETTLE_TIMEOUT_MS
+
+    def test_per_tile_spinner_wait_uses_viewport_check(self, mock_page):
+        """wait_for_function polls viewport-visible spinners after each scroll."""
+        with patch("superset.utils.screenshot_utils.combine_screenshot_tiles"):
+            take_tiled_screenshot(
+                mock_page, "dashboard", tile_height=2000, load_wait=30
+            )
+
+        # 3 tiles → 3 wait_for_function calls, one per tile
+        assert mock_page.wait_for_function.call_count == 3
+
+        # Each call uses viewport-scoped JS and the load_wait timeout
+        for call in mock_page.wait_for_function.call_args_list:
+            js = call[0][0]
+            assert "getBoundingClientRect" in js
+            assert "window.innerHeight" in js
+            assert call[1]["timeout"] == 30 * 1000
+
+    def test_per_tile_spinner_timeout_logs_warning_and_continues(self, mock_page):
+        """A per-tile spinner timeout logs a warning but still takes the screenshot."""
+        from superset.utils.screenshot_utils import PlaywrightTimeout
+
+        timeout = PlaywrightTimeout()
+        mock_page.wait_for_function.side_effect = timeout
+
+        with patch("superset.utils.screenshot_utils.logger") as mock_logger:
+            with patch("superset.utils.screenshot_utils.combine_screenshot_tiles"):
+                result = take_tiled_screenshot(
+                    mock_page, "dashboard", tile_height=2000, load_wait=30
+                )
+
+        # Screenshot should still proceed (non-fatal)
+        assert result is not None
+        # Warning logged for each tile that timed out
+        assert mock_logger.warning.call_count == 3
+        mock_logger.warning.assert_any_call(
+            "Timed out waiting for visible spinners to clear on tile %s/%s "
+            "(load_wait=%ss)",
+            1,
+            3,
+            30,
+        )
+
+    def test_load_wait_default_is_sixty_seconds(self):
+        """load_wait defaults to 60 to match SCREENSHOT_LOAD_WAIT config default."""
+        import inspect
+
+        from superset.utils.screenshot_utils import take_tiled_screenshot
+
+        sig = inspect.signature(take_tiled_screenshot)
+        assert sig.parameters["load_wait"].default == 60
