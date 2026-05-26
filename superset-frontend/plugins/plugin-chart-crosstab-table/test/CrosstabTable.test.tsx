@@ -38,8 +38,8 @@ type TestColumnDef = ColDef & {
   children?: TestColumnDef[];
 };
 
-jest.mock('@superset-ui/core', () => {
-  const actual = jest.requireActual('@superset-ui/core');
+jest.mock('@apache-superset/core/theme', () => {
+  const actual = jest.requireActual('@apache-superset/core/theme');
 
   return {
     ...actual,

@@ -17,12 +17,9 @@
  * under the License.
  */
 import { useCallback, useMemo, useState } from 'react';
-import {
-  ensureIsArray,
-  styled,
-  t,
-  type QueryFormMetric,
-} from '@superset-ui/core';
+import { ensureIsArray, type QueryFormMetric } from '@superset-ui/core';
+import { styled } from '@apache-superset/core/theme';
+import { t } from '@apache-superset/core/translation';
 import type { ColumnMeta, Metric } from '@superset-ui/chart-controls';
 import { Button, Checkbox, Input, Select } from '@superset-ui/core/components';
 import ControlHeader from '../../../../src/explore/components/ControlHeader';

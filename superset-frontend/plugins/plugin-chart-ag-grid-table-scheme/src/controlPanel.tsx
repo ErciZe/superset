@@ -29,8 +29,8 @@ import {
   getColumnLabel,
   QueryFormColumn,
   QueryMode,
-  t,
 } from '@superset-ui/core';
+import { t } from '@apache-superset/core/translation';
 import officialControlPanel from './table/controlPanel';
 import { MATRIX_CELL_COLOR_RULE_COLUMN } from './matrix/cellColorRules';
 import {

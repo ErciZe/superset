@@ -19,11 +19,11 @@
 import {
   getColumnLabel,
   getMetricLabel,
-  t,
   type DataRecord,
   type QueryFormColumn,
   type QueryFormMetric,
 } from '@superset-ui/core';
+import { t } from '@apache-superset/core/translation';
 import type {
   CrosstabRowValueSummaryConfig,
   MetricFieldConfig,

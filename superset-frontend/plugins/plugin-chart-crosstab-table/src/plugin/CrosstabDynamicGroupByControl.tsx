@@ -20,10 +20,10 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   ensureIsArray,
   getColumnLabel,
-  styled,
-  t,
   type QueryFormColumn,
 } from '@superset-ui/core';
+import { styled } from '@apache-superset/core/theme';
+import { t } from '@apache-superset/core/translation';
 import type { ColumnMeta } from '@superset-ui/chart-controls';
 import { Button, Checkbox, Input, Select } from '@superset-ui/core/components';
 import ControlHeader from '../../../../src/explore/components/ControlHeader';

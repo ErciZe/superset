@@ -16,32 +16,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-<<<<<<<< HEAD:superset-frontend/plugins/plugin-chart-ag-grid-table-scheme/src/table/utils/useTableTheme.ts
-import { useTheme } from '@superset-ui/core';
-import {
-  colorSchemeDark,
-  colorSchemeLight,
-  themeQuartz,
-} from '@superset-ui/core/components/ThemedAgGridReact';
-// eslint-disable-next-line import/no-extraneous-dependencies
-import tinycolor from 'tinycolor2';
-
-export const useIsDark = () => {
-  const theme = useTheme();
-  return tinycolor(theme.colorBgContainer).isDark();
-};
-
-const useTableTheme = () => {
-  const baseTheme = themeQuartz;
-  const isDarkTheme = useIsDark();
-  const tableTheme = isDarkTheme
-    ? baseTheme.withPart(colorSchemeDark)
-    : baseTheme.withPart(colorSchemeLight);
-  return tableTheme;
-};
-
-export default useTableTheme;
-========
 import type { TestRunnerConfig } from '@storybook/test-runner';
 
 /**
@@ -62,4 +36,3 @@ const config: TestRunnerConfig = {
 };
 
 export default config;
->>>>>>>> origin/master:superset-frontend/.storybook/test-runner.ts
