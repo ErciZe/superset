@@ -106,6 +106,33 @@ class TestSupersetApp:
 
 
 class TestSupersetAppInitializer:
+    def test_init_views_registers_column_view_scheme_api_when_enabled(self):
+        """Test that column view scheme routes are registered when enabled."""
+        from superset.column_view_scheme.api import ColumnViewSchemeRestApi
+
+        mock_app = MagicMock()
+        mock_app.config = {"APPLICATION_ROOT": "/"}
+        app_initializer = SupersetAppInitializer(mock_app)
+
+        def is_feature_enabled(feature_name: str) -> bool:
+            return feature_name == "COLUMN_VIEW_SCHEME_ENABLED"
+
+        with (
+            patch("superset.initialization.appbuilder") as mock_appbuilder,
+            patch("superset.initialization.feature_flag_manager") as mock_flags,
+            patch("superset.initialization.set_app_error_handlers"),
+            patch.object(app_initializer, "register_request_handlers"),
+        ):
+            mock_appbuilder.app.config = {"APPLICATION_ROOT": "/"}
+            mock_flags.is_feature_enabled.side_effect = is_feature_enabled
+
+            app_initializer.init_views()
+
+        registered_apis = {
+            call.args[0] for call in mock_appbuilder.add_api.call_args_list
+        }
+        assert ColumnViewSchemeRestApi in registered_apis
+
     @patch("superset.initialization.logger")
     def test_init_app_in_ctx_calls_sync_config_to_db(self, mock_logger):
         """Test that initialization calls app.sync_config_to_db()."""

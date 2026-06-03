@@ -159,6 +159,7 @@ class SupersetAppInitializer:  # pylint: disable=too-many-public-methods
         from superset.cachekeys.api import CacheRestApi
         from superset.charts.api import ChartRestApi
         from superset.charts.data.api import ChartDataRestApi
+        from superset.column_view_scheme.api import ColumnViewSchemeRestApi
         from superset.css_templates.api import CssTemplateRestApi
         from superset.dashboards.api import DashboardRestApi
         from superset.dashboards.filter_state.api import DashboardFilterStateRestApi
@@ -269,6 +270,8 @@ class SupersetAppInitializer:  # pylint: disable=too-many-public-methods
         appbuilder.add_api(ReportExecutionLogRestApi)
         appbuilder.add_api(RLSRestApi)
         appbuilder.add_api(SavedQueryRestApi)
+        if feature_flag_manager.is_feature_enabled("COLUMN_VIEW_SCHEME_ENABLED"):
+            appbuilder.add_api(ColumnViewSchemeRestApi)
         if feature_flag_manager.is_feature_enabled("SEMANTIC_LAYERS"):
             from superset.semantic_layers.api import (
                 SemanticLayerRestApi,
