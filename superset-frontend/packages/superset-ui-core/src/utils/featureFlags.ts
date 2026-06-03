@@ -31,6 +31,7 @@ export enum FeatureFlag {
   AllowFullCsvExport = 'ALLOW_FULL_CSV_EXPORT',
   AvoidColorsCollision = 'AVOID_COLORS_COLLISION',
   ChartPluginsExperimental = 'CHART_PLUGINS_EXPERIMENTAL',
+  ColumnViewSchemeEnabled = 'COLUMN_VIEW_SCHEME_ENABLED',
   ConfirmDashboardDiff = 'CONFIRM_DASHBOARD_DIFF',
   CssTemplates = 'CSS_TEMPLATES',
   DashboardVirtualization = 'DASHBOARD_VIRTUALIZATION',
