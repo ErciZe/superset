@@ -29,6 +29,7 @@ import { PluginFilterHooks, PluginFilterStylesProps } from '../types';
 interface PluginFilterTimeCustomizeProps {
   defaultValue?: string | null;
   timeRangeBounds?: TimeRangeBounds;
+  enableEasyDateRange?: boolean;
 }
 
 export type PluginFilterSelectQueryFormData = QueryFormData &

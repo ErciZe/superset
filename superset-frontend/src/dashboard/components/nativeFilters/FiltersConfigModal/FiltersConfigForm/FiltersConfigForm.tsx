@@ -69,6 +69,7 @@ import {
   Flex,
   Input,
   Loading,
+  Checkbox,
 } from '@superset-ui/core/components';
 import { BasicErrorAlert, ErrorMessageWithStackTrace } from 'src/components';
 import { addDangerToast } from 'src/components/MessageToasts/actions';
@@ -619,6 +620,11 @@ const FiltersConfigForm = (
     sort = formFilter.controlValues.sortAscending;
   }
 
+  const enableEasyDateRange =
+    formFilter?.controlValues?.enableEasyDateRange ??
+    filterToEdit?.controlValues?.enableEasyDateRange ??
+    false;
+
   const showDefaultValue = isChartCustomization
     ? !hasDataset || !isDataDirty
     : !hasDataset ||
@@ -645,6 +651,23 @@ const FiltersConfigForm = (
       },
     });
     forceUpdate();
+  };
+
+  const onEnableEasyDateRangeChanged = (value: boolean) => {
+    const previous = (form.getFieldValue('filters')?.[filterId].controlValues ??
+      {}) as Record<string, unknown>;
+    const { enableEasyDateRange: _enableEasyDateRange, ...controlValues } =
+      previous;
+    setNativeFilterFieldValues(form, filterId, {
+      controlValues: value
+        ? {
+            ...controlValues,
+            enableEasyDateRange: true,
+          }
+        : controlValues,
+    });
+    forceUpdate();
+    formChanged();
   };
 
   const currentOperatorType: SelectFilterOperatorType =
@@ -1720,6 +1743,30 @@ const FiltersConfigForm = (
                                     );
                                   }}
                                 />
+                              </StyledRowFormItem>
+                            )}
+                          {!isChartCustomization &&
+                            itemTypeField === 'filter_time' && (
+                              <StyledRowFormItem
+                                expanded={expanded}
+                                name={[
+                                  'filters',
+                                  filterId,
+                                  'controlValues',
+                                  'enableEasyDateRange',
+                                ]}
+                                valuePropName="checked"
+                                initialValue={enableEasyDateRange}
+                              >
+                                <Checkbox
+                                  onChange={event => {
+                                    onEnableEasyDateRangeChanged(
+                                      event.target.checked,
+                                    );
+                                  }}
+                                >
+                                  {t('Use easy date range picker')}
+                                </Checkbox>
                               </StyledRowFormItem>
                             )}
                           <FormItem

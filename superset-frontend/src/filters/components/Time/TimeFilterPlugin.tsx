@@ -87,6 +87,7 @@ export default function TimeFilterPlugin(props: PluginFilterTimeProps) {
     'filter.dateFilterControl',
   );
   const DateFilterComponent = DateFilterControlExtension ?? DateFilterControl;
+  const enableEasyDateRange = Boolean(props.formData.enableEasyDateRange);
 
   const handleTimeRangeChange = useCallback(
     (timeRange?: string): void => {
@@ -132,6 +133,7 @@ export default function TimeFilterPlugin(props: PluginFilterTimeProps) {
           }}
           isOverflowingFilterBar={isOverflowingFilterBar}
           timeRangeBounds={props.formData.timeRangeBounds}
+          enableEasyDateRange={enableEasyDateRange || undefined}
         />
       </ControlContainer>
     </TimeFilterStyles>

@@ -20,7 +20,14 @@ import thunk from 'redux-thunk';
 import { Provider } from 'react-redux';
 import configureStore from 'redux-mock-store';
 
-import { render, screen, userEvent } from 'spec/helpers/testing-library';
+import {
+  render,
+  screen,
+  selectOption,
+  userEvent,
+  waitFor,
+  within,
+} from 'spec/helpers/testing-library';
 
 import { NO_TIME_RANGE } from '@superset-ui/core';
 import DateFilterLabel from '..';
@@ -34,6 +41,7 @@ const defaultProps = {
   onClosePopover: jest.fn(),
   onOpenPopover: jest.fn(),
 };
+const concreteDateRange = '2026-06-10T00:00:00 : 2026-06-13T00:00:00';
 
 function setup(
   props: Omit<DateFilterControlProps, 'name'> = defaultProps,
@@ -44,6 +52,14 @@ function setup(
       <DateFilterLabel name="time_range" {...props} />
     </Provider>
   );
+}
+
+async function openRangeTypeDropdown() {
+  await userEvent.click(screen.getByRole('combobox', { name: 'Range type' }));
+  await waitFor(() =>
+    expect(document.querySelector('.rc-virtual-list')).toBeInTheDocument(),
+  );
+  return document.querySelector('.rc-virtual-list') as HTMLElement;
 }
 
 test('DateFilter with default props', () => {
@@ -135,4 +151,86 @@ test('DateFilter should properly handle isOverflowingFilterBar prop changes', ()
 
   expect(popoverAfterRerender?.parentElement).toBe(trigger.parentElement);
   expect(popoverAfterRerender?.parentElement).not.toBe(document.body);
+});
+
+test('Date range frame option is hidden by default', async () => {
+  render(setup());
+
+  await userEvent.click(screen.getByText(NO_TIME_RANGE));
+
+  const optionsList = await openRangeTypeDropdown();
+  expect(within(optionsList).queryByText('Date range')).not.toBeInTheDocument();
+});
+
+test('Date range frame option appears when enabled', async () => {
+  render(setup({ ...defaultProps, enableEasyDateRange: true }));
+
+  await userEvent.click(screen.getByText(NO_TIME_RANGE));
+
+  const optionsList = await openRangeTypeDropdown();
+  expect(within(optionsList).getByText('Date range')).toBeInTheDocument();
+});
+
+test('Date range frame option is the first option when enabled', async () => {
+  render(setup({ ...defaultProps, enableEasyDateRange: true }));
+
+  await userEvent.click(screen.getByText(NO_TIME_RANGE));
+
+  const optionsList = await openRangeTypeDropdown();
+  expect(within(optionsList).getAllByRole('option')[0]).toHaveTextContent(
+    'Date range',
+  );
+});
+
+test('Date range frame is shown by default for no filter when enabled', async () => {
+  render(setup({ ...defaultProps, enableEasyDateRange: true }));
+
+  await userEvent.click(screen.getByText(NO_TIME_RANGE));
+
+  expect(screen.getByText('Selected range')).toBeInTheDocument();
+});
+
+test('Date range frame renders selected range controls when selected', async () => {
+  render(setup({ ...defaultProps, enableEasyDateRange: true }));
+
+  await userEvent.click(screen.getByText(NO_TIME_RANGE));
+  await selectOption('Date range', 'Range type');
+
+  expect(screen.getByText('Selected range')).toBeInTheDocument();
+});
+
+test('Date range frame uses a wide popover for the two-month calendar', async () => {
+  render(setup({ ...defaultProps, enableEasyDateRange: true }));
+
+  await userEvent.click(screen.getByText(NO_TIME_RANGE));
+  await selectOption('Date range', 'Range type');
+
+  expect(document.querySelector('.time-range-popover')).toHaveStyle({
+    width: '760px',
+    maxWidth: 'calc(100vw - 32px)',
+  });
+});
+
+test('Date range frame reopens for concrete ranges when enabled', async () => {
+  render(
+    setup({
+      ...defaultProps,
+      enableEasyDateRange: true,
+      value: concreteDateRange,
+    }),
+  );
+
+  await userEvent.click(screen.getByText(concreteDateRange));
+
+  expect(screen.getByText('Selected range')).toBeInTheDocument();
+  expect(screen.queryByTestId('custom-frame')).not.toBeInTheDocument();
+});
+
+test('Concrete ranges keep default custom frame when Date range is disabled', async () => {
+  render(setup({ ...defaultProps, value: concreteDateRange }));
+
+  await userEvent.click(screen.getByText(concreteDateRange));
+
+  expect(screen.getByTestId('custom-frame')).toBeInTheDocument();
+  expect(screen.queryByText('Selected range')).not.toBeInTheDocument();
 });

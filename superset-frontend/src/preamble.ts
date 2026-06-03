@@ -72,8 +72,11 @@ export default function initPreamble(): Promise<void> {
       }, LANGUAGE_PACK_REQUEST_TIMEOUT_MS);
 
       try {
-        const languagePackUrl = makeUrl(`/superset/language_pack/${lang}/`);
+        const languagePackUrl = makeUrl(
+          `/superset/language_pack/${lang}/?v=${Date.now()}`,
+        );
         const resp = await fetch(languagePackUrl, {
+          cache: 'no-store',
           signal: abortController.signal,
         });
         if (!resp.ok) {

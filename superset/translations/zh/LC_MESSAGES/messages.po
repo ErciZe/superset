@@ -806,10 +806,6 @@ msgid "Add divider"
 msgstr "分隔"
 
 #, fuzzy
-msgid "Add filter"
-msgstr "增加过滤条件"
-
-#, fuzzy
 msgid "Add Layer"
 msgstr "隐藏Layer"
 
@@ -3271,10 +3267,6 @@ msgstr "创建一个数据集以开始将您的数据可视化为图表，或者
 msgid "Create a new chart"
 msgstr "创建新图表"
 
-#, fuzzy
-msgid "Create chart"
-msgstr "创建图表"
-
 msgid "Create chart with dataset"
 msgstr ""
 
@@ -3361,29 +3353,23 @@ msgstr "货币前缀或后缀"
 msgid "Currency symbol"
 msgstr "货币符号"
 
-#, fuzzy
 msgid "Current"
-msgstr "货币"
+msgstr "当前"
 
-#, fuzzy
 msgid "Current day"
-msgstr "货币"
+msgstr "今天"
 
-#, fuzzy
 msgid "Current month"
-msgstr "货币符号"
+msgstr "本月"
 
-#, fuzzy
 msgid "Current quarter"
-msgstr "运行查询"
+msgstr "本季度"
 
-#, fuzzy
 msgid "Current week"
-msgstr "运行查询"
+msgstr "本周"
 
-#, fuzzy
 msgid "Current year"
-msgstr "货币"
+msgstr "本年"
 
 #, python-format
 msgid "Currently rendered: %s"
@@ -4790,9 +4776,8 @@ msgstr "终点的经度/纬度"
 msgid "End angle"
 msgstr "结束角度"
 
-#, fuzzy
 msgid "End date"
-msgstr "结束时间"
+msgstr "结束日期"
 
 msgid "End date excluded from time range"
 msgstr "从时间范围中排除的结束日期"
@@ -9907,10 +9892,6 @@ msgstr "显示气泡"
 msgid "Show CREATE VIEW statement"
 msgstr "显示 CREATE VIEW 语句"
 
-#, fuzzy
-msgid "Show cell bars"
-msgstr "显示单元格的柱"
-
 msgid "Show Dashboard"
 msgstr "显示看板"
 
@@ -10374,9 +10355,8 @@ msgstr "开始角度"
 msgid "Start at (UTC)"
 msgstr "开始于（UTC）"
 
-#, fuzzy
 msgid "Start date"
-msgstr "开始时间"
+msgstr "开始日期"
 
 msgid "Start date included in time range"
 msgstr "开始日期包含在时间范围内"
@@ -11943,7 +11923,7 @@ msgstr "该表已经有了数据集"
 msgid ""
 "This table already has a dataset associated with it. You can only "
 "associate one dataset with a table.\n"
-msgstr "此表已经关联了一个数据集。一个表只能关联一个数据集。"
+msgstr "此表已经关联了一个数据集。一个表只能关联一个数据集。\n"
 
 msgid "This username is already taken. Please choose another one."
 msgstr ""
@@ -14916,3 +14896,39 @@ msgstr "步长"
 
 msgid "Unsupported calculated field template."
 msgstr "不支持的计算字段模板。"
+
+msgid "Date range"
+msgstr "日期范围"
+
+msgid "Use easy date range picker"
+msgstr "使用易用日期范围选择器"
+
+msgid "Easy date range picker"
+msgstr "易用日期范围选择器"
+
+msgid "Selected range"
+msgstr "已选范围"
+
+msgid "Today"
+msgstr "今天"
+
+msgid "Yesterday"
+msgstr "昨天"
+
+msgid "Last 7 days"
+msgstr "最近 7 天"
+
+msgid "Last 30 days"
+msgstr "最近 30 天"
+
+msgid "Previous week"
+msgstr "上一周"
+
+msgid "Previous month"
+msgstr "上个月"
+
+msgid "Previous quarter"
+msgstr "上一季度"
+
+msgid "Previous year"
+msgstr "上一年"

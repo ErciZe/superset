@@ -45,8 +45,10 @@ import ControlPopover from '../ControlPopover/ControlPopover';
 import { DateFilterControlProps, FrameType } from './types';
 import {
   DateFilterTestKey,
+  EASY_DATE_RANGE_FRAME,
   FRAME_OPTIONS,
   guessFrame,
+  parseConcreteDateRange,
   useDefaultTimeFilter,
 } from './utils';
 import {
@@ -55,12 +57,16 @@ import {
   CustomFrame,
   AdvancedFrame,
   DateLabel,
+  DateRangeFrame,
 } from './components';
 import { CurrentCalendarFrame } from './components/CurrentCalendarFrame';
 
 const StyledRangeType = styled(Select)`
   width: 272px;
 `;
+
+const DEFAULT_POPOVER_WIDTH = 600;
+const DATE_RANGE_POPOVER_WIDTH = 760;
 
 const ContentStyleWrapper = styled.div`
   ${({ theme }) => css`
@@ -140,6 +146,19 @@ const getTooltipTitle = (
     range || null
   );
 
+const getEffectiveGuessedFrame = (
+  value: string,
+  enableEasyDateRange: boolean,
+): FrameType => {
+  if (enableEasyDateRange && value === NO_TIME_RANGE) {
+    return EASY_DATE_RANGE_FRAME;
+  }
+  if (enableEasyDateRange && parseConcreteDateRange(value)) {
+    return EASY_DATE_RANGE_FRAME;
+  }
+  return guessFrame(value);
+};
+
 export default function DateFilterLabel(props: DateFilterControlProps) {
   const {
     name,
@@ -147,6 +166,7 @@ export default function DateFilterLabel(props: DateFilterControlProps) {
     onOpenPopover = noOp,
     onClosePopover = noOp,
     isOverflowingFilterBar = false,
+    enableEasyDateRange = false,
   } = props;
   const defaultTimeFilter = useDefaultTimeFilter();
 
@@ -154,7 +174,10 @@ export default function DateFilterLabel(props: DateFilterControlProps) {
   const [actualTimeRange, setActualTimeRange] = useState<string>(value);
 
   const [show, setShow] = useState<boolean>(false);
-  const guessedFrame = useMemo(() => guessFrame(value), [value]);
+  const guessedFrame = useMemo(
+    () => getEffectiveGuessedFrame(value, enableEasyDateRange),
+    [enableEasyDateRange, value],
+  );
   const [frame, setFrame] = useState<FrameType>(guessedFrame);
   const [lastFetchedTimeRange, setLastFetchedTimeRange] = useState(value);
   const [timeRangeValue, setTimeRangeValue] = useState(value);
@@ -163,6 +186,15 @@ export default function DateFilterLabel(props: DateFilterControlProps) {
   const [tooltipTitle, setTooltipTitle] = useState<ReactNode | null>(t(value));
   const theme = useTheme();
   const [labelRef, labelIsTruncated] = useCSSTextTruncation<HTMLSpanElement>();
+  const rangeTypeOptions = useMemo(() => {
+    if (!enableEasyDateRange) {
+      return FRAME_OPTIONS;
+    }
+    return [
+      { value: EASY_DATE_RANGE_FRAME, label: t('Date range') },
+      ...FRAME_OPTIONS,
+    ];
+  }, [enableEasyDateRange]);
 
   useEffect(() => {
     if (value === NO_TIME_RANGE) {
@@ -276,7 +308,7 @@ export default function DateFilterLabel(props: DateFilterControlProps) {
       <div className="control-label">{t('Range type')}</div>
       <StyledRangeType
         ariaLabel={t('Range type')}
-        options={FRAME_OPTIONS}
+        options={rangeTypeOptions}
         value={frame}
         onChange={onChangeFrame}
       />
@@ -292,6 +324,9 @@ export default function DateFilterLabel(props: DateFilterControlProps) {
           value={timeRangeValue}
           onChange={setTimeRangeValue}
         />
+      )}
+      {enableEasyDateRange && frame === EASY_DATE_RANGE_FRAME && (
+        <DateRangeFrame value={timeRangeValue} onChange={setTimeRangeValue} />
       )}
       {frame === 'Advanced' && (
         <AdvancedFrame value={timeRangeValue} onChange={setTimeRangeValue} />
@@ -359,7 +394,13 @@ export default function DateFilterLabel(props: DateFilterControlProps) {
       defaultOpen={show}
       open={show}
       onOpenChange={toggleOverlay}
-      overlayStyle={{ width: '600px' }}
+      overlayStyle={{
+        width:
+          enableEasyDateRange && frame === EASY_DATE_RANGE_FRAME
+            ? `${DATE_RANGE_POPOVER_WIDTH}px`
+            : `${DEFAULT_POPOVER_WIDTH}px`,
+        maxWidth: 'calc(100vw - 32px)',
+      }}
       destroyOnHidden
       getPopupContainer={nodeTrigger =>
         isOverflowingFilterBar

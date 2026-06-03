@@ -25,6 +25,7 @@ export type FrameType =
   | 'Common'
   | 'Calendar'
   | 'Current'
+  | 'Date range'
   | 'Custom'
   | 'Advanced'
   | 'No filter';
@@ -124,4 +125,5 @@ export interface DateFilterControlProps {
   onClosePopover?: () => void;
   isOverflowingFilterBar?: boolean;
   timeRangeBounds?: TimeRangeBounds;
+  enableEasyDateRange?: boolean;
 }

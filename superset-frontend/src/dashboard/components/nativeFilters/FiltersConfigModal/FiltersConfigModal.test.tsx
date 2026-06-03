@@ -176,6 +176,7 @@ const INVERSE_SELECTION_REGEX = /^inverse selection/i;
 const SEARCH_ALL_REGEX = /^dynamically search all filter values/i;
 const PRE_FILTER_REGEX = /^pre-filter available values/i;
 const SORT_REGEX = /^sort filter values$/i;
+const EASY_DATE_RANGE_REGEX = /^use easy date range picker$/i;
 const SAVE_REGEX = /^save$/i;
 const NAME_REQUIRED_REGEX = /^name is required$/i;
 const COLUMN_REQUIRED_REGEX = /^column is required$/i;
@@ -286,7 +287,122 @@ test('renders a time range filter type', async () => {
   expect(screen.queryByText(COLUMN_REGEX)).not.toBeInTheDocument();
 
   expect(getCheckbox(DEFAULT_VALUE_REGEX)).not.toBeChecked();
+  expect(getCheckbox(EASY_DATE_RANGE_REGEX)).not.toBeChecked();
 });
+
+test('does not render easy date range picker setting for non-time filters', async () => {
+  defaultRender();
+
+  expect(queryCheckbox(EASY_DATE_RANGE_REGEX)).not.toBeInTheDocument();
+});
+
+test('saves easy date range picker setting for time filters', async () => {
+  const nativeFilterConfig = [
+    {
+      ...buildNativeFilter('NATIVE_FILTER-1', 'time', []),
+      filterType: 'filter_time',
+      targets: [],
+    },
+  ];
+  const state = {
+    ...defaultState(),
+    dashboardInfo: {
+      metadata: {
+        native_filter_configuration: nativeFilterConfig,
+      },
+    },
+    dashboardLayout,
+  };
+  const onSave = jest.fn();
+
+  defaultRender(state, {
+    ...props,
+    createNewOnOpen: false,
+    onSave,
+  });
+
+  const collapsedSettingsPanel = screen.queryByRole('button', {
+    name: /collapsed filter settings/i,
+  });
+  if (collapsedSettingsPanel) {
+    fireEvent.click(collapsedSettingsPanel);
+  }
+  await userEvent.click(
+    await screen.findByRole('checkbox', {
+      name: EASY_DATE_RANGE_REGEX,
+    }),
+  );
+  await userEvent.click(screen.getByRole('button', { name: SAVE_REGEX }));
+
+  await waitFor(() =>
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filterChanges: expect.objectContaining({
+          modified: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'NATIVE_FILTER-1',
+              controlValues: expect.objectContaining({
+                enableEasyDateRange: true,
+              }),
+            }),
+          ]),
+        }),
+      }),
+    ),
+  );
+}, 30000);
+
+test('clears easy date range picker setting when unchecked', async () => {
+  const nativeFilterConfig = [
+    {
+      ...buildNativeFilter('NATIVE_FILTER-1', 'time', []),
+      filterType: 'filter_time',
+      targets: [],
+      controlValues: {
+        enableEasyDateRange: true,
+      },
+    },
+  ];
+  const state = {
+    ...defaultState(),
+    dashboardInfo: {
+      metadata: {
+        native_filter_configuration: nativeFilterConfig,
+      },
+    },
+    dashboardLayout,
+  };
+  const onSave = jest.fn();
+
+  defaultRender(state, {
+    ...props,
+    createNewOnOpen: false,
+    onSave,
+  });
+
+  const checkbox = await screen.findByRole('checkbox', {
+    name: EASY_DATE_RANGE_REGEX,
+  });
+  expect(checkbox).toBeChecked();
+
+  await userEvent.click(checkbox);
+  await userEvent.click(screen.getByRole('button', { name: SAVE_REGEX }));
+
+  await waitFor(() => expect(onSave).toHaveBeenCalled());
+  const savePayload = onSave.mock.calls[0]?.[0] as {
+    filterChanges: {
+      modified: Array<{
+        id: string;
+        controlValues?: Record<string, unknown>;
+      }>;
+    };
+  };
+  const modifiedFilter = savePayload.filterChanges.modified.find(
+    filter => filter.id === 'NATIVE_FILTER-1',
+  );
+
+  expect(modifiedFilter?.controlValues?.enableEasyDateRange).toBeUndefined();
+}, 30000);
 
 test('renders a time column filter type', async () => {
   defaultRender();
