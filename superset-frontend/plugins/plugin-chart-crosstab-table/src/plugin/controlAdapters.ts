@@ -50,18 +50,21 @@ type DndMetricSelectProps = {
   value?: QueryFormMetric[];
 };
 
-const controlHeaderModule = require('../../../../src/explore/components/ControlHeader') as {
-  default: ComponentType<ControlHeaderProps>;
-};
+const controlHeaderModule =
+  require('../../../../src/explore/components/ControlHeader') as {
+    default: ComponentType<ControlHeaderProps>;
+  };
 
-const dndColumnSelectModule = require('../../../../src/explore/components/controls/DndColumnSelectControl/DndColumnSelect') as {
-  DndColumnSelect: ComponentType<DndColumnSelectProps>;
-};
+const dndColumnSelectModule =
+  require('../../../../src/explore/components/controls/DndColumnSelectControl/DndColumnSelect') as {
+    DndColumnSelect: ComponentType<DndColumnSelectProps>;
+  };
 
-const dndColumnSelectControlModule = require('../../../../src/explore/components/controls/DndColumnSelectControl') as {
-  DndMetricSelect: ComponentType<DndMetricSelectProps>;
-};
+const dndColumnSelectControlModule =
+  require('../../../../src/explore/components/controls/DndColumnSelectControl') as {
+    DndMetricSelect: ComponentType<DndMetricSelectProps>;
+  };
 
 export const ControlHeader = controlHeaderModule.default;
-export const DndColumnSelect = dndColumnSelectModule.DndColumnSelect;
-export const DndMetricSelect = dndColumnSelectControlModule.DndMetricSelect;
+export const { DndColumnSelect } = dndColumnSelectModule;
+export const { DndMetricSelect } = dndColumnSelectControlModule;
