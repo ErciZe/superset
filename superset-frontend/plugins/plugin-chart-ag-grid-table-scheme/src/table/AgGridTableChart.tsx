@@ -32,6 +32,7 @@ import {
 } from '@superset-ui/core/components/ThemedAgGridReact';
 import {
   AgGridTableChartTransformedProps,
+  AdvancedFilterState,
   InputColumn,
   SearchOption,
   SortByItem,
@@ -39,6 +40,7 @@ import {
 import AgGridDataTable, { type AgGridTableProps } from './AgGridTable';
 import { updateTableOwnState } from './utils/externalAPIs';
 import TimeComparisonVisibility from './AgGridTable/components/TimeComparisonVisibility';
+import AdvancedFilterBar from './components/AdvancedFilterBar';
 import { useColDefs } from './utils/useColDefs';
 import { getCrossFilterDataMask } from './utils/getCrossFilterDataMask';
 import { StyledChartContainer } from './styles';
@@ -46,11 +48,15 @@ import { StyledChartContainer } from './styles';
 const getGridHeight = (
   height: number,
   includeSearch: boolean | undefined,
+  includeAdvancedFilter: boolean,
   columnViewToolbarHeight: number,
 ) => {
   let calculatedGridHeight = height;
   if (includeSearch) {
     calculatedGridHeight -= 16;
+  }
+  if (includeAdvancedFilter) {
+    calculatedGridHeight -= 44;
   }
   return calculatedGridHeight - 80 - columnViewToolbarHeight;
 };
@@ -120,10 +126,21 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         label: column.label,
       }));
 
-    if (!isEqual(options, searchOptions)) {
-      setSearchOptions(options || []);
-    }
+    setSearchOptions(currentOptions =>
+      isEqual(options, currentOptions) ? currentOptions : options || [],
+    );
   }, [columns]);
+
+  const advancedFilterOptions = useMemo(
+    () =>
+      columns
+        .filter(column => column?.key)
+        .map(column => ({
+          value: column.key,
+          label: column.label,
+        })),
+    [columns],
+  );
 
   const comparisonColumns = [
     { key: 'all', label: t('Display all') },
@@ -155,7 +172,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           selectedComparisonColumns.includes(col.label),
       )
       .filter(col => col?.config?.visible !== false);
-  }, [columns, selectedComparisonColumns]);
+  }, [columns, isUsingTimeComparison, selectedComparisonColumns]);
 
   const colDefs = useColDefs({
     columns: isUsingTimeComparison
@@ -179,9 +196,14 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     slice_id,
   });
 
+  const showAdvancedFilter = Boolean(
+    serverPagination && advancedFilterOptions.length,
+  );
+
   const gridHeight = getGridHeight(
     height,
     includeSearch,
+    showAdvancedFilter,
     effectiveColumnViewToolbarHeight,
   );
 
@@ -193,7 +215,14 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   );
 
   const timestampFormatter = useCallback(
-    value => getTimeFormatterForGranularity(timeGrain)(value),
+    (value: DataRecordValue) =>
+      getTimeFormatterForGranularity(timeGrain)(
+        typeof value === 'bigint'
+          ? Number(value)
+          : typeof value === 'boolean'
+            ? String(value)
+            : value,
+      ),
     [timeGrain],
   );
 
@@ -218,7 +247,14 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         setDataMask(getCrossFilterDataMask(crossFilterProps).dataMask);
       }
     },
-    [emitCrossFilters, setDataMask, filters, timeGrain],
+    [
+      emitCrossFilters,
+      filters,
+      isActiveFilterValue,
+      setDataMask,
+      timeGrain,
+      timestampFormatter,
+    ],
   );
 
   const handleServerPaginationChange = useCallback(
@@ -230,7 +266,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
       };
       updateTableOwnState(setDataMask, modifiedOwnState);
     },
-    [setDataMask],
+    [serverPaginationData, setDataMask],
   );
 
   const handlePageSizeChange = useCallback(
@@ -242,7 +278,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
       };
       updateTableOwnState(setDataMask, modifiedOwnState);
     },
-    [setDataMask],
+    [serverPaginationData, setDataMask],
   );
 
   const handleChangeSearchCol = (searchCol: string) => {
@@ -267,8 +303,30 @@ export default function TableChart<D extends DataRecord = DataRecord>(
       };
       updateTableOwnState(setDataMask, modifiedOwnState);
     },
-    [setDataMask, searchOptions],
+    [searchOptions, serverPaginationData, setDataMask],
   );
+
+  const handleAdvancedFilterApply = useCallback(
+    (advancedFilter: AdvancedFilterState) => {
+      const modifiedOwnState = {
+        ...serverPaginationData,
+        advancedFilter,
+        currentPage: 0,
+      };
+      updateTableOwnState(setDataMask, modifiedOwnState);
+    },
+    [serverPaginationData, setDataMask],
+  );
+
+  const handleAdvancedFilterClear = useCallback(() => {
+    const restState = { ...serverPaginationData };
+    delete restState.advancedFilter;
+    const modifiedOwnState = {
+      ...restState,
+      currentPage: 0,
+    };
+    updateTableOwnState(setDataMask, modifiedOwnState);
+  }, [serverPaginationData, setDataMask]);
 
   const handleSortByChange = useCallback(
     (sortBy: SortByItem[]) => {
@@ -279,7 +337,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
       };
       updateTableOwnState(setDataMask, modifiedOwnState);
     },
-    [setDataMask, serverPagination],
+    [serverPagination, serverPaginationData, setDataMask],
   );
 
   const renderTimeComparisonVisibility = (): JSX.Element => (
@@ -292,6 +350,14 @@ export default function TableChart<D extends DataRecord = DataRecord>(
 
   return (
     <StyledChartContainer height={height}>
+      {showAdvancedFilter && (
+        <AdvancedFilterBar
+          searchOptions={advancedFilterOptions}
+          value={serverPaginationData?.advancedFilter}
+          onApply={handleAdvancedFilterApply}
+          onClear={handleAdvancedFilterClear}
+        />
+      )}
       <AgGridDataTable
         gridHeight={gridHeight}
         data={data || []}

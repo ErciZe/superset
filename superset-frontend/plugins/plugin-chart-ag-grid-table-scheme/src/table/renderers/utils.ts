@@ -1,4 +1,3 @@
-/* eslint-disable camelcase */
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -17,24 +16,20 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { SetDataMaskHook } from '@superset-ui/core';
-import { AdvancedFilterState, SortByItem } from '../types';
+import { type ReactNode } from 'react';
+import { type DataRecordValue } from '@superset-ui/core';
 
-interface TableOwnState {
-  currentPage?: number;
-  pageSize?: number;
-  sortColumn?: string;
-  sortOrder?: 'asc' | 'desc';
-  searchText?: string;
-  searchColumn?: string;
-  sortBy?: SortByItem[];
-  advancedFilter?: AdvancedFilterState;
-}
-
-export const updateTableOwnState = (
-  setDataMask: SetDataMaskHook = () => {},
-  modifiedOwnState: TableOwnState,
-) =>
-  setDataMask({
-    ownState: modifiedOwnState,
-  });
+export const getRenderableCellValue = (
+  value: DataRecordValue | undefined,
+): ReactNode => {
+  if (value == null) {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+  return value;
+};

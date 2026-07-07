@@ -1,4 +1,5 @@
 /* eslint-disable camelcase */
+/* oxlint-disable react/no-danger */
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -24,6 +25,7 @@ import { InfoCircleOutlined } from '@ant-design/icons';
 import { Tooltip } from '@superset-ui/core/components';
 import { CellRendererProps } from '../types';
 import { SummaryContainer, SummaryText } from '../styles';
+import { getRenderableCellValue } from './utils';
 
 const SUMMARY_TOOLTIP_TEXT = t(
   'Show total aggregations of selected metrics. Note that row limit does not apply to the result.',
@@ -74,7 +76,11 @@ export const TextCellRenderer = (params: CellRendererProps) => {
     );
   }
   if (additionalFormatting && 'text' in additionalFormatting) {
-    return <div {...additionalContentProps}>{additionalFormatting.text}</div>;
+    return (
+      <div {...additionalContentProps}>
+        {getRenderableCellValue(additionalFormatting.text)}
+      </div>
+    );
   }
 
   if (!(typeof value === 'string' || value instanceof Date)) {
@@ -109,5 +115,9 @@ export const TextCellRenderer = (params: CellRendererProps) => {
     }
   }
 
-  return <div {...additionalContentProps}>{valueFormatted ?? value}</div>;
+  return (
+    <div {...additionalContentProps}>
+      {getRenderableCellValue(valueFormatted ?? value)}
+    </div>
+  );
 };

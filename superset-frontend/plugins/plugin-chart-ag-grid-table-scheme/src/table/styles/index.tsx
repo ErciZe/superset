@@ -330,6 +330,33 @@ export const StyledChartContainer = styled.div<{
       margin-bottom: ${theme.sizeUnit * 4}px;
     }
 
+    .advanced-filter-container {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: ${theme.sizeUnit * 2}px;
+      margin-bottom: ${theme.sizeUnit * 3}px;
+      min-height: ${theme.sizeUnit * 8}px;
+    }
+
+    .advanced-filter-column {
+      min-width: ${theme.sizeUnit * 38}px;
+    }
+
+    .advanced-filter-operator {
+      min-width: ${theme.sizeUnit * 26}px;
+    }
+
+    .advanced-filter-value {
+      width: ${theme.sizeUnit * 48}px;
+    }
+
+    .advanced-filter-container .superset-button {
+      height: ${theme.sizeUnit * 8}px;
+      padding: 0 ${theme.sizeUnit * 3}px;
+    }
+
     .dropdown-controls-container {
       display: flex;
       justify-content: flex-end;

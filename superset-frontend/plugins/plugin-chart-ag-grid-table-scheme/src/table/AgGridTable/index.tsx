@@ -41,16 +41,24 @@ import {
   getAgGridLocaleText,
 } from '@superset-ui/core/components/ThemedAgGridReact';
 import { type FunctionComponent } from 'react';
-import { JsonObject, DataRecordValue, DataRecord } from '@superset-ui/core';
+import { t } from '@apache-superset/core/translation';
+import { DataRecordValue, DataRecord } from '@superset-ui/core';
 import { SearchOutlined } from '@ant-design/icons';
 import { debounce, isEqual } from 'lodash';
 import Pagination from './components/Pagination';
 import SearchSelectDropdown from './components/SearchSelectDropdown';
-import { SearchOption, SortByItem } from '../types';
+import { SearchOption, ServerPaginationData, SortByItem } from '../types';
 import getInitialSortState, { shouldSort } from '../utils/getInitialSortState';
 import { PAGE_SIZE_OPTIONS } from '../consts';
 
 type GridApi = GridReadyEvent['api'];
+
+type HeaderClickParams = {
+  column?: {
+    colId?: string;
+    sort?: 'asc' | 'desc' | null;
+  };
+};
 
 export interface AgGridTableProps {
   gridTheme?: string;
@@ -71,7 +79,7 @@ export interface AgGridTableProps {
   serverPagination?: boolean;
   rowCount?: number;
   onServerPaginationChange: (pageNumber: number, pageSize: number) => void;
-  serverPaginationData: JsonObject;
+  serverPaginationData: ServerPaginationData;
   onServerPageSizeChange: (pageSize: number) => void;
   searchOptions: SearchOption[];
   onSearchColChange: (searchCol: string) => void;
@@ -223,7 +231,15 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
       [serverPagination, debouncedSearch, searchId],
     );
 
-    const handleColSort = (colId: string, sortDir: string) => {
+    const handleColSort = (
+      colId: string,
+      sortDir: 'asc' | 'desc' | null | undefined,
+    ) => {
+      if (sortDir == null) {
+        onSortChange([]);
+        return;
+      }
+
       const isSortable = shouldSort({
         colId,
         sortDir,
@@ -233,11 +249,6 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
       });
 
       if (!isSortable) return;
-
-      if (sortDir == null) {
-        onSortChange([]);
-        return;
-      }
 
       onSortChange([
         {
@@ -249,9 +260,12 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
     };
 
     const handleColumnHeaderClick = useCallback(
-      params => {
+      (params: HeaderClickParams) => {
         const colId = params?.column?.colId;
         const sortDir = params?.column?.sort;
+        if (!colId) {
+          return;
+        }
         handleColSort(colId, sortDir);
       },
       [serverPagination, gridInitialState, percentMetrics, onSortChange],
@@ -299,7 +313,7 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
             <div className="search-container">
               {serverPagination && (
                 <div className="search-by-text-container">
-                  <span className="search-by-text"> Search by :</span>
+                  <span className="search-by-text"> {t('Search by')}:</span>
                   <SearchSelectDropdown
                     onChange={onSearchColChange}
                     searchOptions={searchOptions}
@@ -317,7 +331,7 @@ const AgGridDataTable: FunctionComponent<AgGridTableProps> = memo(
                     }
                     type="text"
                     id="filter-text-box"
-                    placeholder="Search"
+                    placeholder={t('Search')}
                     onInput={onFilterTextBoxChanged}
                     onFocus={handleSearchFocus}
                     onBlur={handleSearchBlur}

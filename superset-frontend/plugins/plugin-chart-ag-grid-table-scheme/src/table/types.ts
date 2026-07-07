@@ -33,7 +33,6 @@ import {
   SetDataMaskHook,
   CurrencyFormatter,
   Currency,
-  JsonObject,
   Metric,
 } from '@superset-ui/core';
 import { GenericDataType } from '@apache-superset/core/common';
@@ -134,12 +133,33 @@ export type SearchOption = {
   label: string;
 };
 
+export type AdvancedFilterOperator =
+  | 'equals'
+  | 'notEqual'
+  | 'contains'
+  | 'notContains'
+  | 'startsWith'
+  | 'endsWith'
+  | 'lessThan'
+  | 'lessThanOrEqual'
+  | 'greaterThan'
+  | 'greaterThanOrEqual'
+  | 'blank'
+  | 'notBlank';
+
+export type AdvancedFilterState = {
+  column?: string;
+  operator?: AdvancedFilterOperator;
+  value?: string;
+};
+
 export interface ServerPaginationData {
   pageSize?: number;
   currentPage?: number;
   sortBy?: SortByItem[];
   searchText?: string;
   searchColumn?: string;
+  advancedFilter?: AdvancedFilterState;
 }
 
 export type AdditionalCellStyle = (
@@ -184,7 +204,7 @@ export interface AgGridTableChartTransformedProps<
   slice_id: number;
   serverPagination: boolean;
   rowCount: number;
-  serverPaginationData: JsonObject;
+  serverPaginationData: ServerPaginationData;
   percentMetrics: string[];
   hasServerPageLengthChanged: boolean;
   serverPageLength: number;

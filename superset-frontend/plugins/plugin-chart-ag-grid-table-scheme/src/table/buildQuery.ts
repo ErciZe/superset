@@ -25,6 +25,7 @@ import {
   QueryFormOrderBy,
   QueryMode,
   QueryObject,
+  QueryObjectFilterClause,
   removeDuplicates,
   PostProcessingRule,
   BuildQuery,
@@ -34,7 +35,11 @@ import {
   timeCompareOperator,
 } from '@superset-ui/chart-controls';
 import { isEmpty } from 'lodash';
-import { TableChartFormData } from './types';
+import {
+  AdvancedFilterOperator,
+  AdvancedFilterState,
+  TableChartFormData,
+} from './types';
 import { updateTableOwnState } from './utils/externalAPIs';
 
 /**
@@ -53,6 +58,94 @@ export function getQueryMode(formData: TableChartFormData) {
   return hasRawColumns ? QueryMode.Raw : QueryMode.Aggregate;
 }
 
+const splitAdvancedFilterValues = (value: string): string[] => [
+  ...new Set(
+    value
+      .split(/[\s,;\uFF0C\uFF1B]+/)
+      .map(part => part.trim())
+      .filter(Boolean),
+  ),
+];
+
+const wrapAdvancedFilterValue = (
+  operator: AdvancedFilterOperator,
+  value: string,
+) => {
+  if (operator === 'contains' || operator === 'notContains') {
+    return `%${value}%`;
+  }
+  if (operator === 'startsWith') {
+    return `${value}%`;
+  }
+  if (operator === 'endsWith') {
+    return `%${value}`;
+  }
+  return value;
+};
+
+const getAdvancedFilterOp = (operator: AdvancedFilterOperator) => {
+  const opMap: Record<AdvancedFilterOperator, string> = {
+    equals: '==',
+    notEqual: '!=',
+    contains: 'ILIKE',
+    notContains: 'NOT ILIKE',
+    startsWith: 'ILIKE',
+    endsWith: 'ILIKE',
+    lessThan: '<',
+    lessThanOrEqual: '<=',
+    greaterThan: '>',
+    greaterThanOrEqual: '>=',
+    blank: 'IS NULL',
+    notBlank: 'IS NOT NULL',
+  };
+  return opMap[operator];
+};
+
+const buildAdvancedFilter = (
+  advancedFilter?: AdvancedFilterState,
+): QueryObjectFilterClause | null => {
+  const column = advancedFilter?.column;
+  const operator = advancedFilter?.operator;
+  if (!column || !operator) {
+    return null;
+  }
+
+  if (operator === 'blank' || operator === 'notBlank') {
+    return {
+      col: column,
+      op: getAdvancedFilterOp(operator),
+      val: null,
+    } as QueryObjectFilterClause;
+  }
+
+  const value = String(advancedFilter.value || '').trim();
+  if (!value) {
+    return null;
+  }
+
+  const values = splitAdvancedFilterValues(value);
+  if (values.length > 1 && operator === 'equals') {
+    return {
+      col: column,
+      op: 'IN',
+      val: values,
+    } as QueryObjectFilterClause;
+  }
+  if (values.length > 1 && operator === 'notEqual') {
+    return {
+      col: column,
+      op: 'NOT IN',
+      val: values,
+    } as QueryObjectFilterClause;
+  }
+
+  return {
+    col: column,
+    op: getAdvancedFilterOp(operator),
+    val: wrapAdvancedFilterValue(operator, value),
+  } as QueryObjectFilterClause;
+};
+
 const buildQuery: BuildQuery<TableChartFormData> = (
   formData: TableChartFormData,
   options,
@@ -63,7 +156,7 @@ const buildQuery: BuildQuery<TableChartFormData> = (
     extra_form_data,
   } = formData;
   const queryMode = getQueryMode(formData);
-  const sortByMetric = ensureIsArray(formData.timeseries_limit_metric)[0];
+  const [sortByMetric] = ensureIsArray(formData.timeseries_limit_metric);
   const time_grain_sqla =
     extra_form_data?.time_grain_sqla || formData.time_grain_sqla;
   let formDataCopy = formData;
@@ -290,6 +383,16 @@ const buildQuery: BuildQuery<TableChartFormData> = (
           ],
         };
       }
+
+      const advancedFilter = buildAdvancedFilter(
+        ownState.advancedFilter as AdvancedFilterState | undefined,
+      );
+      if (advancedFilter) {
+        queryObject = {
+          ...queryObject,
+          filters: [...(queryObject.filters || []), advancedFilter],
+        };
+      }
     }
 
     // Now since row limit control is always visible even
@@ -301,7 +404,7 @@ const buildQuery: BuildQuery<TableChartFormData> = (
         {
           ...queryObject,
           time_offsets: [],
-          row_limit: Number(formData?.row_limit) ?? 0,
+          row_limit: Number(formData?.row_limit ?? 0),
           row_offset: 0,
           post_processing: [],
           is_rowcount: true,

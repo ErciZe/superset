@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+/* oxlint-disable react/no-danger */
 import { styled } from '@apache-superset/core/theme';
 import { sanitizeHtml } from '@superset-ui/core';
 import { CustomCellRendererProps } from '@superset-ui/core/components/ThemedAgGridReact';
@@ -25,6 +26,7 @@ import {
   InputColumn,
 } from '../types';
 import { useIsDark } from '../utils/useTableTheme';
+import { getRenderableCellValue } from './utils';
 
 const StyledTotalCell = styled.div`
   ${() => `
@@ -120,7 +122,8 @@ function cellBackground({
   isDarkTheme: boolean;
 }) {
   if (!colorPositiveNegative) {
-    return isDarkTheme ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'; // transparent or neutral
+    const channel = isDarkTheme ? 255 : 0;
+    return `rgba(${channel},${channel},${channel},0.2)`;
   }
 
   const r = value < 0 ? 150 : 0;
@@ -181,7 +184,11 @@ export const NumericCellRenderer = (
     );
   }
   if (additionalFormatting && 'text' in additionalFormatting) {
-    return <div {...additionalContentProps}>{additionalFormatting.text}</div>;
+    return (
+      <div {...additionalContentProps}>
+        {getRenderableCellValue(additionalFormatting.text)}
+      </div>
+    );
   }
 
   let arrow = '';
