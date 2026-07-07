@@ -139,7 +139,7 @@ function createFormData(
 }
 
 describe('crosstab dynamic group by resolver', () => {
-  it('returns persisted dimensions and signature when disabled', () => {
+  test('returns persisted dimensions and signature when disabled', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData({ ...baseConfig, enabled: false }),
       rowDimensions: ['metric_name_with_unit'],
@@ -152,11 +152,11 @@ describe('crosstab dynamic group by resolver', () => {
       config: undefined,
       selectedColumn: undefined,
       selectedDynamicGroupBy: undefined,
-      signature: 'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+      signature: 'rows=metric_name_with_unit|columns=biz_date\u001Fshop_name',
     });
   });
 
-  it('returns persisted dimensions when disabled saved config omits slots', () => {
+  test('returns persisted dimensions when disabled saved config omits slots', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData({
         enabled: false,
@@ -171,11 +171,11 @@ describe('crosstab dynamic group by resolver', () => {
       config: undefined,
       selectedColumn: undefined,
       selectedDynamicGroupBy: undefined,
-      signature: 'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+      signature: 'rows=metric_name_with_unit|columns=biz_date\u001Fshop_name',
     });
   });
 
-  it('uses the default column when ownState has no selected column', () => {
+  test('uses the default column when ownState has no selected column', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData(baseConfig),
       ownState: {},
@@ -186,11 +186,11 @@ describe('crosstab dynamic group by resolver', () => {
     expect(result.columnDimensions).toEqual(['biz_date', 'shop_name']);
     expect(result.selectedColumn).toBe('shop_name');
     expect(result.signature).toBe(
-      'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+      'rows=metric_name_with_unit|columns=biz_date\u001Fshop_name',
     );
   });
 
-  it('replaces the configured slot with the runtime selected column', () => {
+  test('replaces the configured slot with the runtime selected column', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData(baseConfig),
       ownState: { selectedDynamicGroupByColumn: 'country' },
@@ -201,11 +201,11 @@ describe('crosstab dynamic group by resolver', () => {
     expect(result.columnDimensions).toEqual(['biz_date', 'country']);
     expect(result.selectedColumn).toBe('country');
     expect(result.signature).toBe(
-      'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
+      'rows=metric_name_with_unit|columns=biz_date\u001Fcountry',
     );
   });
 
-  it('preserves dimension metadata positionally when resolving config slots', () => {
+  test('preserves dimension metadata positionally when resolving config slots', () => {
     const result = resolveDynamicGroupByDimensionConfigs({
       formData: createFormData(baseConfig),
       ownState: { selectedDynamicGroupByColumn: 'country' },
@@ -230,7 +230,7 @@ describe('crosstab dynamic group by resolver', () => {
     ]);
   });
 
-  it('uses option column configs before positional metadata when resolving config slots', () => {
+  test('uses option column configs before positional metadata when resolving config slots', () => {
     const result = resolveDynamicGroupByDimensionConfigs({
       formData: createFormData({
         enabled: true,
@@ -310,7 +310,7 @@ describe('crosstab dynamic group by resolver', () => {
     ]);
   });
 
-  it('matches valid object columns and uses their labels in the signature', () => {
+  test('matches valid object columns and uses their labels in the signature', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData({
         ...baseConfig,
@@ -324,11 +324,11 @@ describe('crosstab dynamic group by resolver', () => {
     expect(result.columnDimensions).toEqual(['biz_date', adhocSqlColumn]);
     expect(result.selectedColumn).toBe(adhocSqlColumn);
     expect(result.signature).toBe(
-      'rows=metric_name_with_unit|columns=biz_date\u001fOrder month',
+      'rows=metric_name_with_unit|columns=biz_date\u001FOrder month',
     );
   });
 
-  it('canonicalizes runtime label matches to the whitelisted object column', () => {
+  test('canonicalizes runtime label matches to the whitelisted object column', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData({
         ...baseConfig,
@@ -346,11 +346,11 @@ describe('crosstab dynamic group by resolver', () => {
     expect(result.columnDimensions).toEqual(['biz_date', adhocSqlColumn]);
     expect(result.selectedColumn).toBe(adhocSqlColumn);
     expect(result.signature).toBe(
-      'rows=metric_name_with_unit|columns=biz_date\u001fOrder month',
+      'rows=metric_name_with_unit|columns=biz_date\u001FOrder month',
     );
   });
 
-  it('parses JSON string config and rejects invalid JSON', () => {
+  test('parses JSON string config and rejects invalid JSON', () => {
     expect(
       getDynamicGroupByConfig(createFormData(JSON.stringify(baseConfig))),
     ).toEqual({
@@ -376,7 +376,7 @@ describe('crosstab dynamic group by resolver', () => {
     );
   });
 
-  it('treats blank string config as disabled', () => {
+  test('treats blank string config as disabled', () => {
     expect(getDynamicGroupByConfig(createFormData(''))).toBeUndefined();
     expect(getDynamicGroupByConfig(createFormData('   '))).toBeUndefined();
 
@@ -392,11 +392,11 @@ describe('crosstab dynamic group by resolver', () => {
       config: undefined,
       selectedColumn: undefined,
       selectedDynamicGroupBy: undefined,
-      signature: 'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+      signature: 'rows=metric_name_with_unit|columns=biz_date\u001Fshop_name',
     });
   });
 
-  it('rejects malformed object columns in dynamic group by config', () => {
+  test('rejects malformed object columns in dynamic group by config', () => {
     expect(() =>
       getDynamicGroupByConfig(
         createFormData(
@@ -409,7 +409,7 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   });
 
-  it('throws when enabled legacy config has empty options', () => {
+  test('throws when enabled legacy config has empty options', () => {
     expect(() =>
       resolveDynamicGroupByDimensions({
         formData: createFormData({ ...baseConfig, options: [] }),
@@ -419,7 +419,7 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS);
   });
 
-  it('throws when selected column is outside the whitelist', () => {
+  test('throws when selected column is outside the whitelist', () => {
     expect(() =>
       resolveDynamicGroupByDimensions({
         formData: createFormData(baseConfig),
@@ -430,7 +430,7 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SELECTED_COLUMN);
   });
 
-  it('throws when slot index is outside the target dimensions', () => {
+  test('throws when slot index is outside the target dimensions', () => {
     expect(() =>
       resolveDynamicGroupByDimensions({
         formData: createFormData({ ...baseConfig, slotIndex: 2 }),
@@ -440,7 +440,7 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT);
   });
 
-  it('normalizes the legacy single-slot shape to one canonical slot', () => {
+  test('normalizes the legacy single-slot shape to one canonical slot', () => {
     expect(getDynamicGroupByConfig(createFormData(baseConfig))).toEqual({
       enabled: true,
       slots: [
@@ -460,7 +460,7 @@ describe('crosstab dynamic group by resolver', () => {
     });
   });
 
-  it('rejects legacy config when default column is outside options', () => {
+  test('rejects legacy config when default column is outside options', () => {
     expect(() =>
       getDynamicGroupByConfig(
         createFormData({
@@ -471,7 +471,7 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION);
   });
 
-  it('accepts the canonical slot-array shape without rewriting stable ids', () => {
+  test('accepts the canonical slot-array shape without rewriting stable ids', () => {
     expect(
       getDynamicGroupByConfig(
         createFormData({
@@ -511,7 +511,7 @@ describe('crosstab dynamic group by resolver', () => {
     });
   });
 
-  it('accepts repeated physical columns across canonical slot options', () => {
+  test('accepts repeated physical columns across canonical slot options', () => {
     expect(
       getDynamicGroupByConfig(
         createFormData({
@@ -587,7 +587,7 @@ describe('crosstab dynamic group by resolver', () => {
     });
   });
 
-  it('rejects duplicate canonical slot ids', () => {
+  test('rejects duplicate canonical slot ids', () => {
     expect(() =>
       getDynamicGroupByConfig(
         createFormData({
@@ -613,7 +613,7 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT);
   });
 
-  it('rejects duplicate option ids within one canonical slot', () => {
+  test('rejects duplicate option ids within one canonical slot', () => {
     expect(() =>
       getDynamicGroupByConfig(
         createFormData({
@@ -643,13 +643,13 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS);
   });
 
-  it('rejects enabled canonical config with no slots', () => {
+  test('rejects enabled canonical config with no slots', () => {
     expect(() =>
       getDynamicGroupByConfig(createFormData({ enabled: true, slots: [] })),
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   });
 
-  it('rejects non-array canonical slots even with legacy fields present', () => {
+  test('rejects non-array canonical slots even with legacy fields present', () => {
     const invalidCanonicalDynamicGroupBy = {
       enabled: true,
       slots: 'bad',
@@ -664,7 +664,7 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
   });
 
-  it('rejects canonical slots with empty options', () => {
+  test('rejects canonical slots with empty options', () => {
     expect(() =>
       getDynamicGroupByConfig(
         createFormData({
@@ -683,7 +683,7 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_OPTIONS);
   });
 
-  it('rejects option columns that do not match spliceCount', () => {
+  test('rejects option columns that do not match spliceCount', () => {
     expect(() =>
       getDynamicGroupByConfig(
         createFormData({
@@ -703,7 +703,7 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SPLICE_COUNT);
   });
 
-  it('applies multiple selected slots against original persisted positions', () => {
+  test('applies multiple selected slots against original persisted positions', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData(multiSlotConfig),
       ownState: {
@@ -723,11 +723,68 @@ describe('crosstab dynamic group by resolver', () => {
     });
     expect(result.selectedColumn).toBe('country');
     expect(result.signature).toBe(
-      'rows=metric_name_with_unit|columns=biz_date\u001fcountry\u001fmsku',
+      'rows=metric_name_with_unit|columns=biz_date\u001Fcountry\u001Fmsku',
     );
   });
 
-  it('treats append-position empty option as no-op', () => {
+  test('clears later selected slots after an empty previous slot', () => {
+    const options = [
+      { id: 'none', label: '无', columns: [] },
+      { id: 'date', label: '日期', columns: ['biz_date'] },
+      { id: 'shop', label: '店铺', columns: ['shop_name'] },
+      { id: 'country', label: '国家', columns: ['country'] },
+      { id: 'msku', label: 'MSKU', columns: ['msku'] },
+    ];
+    const result = resolveDynamicGroupByDimensions({
+      formData: createFormData({
+        enabled: true,
+        slots: [
+          {
+            id: 'dimension1',
+            placement: 'columns',
+            slotIndex: 0,
+            spliceCount: 1,
+            defaultOptionId: 'date',
+            options,
+          },
+          {
+            id: 'dimension2',
+            placement: 'columns',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'shop',
+            options,
+          },
+          {
+            id: 'dimension3',
+            placement: 'columns',
+            slotIndex: 2,
+            spliceCount: 1,
+            defaultOptionId: 'country',
+            options,
+          },
+        ],
+      }),
+      ownState: {
+        selectedDynamicGroupBy: {
+          dimension1: 'date',
+          dimension2: 'none',
+          dimension3: 'msku',
+        },
+      },
+      rowDimensions: ['metric_name_with_unit'],
+      columnDimensions: ['biz_date', 'shop_name', 'country'],
+    });
+
+    expect(result.columnDimensions).toEqual(['biz_date']);
+    expect(result.selectedDynamicGroupBy).toEqual({
+      dimension1: 'date',
+      dimension2: 'none',
+      dimension3: 'none',
+    });
+  });
+
+  test('treats append-position empty option as no-op', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData(multiSlotConfig),
       ownState: {
@@ -747,7 +804,7 @@ describe('crosstab dynamic group by resolver', () => {
     });
   });
 
-  it('replaces multiple contiguous dimensions for a multi-column option', () => {
+  test('replaces multiple contiguous dimensions for a multi-column option', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData(multiColumnOptionConfig),
       ownState: {
@@ -769,7 +826,7 @@ describe('crosstab dynamic group by resolver', () => {
     });
   });
 
-  it('applies selected row and column slots across placements', () => {
+  test('applies selected row and column slots across placements', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData({
         enabled: true,
@@ -827,7 +884,7 @@ describe('crosstab dynamic group by resolver', () => {
     expect(result.selectedColumn).toBe('metric_family');
   });
 
-  it('maps legacy selectedDynamicGroupByColumn to the legacy slot option', () => {
+  test('maps legacy selectedDynamicGroupByColumn to the legacy slot option', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData(baseConfig),
       ownState: { selectedDynamicGroupByColumn: 'country' },
@@ -840,7 +897,7 @@ describe('crosstab dynamic group by resolver', () => {
     expect(result.selectedColumn).toBe('country');
   });
 
-  it('throws when selected option id is outside the slot whitelist', () => {
+  test('throws when selected option id is outside the slot whitelist', () => {
     expect(() =>
       resolveDynamicGroupByDimensions({
         formData: createFormData(multiSlotConfig),
@@ -855,7 +912,7 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_UNKNOWN_OPTION);
   });
 
-  it('throws when slot ranges overlap within one placement', () => {
+  test('throws when slot ranges overlap within one placement', () => {
     expect(() =>
       resolveDynamicGroupByDimensions({
         formData: createFormData({
@@ -891,7 +948,7 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_SLOT_OVERLAP);
   });
 
-  it('throws when the same physical string column is duplicated after resolution', () => {
+  test('throws when the same physical string column is duplicated after resolution', () => {
     expect(() =>
       resolveDynamicGroupByDimensions({
         formData: createFormData({
@@ -913,7 +970,7 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_DUPLICATE_COLUMN);
   });
 
-  it('allows same-label adhoc SQL columns with different expressions', () => {
+  test('allows same-label adhoc SQL columns with different expressions', () => {
     const result = resolveDynamicGroupByDimensions({
       formData: createFormData({
         enabled: true,
@@ -945,7 +1002,7 @@ describe('crosstab dynamic group by resolver', () => {
     ]);
   });
 
-  it('throws when adhoc SQL columns share an expression with different labels', () => {
+  test('throws when adhoc SQL columns share an expression with different labels', () => {
     expect(() =>
       resolveDynamicGroupByDimensions({
         formData: createFormData({
@@ -973,7 +1030,7 @@ describe('crosstab dynamic group by resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_GROUP_BY_DUPLICATE_COLUMN);
   });
 
-  it('throws when total effective dimensions exceed MAX_DIMENSIONS', () => {
+  test('throws when total effective dimensions exceed MAX_DIMENSIONS', () => {
     expect(() =>
       resolveDynamicGroupByDimensions({
         formData: createFormData({

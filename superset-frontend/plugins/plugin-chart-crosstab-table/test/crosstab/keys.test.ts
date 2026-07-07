@@ -28,14 +28,14 @@ function expectErrorMessage(callback: () => unknown, message: string) {
 }
 
 describe('crosstab keys', () => {
-  it('separates type, length, and display value', () => {
+  test('separates type, length, and display value', () => {
     expect(encodeKey(null)).toBe('null:0:');
     expect(encodeKey('12:string')).toBe('string:9:12:string');
     expect(encodeKey(12)).toBe('number:2:12');
     expect(encodeKey(true)).toBe('boolean:4:true');
   });
 
-  it('round trips encoded values', () => {
+  test('round trips encoded values', () => {
     expect(decodeKey('null:0:')).toEqual({ type: 'null', value: null });
     expect(decodeKey('string:9:12:string')).toEqual({
       type: 'string',
@@ -55,7 +55,7 @@ describe('crosstab keys', () => {
     });
   });
 
-  it('rejects unsupported encode inputs', () => {
+  test('rejects unsupported encode inputs', () => {
     expectErrorMessage(
       () => encodeKey(undefined),
       'Unsupported crosstab key value type: undefined',
@@ -66,7 +66,7 @@ describe('crosstab keys', () => {
     );
   });
 
-  it('rejects non-finite encode inputs', () => {
+  test('rejects non-finite encode inputs', () => {
     expectErrorMessage(
       () => encodeKey(NaN),
       'Unsupported crosstab key number value: NaN',
@@ -81,7 +81,7 @@ describe('crosstab keys', () => {
     );
   });
 
-  it('rejects invalid encoded keys', () => {
+  test('rejects invalid encoded keys', () => {
     expectErrorMessage(
       () => decodeKey('date:10:2026-05-01'),
       'Invalid crosstab key type: date',
@@ -112,7 +112,7 @@ describe('crosstab keys', () => {
     );
   });
 
-  it('builds tuple keys without separator collisions', () => {
+  test('builds tuple keys without separator collisions', () => {
     expect(encodeTuple(['A|B', 'C'])).not.toBe(encodeTuple(['A', 'B|C']));
   });
 });

@@ -235,6 +235,28 @@ test('applies custom theme colors from Superset theme', () => {
   expect(theme.borderColor).toBe('#d9d9d9');
 });
 
+test('uses elevated backgrounds for AG Grid menus and popups', () => {
+  const customTheme = {
+    ...supersetTheme,
+    colorBgContainer: '#ffffff',
+    colorBgElevated: '#fafafa',
+  };
+
+  render(
+    <ThemeProvider theme={customTheme}>
+      <ThemedAgGridReact rowData={mockRowData} columnDefs={mockColumnDefs} />
+    </ThemeProvider>,
+  );
+
+  const agGrid = screen.getByTestId('ag-grid-react');
+  const theme = JSON.parse(agGrid.getAttribute('data-theme') || '{}');
+
+  expect(theme.backgroundColor).toBe('transparent');
+  expect(theme.menuBackgroundColor).toBe('#fafafa');
+  expect(theme.panelBackgroundColor).toBe('#fafafa');
+  expect(theme.pickerListBackgroundColor).toBe('#fafafa');
+});
+
 test('wraps component with proper container div', () => {
   const { container } = render(
     <ThemedAgGridReact rowData={mockRowData} columnDefs={mockColumnDefs} />,

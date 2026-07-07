@@ -54,7 +54,7 @@ const baseParams = {
 };
 
 describe('cell formatter renderers', () => {
-  it('applies formatter class and tooltip without replacing text cells', () => {
+  test('applies formatter class and tooltip without replacing text cells', () => {
     render(
       <TextCellRenderer
         {...(baseParams as any)}
@@ -70,7 +70,7 @@ describe('cell formatter renderers', () => {
     expect(cell).toHaveAttribute('title', 'Raw value');
   });
 
-  it('applies formatter class and tooltip without replacing numeric cells', () => {
+  test('applies formatter class and tooltip without replacing numeric cells', () => {
     render(
       <NumericCellRenderer
         {...(baseParams as any)}

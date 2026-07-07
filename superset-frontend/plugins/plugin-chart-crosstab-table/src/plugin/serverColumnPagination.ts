@@ -106,7 +106,7 @@ function getSortSignature(config: DimensionFieldConfig): string {
     config.sort.direction ?? 'asc',
     config.sort.type ?? 'string',
     config.sort.nulls ?? 'last',
-  ].join('\u001e');
+  ].join('\u001E');
 }
 
 function isDimensionFieldConfig(
@@ -119,8 +119,8 @@ export function getServerColumnPageColumnSignature(
   columns: string[] | DimensionFieldConfig[],
 ): string {
   return columns.some(isDimensionFieldConfig)
-    ? (columns as DimensionFieldConfig[]).map(getSortSignature).join('\u001f')
-    : (columns as string[]).join('\u001f');
+    ? (columns as DimensionFieldConfig[]).map(getSortSignature).join('\u001F')
+    : (columns as string[]).join('\u001F');
 }
 
 export function assertServerColumnPaginationShape(

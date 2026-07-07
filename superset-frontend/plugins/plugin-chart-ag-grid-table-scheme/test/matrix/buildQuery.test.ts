@@ -20,7 +20,7 @@ import { QueryMode, VizType } from '@superset-ui/core';
 import buildQuery from '../../src/matrix/buildQuery';
 
 describe('ag grid table scheme matrix buildQuery', () => {
-  it('preserves official query behavior when matrix mode is disabled', () => {
+  test('preserves official query behavior when matrix mode is disabled', () => {
     const query = buildQuery({
       viz_type: VizType.Table,
       datasource: '11__table',
@@ -34,7 +34,7 @@ describe('ag grid table scheme matrix buildQuery', () => {
     expect(query.metrics).toEqual(['count']);
   });
 
-  it('injects matrix dimensions, unit, sort field, and selected metric', () => {
+  test('injects matrix dimensions, unit, sort field, and selected metric', () => {
     const query = buildQuery({
       viz_type: VizType.Table,
       datasource: '11__table',
@@ -58,7 +58,7 @@ describe('ag grid table scheme matrix buildQuery', () => {
     expect(query.metrics).toEqual(['value']);
   });
 
-  it('adds a raw total summary query without matrix columns', () => {
+  test('adds a raw total summary query without matrix columns', () => {
     const queryContext = buildQuery({
       viz_type: VizType.Table,
       datasource: '11__table',
@@ -90,7 +90,7 @@ describe('ag grid table scheme matrix buildQuery', () => {
     });
   });
 
-  it('passes adhoc dimensions and metrics through the official query builder', () => {
+  test('passes adhoc dimensions and metrics through the official query builder', () => {
     const regionColumn = {
       expressionType: 'SQL',
       label: 'region_bucket',
@@ -119,7 +119,7 @@ describe('ag grid table scheme matrix buildQuery', () => {
     expect(query.metrics).toEqual([valueMetric]);
   });
 
-  it('fails fast when matrix mode is combined with server pagination', () => {
+  test('fails fast when matrix mode is combined with server pagination', () => {
     expect(() =>
       buildQuery({
         viz_type: VizType.Table,

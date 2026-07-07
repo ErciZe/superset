@@ -43,6 +43,7 @@ import {
   ClientSideRowModelModule,
   type ColDef,
   type CustomCellRendererProps,
+  getAgGridLocaleText,
   type ValueFormatterParams,
   ModuleRegistry,
 } from '@superset-ui/core/components/ThemedAgGridReact';
@@ -69,6 +70,7 @@ import {
 } from './crosstab/engine';
 import { getCrosstabParameters } from './plugin/parameters';
 import { getGeneratedColumnWidth } from './plugin/serverColumnPagination';
+import { resolveSequentialDynamicGroupByOptionIds } from './plugin/dynamicGroupBy';
 import {
   createCrosstabCellFormatter,
   type CrosstabCellFormatterResult,
@@ -114,6 +116,7 @@ type FormatterHookParams = {
 type DynamicGroupBySelector = {
   canClear: boolean;
   clearOptionId?: string;
+  disabled: boolean;
   label: string;
   options: {
     disabled?: boolean;
@@ -472,7 +475,7 @@ function buildRowColumnDefs(
               const path = row[CROSSTAB_ROW_PATH] as string;
               const expanded = expandedRowPaths.has(path);
               const level = Number(row[CROSSTAB_ROW_LEVEL] ?? 0);
-              const indent = '\u00a0'.repeat(level * 2);
+              const indent = '\u00A0'.repeat(level * 2);
 
               return `${indent}${expanded ? '▾' : '▸'} ${value ?? ''}`;
             }
@@ -828,25 +831,38 @@ export default function CrosstabTable({
         slot.options.find(option => option.columns.length === 0)?.id,
       ]),
     );
-    const selectedOptionIdsBySlot = new Map<string, string>();
+    const selectedOptionIdsBySlot = new Map(
+      Object.entries(
+        resolveSequentialDynamicGroupByOptionIds(
+          dynamicGroupByConfig.slots,
+          selectedDynamicGroupBy,
+        ),
+      ),
+    );
+    const disabledSlotIds = new Set<string>();
+    const previousSlotHasColumnsByPlacement = new Map<string, boolean>();
     const activeOptionCountsByPlacement = new Map<string, number>();
 
     sortedSlots.forEach(slot => {
-      const valueSet = new Set(slot.options.map(option => option.id));
-      const selectedOptionId = selectedDynamicGroupBy?.[slot.id];
+      const previousSlotHasColumns =
+        previousSlotHasColumnsByPlacement.get(slot.placement) ?? true;
       const value =
-        selectedOptionId && valueSet.has(selectedOptionId)
-          ? selectedOptionId
-          : slot.defaultOptionId;
+        selectedOptionIdsBySlot.get(slot.id) ?? slot.defaultOptionId;
       const selectedOption = slot.options.find(option => option.id === value);
 
-      selectedOptionIdsBySlot.set(slot.id, value);
+      if (!previousSlotHasColumns) {
+        disabledSlotIds.add(slot.id);
+      }
       if (selectedOption && selectedOption.columns.length > 0) {
         activeOptionCountsByPlacement.set(
           slot.placement,
           (activeOptionCountsByPlacement.get(slot.placement) ?? 0) + 1,
         );
       }
+      previousSlotHasColumnsByPlacement.set(
+        slot.placement,
+        (selectedOption?.columns.length ?? 0) > 0,
+      );
     });
 
     return sortedSlots.map(slot => {
@@ -854,11 +870,14 @@ export default function CrosstabTable({
       const value =
         selectedOptionIdsBySlot.get(slot.id) ?? slot.defaultOptionId;
       const selectedOption = slot.options.find(option => option.id === value);
+      const disabled = disabledSlotIds.has(slot.id);
       const canClear =
+        !disabled &&
         clearOptionId !== undefined &&
         (selectedOption?.columns.length ?? 0) === 0
           ? true
           : clearOptionId !== undefined &&
+            !disabled &&
             (activeOptionCountsByPlacement.get(slot.placement) ?? 0) > 1;
       const selectedOptionIdsFromOtherSlots = new Set(
         [...selectedOptionIdsBySlot]
@@ -871,6 +890,7 @@ export default function CrosstabTable({
       );
       const options = slot.options.map(option => ({
         disabled:
+          disabled ||
           (option.id === clearOptionId && !canClear) ||
           (option.id !== clearOptionId &&
             option.id !== value &&
@@ -879,12 +899,17 @@ export default function CrosstabTable({
         value: option.id,
       }));
       const valueSet = new Set(
-        options.filter(option => !option.disabled).map(option => option.value),
+        disabled
+          ? [value]
+          : options
+              .filter(option => !option.disabled)
+              .map(option => option.value),
       );
 
       return {
         canClear,
         clearOptionId,
+        disabled,
         label: slot.label ?? t('Group dimension'),
         options,
         slotId: slot.id,
@@ -1030,14 +1055,24 @@ export default function CrosstabTable({
       if (!selector?.valueSet.has(nextOptionId)) {
         return;
       }
+      const nextSelectedDynamicGroupBy =
+        dynamicGroupByConfig?.enabled === true
+          ? resolveSequentialDynamicGroupByOptionIds(
+              dynamicGroupByConfig.slots,
+              {
+                ...selectedDynamicGroupBy,
+                [slotId]: nextOptionId,
+              },
+            )
+          : {
+              ...selectedDynamicGroupBy,
+              [slotId]: nextOptionId,
+            };
 
       setDataMask?.({
         ownState: {
           ...getPreservedDynamicGroupByOwnState(ownState),
-          selectedDynamicGroupBy: {
-            ...(selectedDynamicGroupBy ?? {}),
-            [slotId]: nextOptionId,
-          },
+          selectedDynamicGroupBy: nextSelectedDynamicGroupBy,
           currentColumnPage: 0,
           currentColumnPageSize: effectiveColumnsPerPage,
           serverColumnPageTuples: [],
@@ -1048,6 +1083,7 @@ export default function CrosstabTable({
     },
     [
       dynamicGroupBySelectors,
+      dynamicGroupByConfig,
       effectiveColumnsPerPage,
       ownState,
       selectedDynamicGroupBy,
@@ -1068,7 +1104,7 @@ export default function CrosstabTable({
         ownState: {
           ...getPreservedDynamicMetricOwnState(ownState),
           selectedDynamicMetric: {
-            ...(selectedDynamicMetric ?? {}),
+            ...selectedDynamicMetric,
             [slotId]: nextOptionId,
           },
           currentColumnPage: 0,
@@ -1096,7 +1132,7 @@ export default function CrosstabTable({
         ownState: {
           ...getPreservedRuntimeParameterOwnState(ownState),
           numericParameters: {
-            ...(ownState?.numericParameters ?? {}),
+            ...ownState?.numericParameters,
             [parameter.id]: value,
           },
           currentColumnPage: 0,
@@ -1285,6 +1321,7 @@ export default function CrosstabTable({
           }
           options={selector.options}
           allowClear={clearOptionId !== undefined && selector.canClear}
+          disabled={selector.disabled}
           sortComparator={PRESERVE_SELECT_OPTION_ORDER}
           value={selector.value}
         />
@@ -1366,6 +1403,7 @@ export default function CrosstabTable({
           flex: '0 0 auto',
           flexWrap: 'wrap',
           gap: theme.sizeUnit,
+          marginBottom: 5,
         }}
       >
         {dynamicGroupBySelects}
@@ -1387,6 +1425,7 @@ export default function CrosstabTable({
           rowData={visibleRowData}
           columnDefs={columnDefs}
           defaultColDef={defaultColDef}
+          localeText={getAgGridLocaleText()}
           getRowStyle={({ data }) => {
             const rowType = data?.[CROSSTAB_ROW_TYPE];
 

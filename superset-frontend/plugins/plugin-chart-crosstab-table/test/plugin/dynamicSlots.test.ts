@@ -60,7 +60,7 @@ const baseSlots: TestSlot[] = [
 ];
 
 describe('dynamic slot mechanics', () => {
-  it('resolves selected options from ownState selections and defaults', () => {
+  test('resolves selected options from ownState selections and defaults', () => {
     const selectedOptions = resolveDynamicSlotOptions(baseSlots, {
       level2: 'country',
     });
@@ -74,7 +74,7 @@ describe('dynamic slot mechanics', () => {
     expect(selectedOptions[0].slot.placement).toBe('columns');
   });
 
-  it('throws for duplicate slot ids', () => {
+  test('throws for duplicate slot ids', () => {
     expect(() =>
       validateDynamicSlots(
         [
@@ -89,7 +89,7 @@ describe('dynamic slot mechanics', () => {
     ).toThrow(ERR_DYNAMIC_SLOT_DUPLICATE_SLOT);
   });
 
-  it('throws for duplicate option ids inside one slot', () => {
+  test('throws for duplicate option ids inside one slot', () => {
     expect(() =>
       validateDynamicSlots(
         [
@@ -106,7 +106,7 @@ describe('dynamic slot mechanics', () => {
     ).toThrow(ERR_DYNAMIC_SLOT_DUPLICATE_OPTION);
   });
 
-  it('throws for overlapping slot ranges within the same placement', () => {
+  test('throws for overlapping slot ranges within the same placement', () => {
     expect(() =>
       validateDynamicSlots(
         [
@@ -126,7 +126,7 @@ describe('dynamic slot mechanics', () => {
     ).toThrow(ERR_DYNAMIC_SLOT_OVERLAP);
   });
 
-  it('allows overlapping slot ranges across different placements', () => {
+  test('allows overlapping slot ranges across different placements', () => {
     expect(() =>
       validateDynamicSlots(
         [
@@ -142,7 +142,7 @@ describe('dynamic slot mechanics', () => {
     ).not.toThrow();
   });
 
-  it('validates payload length against spliceCount and allowEmptyPayload', () => {
+  test('validates payload length against spliceCount and allowEmptyPayload', () => {
     const slots: TestSlot[] = [
       {
         ...baseSlots[0],
@@ -179,13 +179,13 @@ describe('dynamic slot mechanics', () => {
     ).toThrow(ERR_DYNAMIC_SLOT_SPLICE_COUNT);
   });
 
-  it('throws when a selected option id is not in the slot options', () => {
+  test('throws when a selected option id is not in the slot options', () => {
     expect(() =>
       resolveDynamicSlotOptions(baseSlots, { level2: 'unknown' }),
     ).toThrow(ERR_DYNAMIC_SLOT_INVALID_OPTION);
   });
 
-  it('applies splices in descending slot order', () => {
+  test('applies splices in descending slot order', () => {
     const selectedOptions = resolveDynamicSlotOptions(
       [
         {
@@ -207,7 +207,7 @@ describe('dynamic slot mechanics', () => {
     ).toEqual(['biz_date', 'country', 'msku']);
   });
 
-  it('uses one as the default splice count', () => {
+  test('uses one as the default splice count', () => {
     expect(
       getDynamicSlotSpliceCount({
         spliceCount: undefined,

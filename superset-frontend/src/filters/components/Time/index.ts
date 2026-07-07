@@ -31,6 +31,7 @@ export default class TimeFilterPlugin extends ChartPlugin {
       thumbnail,
       tags: [t('Experimental')],
       datasourceCount: 0,
+      enableNoResults: false,
     });
 
     super({

@@ -74,7 +74,7 @@ const getRow = (
 };
 
 describe('matrixTransform', () => {
-  it('converts long records to wide matrix rows with left total', () => {
+  test('converts long records to wide matrix rows with left total', () => {
     const result = matrixTransform(records, {
       rows: ['metric_name'],
       columns: ['biz_date'],
@@ -114,7 +114,7 @@ describe('matrixTransform', () => {
     ]);
   });
 
-  it('only appends row-level units for percentage values', () => {
+  test('only appends row-level units for percentage values', () => {
     const result = matrixTransform(records, {
       rows: ['metric_name'],
       columns: ['biz_date'],
@@ -140,7 +140,7 @@ describe('matrixTransform', () => {
     });
   });
 
-  it('preserves generated cell display values and exposes raw values for styling', () => {
+  test('preserves generated cell display values and exposes raw values for styling', () => {
     const result = matrixTransform(records, {
       rows: ['metric_name'],
       columns: ['biz_date'],
@@ -180,7 +180,7 @@ describe('matrixTransform', () => {
     });
   });
 
-  it('uses summary records for raw totals when provided', () => {
+  test('uses summary records for raw totals when provided', () => {
     const result = matrixTransform(records, {
       rows: ['metric_name'],
       columns: ['biz_date'],
@@ -219,7 +219,7 @@ describe('matrixTransform', () => {
     });
   });
 
-  it('preserves null raw totals from summary records', () => {
+  test('preserves null raw totals from summary records', () => {
     const result = matrixTransform(records, {
       rows: ['metric_name'],
       columns: ['biz_date'],
@@ -258,7 +258,7 @@ describe('matrixTransform', () => {
     });
   });
 
-  it('fails fast when a summary total is missing for a raw row', () => {
+  test('fails fast when a summary total is missing for a raw row', () => {
     expect(() =>
       matrixTransform(records, {
         rows: ['metric_name'],
@@ -282,7 +282,7 @@ describe('matrixTransform', () => {
     ).toThrow('Matrix summary total is missing for row Sales.');
   });
 
-  it('keeps raw values numeric when no unit field is configured', () => {
+  test('keeps raw values numeric when no unit field is configured', () => {
     const valueFormatter = (value: number) => value.toFixed(2);
     const result = matrixTransform(records, {
       rows: ['metric_name'],
@@ -310,7 +310,7 @@ describe('matrixTransform', () => {
     });
   });
 
-  it('formats temporal column labels and sorts them newest first', () => {
+  test('formats temporal column labels and sorts them newest first', () => {
     const result = matrixTransform(
       [
         { metric_name: 'Sales', biz_date: 1777334400000, value: 1 },
@@ -343,7 +343,7 @@ describe('matrixTransform', () => {
     ).toEqual(['2026-05-12', '2026-04-28']);
   });
 
-  it('supports contribution, row contribution, and dense row rank', () => {
+  test('supports contribution, row contribution, and dense row rank', () => {
     const base = {
       rows: ['metric_name'],
       columns: ['biz_date'],
@@ -385,7 +385,7 @@ describe('matrixTransform', () => {
     });
   });
 
-  it('uses non-colliding generated IDs for multi-column dimensions', () => {
+  test('uses non-colliding generated IDs for multi-column dimensions', () => {
     const result = matrixTransform(
       [
         { metric_name: 'Sales', first: 'a', second: 'b__c', value: 1 },
@@ -414,7 +414,7 @@ describe('matrixTransform', () => {
     });
   });
 
-  it('distinguishes typed null and numeric column dimension values', () => {
+  test('distinguishes typed null and numeric column dimension values', () => {
     const result = matrixTransform(
       [
         { metric_name: 'Sales', dimension_value: null, value: 1 },
@@ -448,7 +448,7 @@ describe('matrixTransform', () => {
     });
   });
 
-  it('does not merge delimiter-like multi-field row dimensions', () => {
+  test('does not merge delimiter-like multi-field row dimensions', () => {
     const result = matrixTransform(
       [
         { row_a: 'a', row_b: 'b\u0001c', biz_date: '2026-05-01', value: 1 },
@@ -480,7 +480,7 @@ describe('matrixTransform', () => {
     ]);
   });
 
-  it('keeps generated column labels human-readable', () => {
+  test('keeps generated column labels human-readable', () => {
     const result = matrixTransform(
       [
         {
@@ -515,7 +515,7 @@ describe('matrixTransform', () => {
     ).toEqual(['North / 华北 / Profit %', 'South Zone / 销售额'].sort());
   });
 
-  it('fails fast for inconsistent row sort or unit values within one row', () => {
+  test('fails fast for inconsistent row sort or unit values within one row', () => {
     const base = {
       rows: ['metric_name'],
       columns: ['biz_date'],
@@ -574,7 +574,7 @@ describe('matrixTransform', () => {
     ).toThrow('Matrix unitField value must be consistent within row Sales.');
   });
 
-  it('fails fast for invalid config and excessive generated columns', () => {
+  test('fails fast for invalid config and excessive generated columns', () => {
     expect(() =>
       matrixTransform(records, {
         rows: [],

@@ -220,7 +220,7 @@ const processComparisonColumns = (
   comparisonSuffix: string,
 ) =>
   columns
-    .map(col => {
+    .flatMap(col => {
       const {
         datasource: { columnFormats, currencyFormats },
         rawFormData: { column_config: columnConfig = {} },
@@ -304,8 +304,7 @@ const processComparisonColumns = (
         return [col];
       }
       return [];
-    })
-    .flat();
+    });
 
 const serverPageLengthMap = new Map();
 

@@ -22,6 +22,12 @@
         "description": "Enables experimental chart plugins"
       },
       {
+        "name": "COLUMN_VIEW_SCHEME_ENABLED",
+        "default": false,
+        "lifecycle": "development",
+        "description": "Enables the internal column view scheme chart plugin."
+      },
+      {
         "name": "CSV_UPLOAD_PYARROW_ENGINE",
         "default": false,
         "lifecycle": "development",

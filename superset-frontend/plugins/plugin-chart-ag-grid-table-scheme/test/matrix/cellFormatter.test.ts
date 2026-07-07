@@ -24,7 +24,7 @@ import {
 } from '../../src/matrix/cellFormatter';
 
 describe('matrix cell formatter', () => {
-  it('formats matrix cells with a JavaScript callback', () => {
+  test('formats matrix cells with a JavaScript callback', () => {
     const formatter = createMatrixCellFormatter(`
       ({ row, rawValue, cell, column, rowIndex }) => {
         if (row.metric_name === "Profit" && rawValue < 0) {
@@ -64,7 +64,7 @@ describe('matrix cell formatter', () => {
     });
   });
 
-  it('uses the default commented example as documentation only', () => {
+  test('uses the default commented example as documentation only', () => {
     expect(validateMatrixCellFormatterCallback('')).toBe(false);
     expect(
       validateMatrixCellFormatterCallback(
@@ -76,7 +76,7 @@ describe('matrix cell formatter', () => {
     ).toBeUndefined();
   });
 
-  it('supports Math.abs threshold formatting for refund ratio rows', () => {
+  test('supports Math.abs threshold formatting for refund ratio rows', () => {
     const formatter = createMatrixCellFormatter(`
       ({ row, rawValue }) => {
         if (
@@ -125,7 +125,7 @@ describe('matrix cell formatter', () => {
     });
   });
 
-  it('formats dashboard threshold backgrounds from raw ratio values', () => {
+  test('formats dashboard threshold backgrounds from raw ratio values', () => {
     const formatter = createMatrixCellFormatter(`
       ({ row, rawValue, value: displayValue }) => {
         const metricName = String(
@@ -264,7 +264,7 @@ describe('matrix cell formatter', () => {
     ).toBeUndefined();
   });
 
-  it('validates callback source and returned fields', () => {
+  test('validates callback source and returned fields', () => {
     expect(() =>
       validateMatrixCellFormatterCallback('{ text: value }'),
     ).toThrow(/must be a function/);
@@ -283,7 +283,7 @@ describe('matrix cell formatter', () => {
     ).toThrow(/unsupported style field/);
   });
 
-  it('formats callback source with prettier', async () => {
+  test('formats callback source with prettier', async () => {
     const formatted = await formatMatrixCellFormatterCallback(
       '({rawValue})=>({text:rawValue})',
     );
@@ -311,7 +311,7 @@ describe('matrix cell formatter', () => {
     ).toEqual({ text: 12 });
   });
 
-  it('validates callback source with a trailing semicolon', () => {
+  test('validates callback source with a trailing semicolon', () => {
     expect(
       validateMatrixCellFormatterCallback(
         '({ rawValue }) => ({ text: rawValue });',
@@ -319,19 +319,19 @@ describe('matrix cell formatter', () => {
     ).toBe(false);
   });
 
-  it('keeps formatted callback source stable when re-validating', async () => {
+  test('keeps formatted callback source stable when re-validating', async () => {
     await expect(
       formatMatrixCellFormatterCallback('({rawValue})=>({text:rawValue})'),
     ).resolves.toBe(`({ rawValue }) => ({ text: rawValue });\n`);
   });
 
-  it('preserves string literal values while formatting callback source', async () => {
+  test('preserves string literal values while formatting callback source', async () => {
     await expect(
       formatMatrixCellFormatterCallback('()=>({text:"a=>b"})'),
     ).resolves.toBe(`() => ({ text: "a=>b" });\n`);
   });
 
-  it('rejects invalid callback source while formatting', async () => {
+  test('rejects invalid callback source while formatting', async () => {
     await expect(
       formatMatrixCellFormatterCallback('{ text: value }'),
     ).rejects.toThrow(/must be a function/);

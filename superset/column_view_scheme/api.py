@@ -72,8 +72,7 @@ class ColumnViewSchemeRestApi(BaseSupersetApi):
         user = getattr(g, "user", None)
         if user is None or getattr(user, "is_anonymous", False):
             return None
-        user_id = getattr(user, "id", None)
-        if user_id is not None:
+        if (user_id := getattr(user, "id", None)) is not None:
             return user_id
         if security_manager.is_guest_user(user):
             storage_username = (

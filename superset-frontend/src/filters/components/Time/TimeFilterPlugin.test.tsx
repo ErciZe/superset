@@ -17,6 +17,7 @@
  * under the License.
  */
 import { render, screen } from 'spec/helpers/testing-library';
+import TimeFilterChartPlugin from '.';
 import TimeFilterPlugin from './TimeFilterPlugin';
 import { PluginFilterTimeProps } from './types';
 
@@ -85,4 +86,10 @@ test('omits easy date range flag without native filter form data flag', () => {
   render(<TimeFilterPlugin {...baseProps} />);
 
   expect(screen.getByText('easy-missing')).toBeInTheDocument();
+});
+
+test('disables no-results placeholder for empty time filter queries', () => {
+  const plugin = new TimeFilterChartPlugin();
+
+  expect(plugin.metadata.enableNoResults).toBe(false);
 });

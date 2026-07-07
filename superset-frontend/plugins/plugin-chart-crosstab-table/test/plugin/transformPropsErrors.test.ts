@@ -22,7 +22,7 @@ import transformProps from '../../src/plugin/transformProps';
 import type { CrosstabFormData } from '../../src/types';
 
 describe('crosstab transformProps errors', () => {
-  it('fails fast for malformed metric entries', () => {
+  test('fails fast for malformed metric entries', () => {
     expect(() =>
       transformProps(
         new ChartProps<CrosstabFormData>({
@@ -42,7 +42,7 @@ describe('crosstab transformProps errors', () => {
     ).toThrow('Unsupported crosstab metric field.');
   });
 
-  it('fails fast for invalid conditional formatting JSON', () => {
+  test('fails fast for invalid conditional formatting JSON', () => {
     expect(() =>
       transformProps(
         new ChartProps<CrosstabFormData>({

@@ -360,13 +360,13 @@ function getMetricConfigSignaturePart(config: MetricFieldConfig): string {
     getMetricConfigIdentity(config),
     stableStringify(config.metric),
     config.semantic ?? '',
-  ].join('\u001e');
+  ].join('\u001E');
 }
 
 export function getMetricConfigSignature(
   metricConfigs: MetricFieldConfig[],
 ): string {
-  return metricConfigs.map(getMetricConfigSignaturePart).join('\u001f');
+  return metricConfigs.map(getMetricConfigSignaturePart).join('\u001F');
 }
 
 function validateSlotBounds(

@@ -107,6 +107,10 @@ export const ThemedAgGridReact = forwardRef<
       // Header styling
       headerBackgroundColor: theme.colorFillTertiary,
       headerTextColor: theme.colorTextHeading,
+      menuBackgroundColor: theme.colorBgElevated,
+      menuTextColor: theme.colorText,
+      panelBackgroundColor: theme.colorBgElevated,
+      pickerListBackgroundColor: theme.colorBgElevated,
 
       // Cell and row styling
       oddRowBackgroundColor: oddRowBg,
@@ -182,8 +186,20 @@ export const ThemedAgGridReact = forwardRef<
       css={css`
         width: 100%;
         height: 100%;
+        --ag-menu-background-color: ${theme.colorBgElevated};
+        --ag-menu-text-color: ${theme.colorText};
+        --ag-panel-background-color: ${theme.colorBgElevated};
+        --ag-picker-list-background-color: ${theme.colorBgElevated};
         .ag-cell {
           -webkit-font-smoothing: antialiased;
+        }
+        .ag-menu,
+        .ag-menu .ag-filter,
+        .ag-menu .ag-filter-wrapper,
+        .ag-menu .ag-filter-body-wrapper,
+        .ag-select-list {
+          background-color: ${theme.colorBgElevated};
+          color: ${theme.colorText};
         }
       `}
       data-themed-ag-grid="true"
@@ -235,3 +251,4 @@ export { AgGridReact } from 'ag-grid-react';
 
 // Export the setup function and default modules for AG-Grid
 export { setupAGGridModules, defaultModules } from './setupAGGridModules';
+export { default as getAgGridLocaleText } from './getAgGridLocaleText';

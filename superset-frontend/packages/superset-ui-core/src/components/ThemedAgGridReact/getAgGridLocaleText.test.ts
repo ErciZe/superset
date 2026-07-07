@@ -16,14 +16,23 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import CrosstabTableChartPlugin from '../src';
+import getAgGridLocaleText from './getAgGridLocaleText';
 
-describe('CrosstabTableChartPlugin', () => {
-  test('has chart metadata and a lazy chart loader', () => {
-    const plugin = new CrosstabTableChartPlugin();
+test('includes AG Grid header filter menu labels', () => {
+  const localeText = getAgGridLocaleText();
 
-    expect(plugin.metadata.name).toBe('Crosstab Table');
-    expect(plugin.metadata.category).toBe('Table');
-    expect(plugin.loadChart).toBeDefined();
-  });
+  expect(localeText).toEqual(
+    expect.objectContaining({
+      filterOoo: 'Filter',
+      applyFilter: 'Apply Filter',
+      clearFilter: 'Clear Filter',
+      resetFilter: 'Reset Filter',
+      cancelFilter: 'Cancel Filter',
+      empty: 'Choose one',
+      contains: 'Contains',
+      ariaFilterValue: 'Filter Value',
+      ariaFilterInput: 'Filter Input',
+      ariaFilteringOperator: 'Filtering operator',
+    }),
+  );
 });

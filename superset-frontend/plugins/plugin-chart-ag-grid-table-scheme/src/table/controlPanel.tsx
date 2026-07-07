@@ -90,7 +90,7 @@ function getQueryMode(controls: ControlStateMapping): QueryMode {
 
 const processComparisonColumns = (columns: any[], suffix: string) =>
   columns
-    .map(col => {
+    .flatMap(col => {
       if (!col.label.includes(suffix)) {
         return [
           {
@@ -112,8 +112,7 @@ const processComparisonColumns = (columns: any[], suffix: string) =>
         ];
       }
       return [];
-    })
-    .flat();
+    });
 
 /**
  * Visibility check

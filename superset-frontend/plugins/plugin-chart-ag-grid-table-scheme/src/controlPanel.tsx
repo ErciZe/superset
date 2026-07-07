@@ -165,8 +165,7 @@ const matrixDetailControlRows: ControlSetRows = [
           state: ControlPanelState,
           controlState: ControlState,
         ) => ({
-          ...(sharedControls.metrics.mapStateToProps?.(state, controlState) ??
-            {}),
+          ...sharedControls.metrics.mapStateToProps?.(state, controlState),
           externalValidationErrors:
             matrixVisibility({ controls: state.controls }) &&
             ensureIsArray(controlState?.value).length === 0

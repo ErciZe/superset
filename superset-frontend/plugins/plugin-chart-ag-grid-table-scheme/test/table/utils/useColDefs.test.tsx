@@ -48,7 +48,7 @@ const defaultProps = {
 };
 
 describe('useColDefs', () => {
-  it('reuses additional cell formatter results between style and renderer callbacks', () => {
+  test('reuses additional cell formatter results between style and renderer callbacks', () => {
     const additionalCellFormatter = jest.fn(() => ({
       className: 'matrix-cell-note',
       style: {

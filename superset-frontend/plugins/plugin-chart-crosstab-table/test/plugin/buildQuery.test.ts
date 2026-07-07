@@ -135,7 +135,7 @@ const dynamicMetricPair = {
 } as const;
 
 describe('crosstab buildQuery', () => {
-  it('includes calculated SQL metrics using runtime parameter values', () => {
+  test('includes calculated SQL metrics using runtime parameter values', () => {
     const queryContext = buildQuery(
       {
         datasource: '7__table',
@@ -224,7 +224,7 @@ describe('crosstab buildQuery', () => {
     );
   });
 
-  it('includes calculated SQL metrics from selected saved metric names', () => {
+  test('includes calculated SQL metrics from selected saved metric names', () => {
     const queryContext = buildQuery({
       datasource: '7__table',
       datasourceMetrics: [
@@ -274,7 +274,7 @@ describe('crosstab buildQuery', () => {
     );
   });
 
-  it('includes a calculated SQL metric from hidden datasource saved metrics', () => {
+  test('includes a calculated SQL metric from hidden datasource saved metrics', () => {
     const queryContext = buildQuery({
       datasource: '7__table',
       datasourceMetrics: [
@@ -334,7 +334,7 @@ describe('crosstab buildQuery', () => {
     ]);
   });
 
-  it('uses the default dynamic group-by column in query dimensions', () => {
+  test('uses the default dynamic group-by column in query dimensions', () => {
     const queryContext = buildQuery({
       datasource: '11__table',
       viz_type: 'crosstab-table',
@@ -352,7 +352,7 @@ describe('crosstab buildQuery', () => {
     ]);
   });
 
-  it('uses the runtime selected dynamic group-by column in non-server query dimensions', () => {
+  test('uses the runtime selected dynamic group-by column in non-server query dimensions', () => {
     const queryContext = buildQuery(
       {
         datasource: '11__table',
@@ -377,7 +377,7 @@ describe('crosstab buildQuery', () => {
     ]);
   });
 
-  it('uses the runtime selected dynamic group-by column in server column domain queries', () => {
+  test('uses the runtime selected dynamic group-by column in server column domain queries', () => {
     const queryContext = buildQuery(
       {
         datasource: '7__table',
@@ -422,7 +422,7 @@ describe('crosstab buildQuery', () => {
     );
   });
 
-  it('uses the runtime selected dynamic group-by column in non-additive summary queries', () => {
+  test('uses the runtime selected dynamic group-by column in non-additive summary queries', () => {
     const queryContext = buildQuery(
       {
         datasource: '11__table',
@@ -459,7 +459,7 @@ describe('crosstab buildQuery', () => {
     ]);
   });
 
-  it('uses canonical multi-slot dimensions in non-server query dimensions', () => {
+  test('uses canonical multi-slot dimensions in non-server query dimensions', () => {
     const queryContext = buildQuery(
       {
         datasource: '11__table',
@@ -488,7 +488,7 @@ describe('crosstab buildQuery', () => {
     ]);
   });
 
-  it('uses canonical multi-slot dimensions for pre-tuples server domain and count queries', () => {
+  test('uses canonical multi-slot dimensions for pre-tuples server domain and count queries', () => {
     const queryContext = buildQuery(
       {
         datasource: '11__table',
@@ -543,7 +543,7 @@ describe('crosstab buildQuery', () => {
     );
   });
 
-  it('preserves configured sort metadata on dynamic server column dimensions', () => {
+  test('preserves configured sort metadata on dynamic server column dimensions', () => {
     const queryContext = buildQuery(
       {
         datasource: '11__table',
@@ -589,7 +589,7 @@ describe('crosstab buildQuery', () => {
     ]);
   });
 
-  it('uses canonical multi-slot dimensions for cached-tuples server leaf and summary queries', () => {
+  test('uses canonical multi-slot dimensions for cached-tuples server leaf and summary queries', () => {
     const queryContext = buildQuery(
       {
         datasource: '11__table',
@@ -613,7 +613,7 @@ describe('crosstab buildQuery', () => {
           currentColumnPageSize: 5,
           serverColumnPageTuplesPage: 0,
           serverColumnPageTuplesPageSize: 5,
-          serverColumnPageColumnSignature: 'biz_date\u001fcountry\u001fmsku',
+          serverColumnPageColumnSignature: 'biz_date\u001Fcountry\u001Fmsku',
           serverColumnTotalCount: 2,
           serverColumnPageTuples: [
             ['2026-05-01', 'US', 'SKU-1'],
@@ -657,7 +657,7 @@ describe('crosstab buildQuery', () => {
     expect(queryContext.queries[9].extras?.where ?? '').toBe('');
   });
 
-  it('includes row dimensions, column dimensions, and metrics in one aggregate query', () => {
+  test('includes row dimensions, column dimensions, and metrics in one aggregate query', () => {
     const queryContext = buildQuery({
       datasource: '11__table',
       viz_type: 'crosstab-table',
@@ -694,7 +694,7 @@ describe('crosstab buildQuery', () => {
     );
   });
 
-  it('ignores hidden chart-local time range so dashboard filters can control time', () => {
+  test('ignores hidden chart-local time range so dashboard filters can control time', () => {
     const queryContext = buildQuery({
       datasource: '11__table',
       viz_type: 'crosstab-table',
@@ -709,7 +709,7 @@ describe('crosstab buildQuery', () => {
     expect(queryContext.form_data?.time_range).toBeUndefined();
   });
 
-  it('preserves dashboard-provided time range from extra form data', () => {
+  test('preserves dashboard-provided time range from extra form data', () => {
     const queryContext = buildQuery({
       datasource: '11__table',
       viz_type: 'crosstab-table',
@@ -726,7 +726,7 @@ describe('crosstab buildQuery', () => {
     expect(queryContext.queries[0].time_range).toBe('2026-05-01 : 2026-05-31');
   });
 
-  it('keeps cell formatter expressions out of the full query payload', () => {
+  test('keeps cell formatter expressions out of the full query payload', () => {
     const formatterExpression =
       "({ value }) => (value == null ? 'formatterSentinelEmpty' : value)";
     const queryContext = buildQuery({
@@ -748,7 +748,7 @@ describe('crosstab buildQuery', () => {
     expect(queryPayload).not.toContain('formatterSentinelEmpty');
   });
 
-  it('de-duplicates overlapping row and column dimensions while preserving order', () => {
+  test('de-duplicates overlapping row and column dimensions while preserving order', () => {
     const queryContext = buildQuery({
       datasource: '11__table',
       viz_type: 'crosstab-table',
@@ -764,7 +764,7 @@ describe('crosstab buildQuery', () => {
     ]);
   });
 
-  it('normalizes scalar metrics to an array', () => {
+  test('normalizes scalar metrics to an array', () => {
     const queryContext = buildQuery({
       datasource: '11__table',
       viz_type: 'crosstab-table',
@@ -776,7 +776,7 @@ describe('crosstab buildQuery', () => {
     expect(queryContext.queries[0].metrics).toEqual(['amount']);
   });
 
-  it('uses crosstabFieldConfig before legacy query controls', () => {
+  test('uses crosstabFieldConfig before legacy query controls', () => {
     const queryContext = buildQuery({
       datasource: '11__table',
       viz_type: 'crosstab-table',
@@ -798,7 +798,7 @@ describe('crosstab buildQuery', () => {
     expect(queryContext.queries[0].metrics).toEqual(['指标值']);
   });
 
-  it('uses the selected dynamic metric in the leaf query metrics', () => {
+  test('uses the selected dynamic metric in the leaf query metrics', () => {
     const queryContext = buildQuery(
       {
         datasource: '11__table',
@@ -828,7 +828,7 @@ describe('crosstab buildQuery', () => {
     });
   });
 
-  it('emits SQL summary queries for configured non-additive metric semantics', () => {
+  test('emits SQL summary queries for configured non-additive metric semantics', () => {
     const queryContext = buildQuery({
       datasource: '11__table',
       viz_type: 'crosstab-table',
@@ -862,7 +862,7 @@ describe('crosstab buildQuery', () => {
     });
   });
 
-  it('plans summary queries from selected dynamic metric semantics', () => {
+  test('plans summary queries from selected dynamic metric semantics', () => {
     const queryContext = buildQuery(
       {
         datasource: '11__table',
@@ -906,7 +906,7 @@ describe('crosstab buildQuery', () => {
     });
   });
 
-  it.each([
+  test.each([
     ['missing dynamic metric config', undefined],
     [
       'disabled dynamic metric config',
@@ -932,7 +932,7 @@ describe('crosstab buildQuery', () => {
     },
   );
 
-  it.each([
+  test.each([
     ['empty persisted metrics', { metrics: [] }],
     ['missing persisted metrics', {}],
   ])(
@@ -963,7 +963,7 @@ describe('crosstab buildQuery', () => {
     },
   );
 
-  it('rejects v4 charts when only legacy top-level metrics remain', () => {
+  test('rejects v4 charts when only legacy top-level metrics remain', () => {
     expect(() =>
       buildQuery({
         datasource: '11__table',
@@ -999,7 +999,7 @@ describe('crosstab buildQuery', () => {
     ).toThrow(ERR_CROSSTAB_V4_METRIC_CONFIG);
   });
 
-  it('rejects server pagination', () => {
+  test('rejects server pagination', () => {
     expect(() =>
       buildQuery({
         datasource: '11__table',
@@ -1012,7 +1012,7 @@ describe('crosstab buildQuery', () => {
     ).toThrow('Crosstab table does not support server pagination in v1.');
   });
 
-  it('builds column domain and rowcount queries before server column page tuples are loaded', () => {
+  test('builds column domain and rowcount queries before server column page tuples are loaded', () => {
     const queryContext = buildQuery(
       {
         datasource: '7__table',
@@ -1056,7 +1056,7 @@ describe('crosstab buildQuery', () => {
     );
   });
 
-  it('rejects server column pagination without an effective column dimension', () => {
+  test('rejects server column pagination without an effective column dimension', () => {
     expect(() =>
       buildQuery(
         {
@@ -1101,7 +1101,7 @@ describe('crosstab buildQuery', () => {
     ).toThrow(ERR_SERVER_COLUMN_PAGINATION_SHAPE);
   });
 
-  it('builds current page data without a legacy row total query after server column page tuples are loaded', () => {
+  test('builds current page data without a legacy row total query after server column page tuples are loaded', () => {
     const queryContext = buildQuery(
       {
         datasource: '7__table',
@@ -1156,7 +1156,7 @@ describe('crosstab buildQuery', () => {
     );
   });
 
-  it('uses configured column sort in server column domain queries', () => {
+  test('uses configured column sort in server column domain queries', () => {
     const queryContext = buildQuery(
       {
         datasource: '1__table',
@@ -1191,7 +1191,7 @@ describe('crosstab buildQuery', () => {
     expect(queryContext.queries[0].orderby).toEqual([['biz_date', false]]);
   });
 
-  it('changes server column page signature when sort direction changes', () => {
+  test('changes server column page signature when sort direction changes', () => {
     const ascendingSignature = getServerColumnPageColumnSignature([
       {
         field: 'biz_date',
@@ -1210,7 +1210,7 @@ describe('crosstab buildQuery', () => {
     expect(descendingSignature).toContain('biz_date');
   });
 
-  it('keeps server row total summary full range while leaf query is page filtered', () => {
+  test('keeps server row total summary full range while leaf query is page filtered', () => {
     const queryContext = buildQuery(
       {
         datasource: '1__table',
@@ -1254,7 +1254,7 @@ describe('crosstab buildQuery', () => {
     expect(rowTotalQuery.extras?.where ?? '').not.toContain('biz_date');
   });
 
-  it('uses planned SQL summaries instead of the legacy row total query for non-additive server column pages', () => {
+  test('uses planned SQL summaries instead of the legacy row total query for non-additive server column pages', () => {
     const queryContext = buildQuery(
       {
         datasource: '7__table',
@@ -1283,7 +1283,7 @@ describe('crosstab buildQuery', () => {
           serverColumnPageTuplesPage: 0,
           serverColumnPageTuplesPageSize: 5,
           serverColumnPageColumnSignature:
-            'biz_date\u001fshop_name\u001fcountry',
+            'biz_date\u001Fshop_name\u001Fcountry',
           serverColumnTotalCount: 2,
           serverColumnPageTuples: [
             ['2026-05-01', 'Shop A', 'US'],
@@ -1306,7 +1306,7 @@ describe('crosstab buildQuery', () => {
     expect(queryContext.queries[5].extras?.where ?? '').toBe('');
   });
 
-  it('plans SQL summaries for additive totals without row-value overrides', () => {
+  test('plans SQL summaries for additive totals without row-value overrides', () => {
     const queryContext = buildQuery(
       {
         datasource: '7__table',
@@ -1344,7 +1344,7 @@ describe('crosstab buildQuery', () => {
     ]);
   });
 
-  it('rejects row value summary metrics that the current query path cannot represent', () => {
+  test('rejects row value summary metrics that the current query path cannot represent', () => {
     expect(() =>
       buildQuery({
         datasource: '7__table',
@@ -1368,7 +1368,7 @@ describe('crosstab buildQuery', () => {
     ).toThrow(ERR_CROSSTAB_ROW_VALUE_SUMMARY_METRIC);
   });
 
-  it('reloads column domain when cached server column tuples no longer match selected columns', () => {
+  test('reloads column domain when cached server column tuples no longer match selected columns', () => {
     const queryContext = buildQuery(
       {
         datasource: '7__table',
@@ -1407,7 +1407,7 @@ describe('crosstab buildQuery', () => {
     );
   });
 
-  it('reloads column domain when cached server column tuples are for a stale page or page size', () => {
+  test('reloads column domain when cached server column tuples are for a stale page or page size', () => {
     const queryContext = buildQuery(
       {
         datasource: '7__table',
@@ -1427,7 +1427,7 @@ describe('crosstab buildQuery', () => {
           serverColumnPageTuplesPageSize: 5,
           serverColumnPageTuples: [['2026-05-01', 'Shop A', 'US']],
           serverColumnPageColumnSignature:
-            'biz_date\u001fshop_name\u001fcountry',
+            'biz_date\u001Fshop_name\u001Fcountry',
         },
       } as never,
     );
@@ -1449,7 +1449,7 @@ describe('crosstab buildQuery', () => {
     );
   });
 
-  it('encodes Superset temporal column values from epoch milliseconds', () => {
+  test('encodes Superset temporal column values from epoch milliseconds', () => {
     const queryContext = buildQuery(
       {
         datasource: '7__table',
@@ -1475,7 +1475,7 @@ describe('crosstab buildQuery', () => {
     );
   });
 
-  it('rejects server column pagination for unsupported dimensions', () => {
+  test('rejects server column pagination for unsupported dimensions', () => {
     expect(() =>
       buildQuery({
         datasource: '7__table',
@@ -1494,7 +1494,7 @@ describe('crosstab buildQuery', () => {
     ).toThrow(ERR_SERVER_COLUMN_PAGINATION_COLUMNS);
   });
 
-  it('rejects server column pagination outside the production v1 shape', () => {
+  test('rejects server column pagination outside the production v1 shape', () => {
     expect(() =>
       buildQuery({
         datasource: '7__table',
@@ -1507,7 +1507,7 @@ describe('crosstab buildQuery', () => {
     ).toThrow(ERR_SERVER_COLUMN_PAGINATION_SHAPE);
   });
 
-  it('uses server column pagination when dynamic metric expands to multiple effective metrics', () => {
+  test('uses server column pagination when dynamic metric expands to multiple effective metrics', () => {
     const queryContext = buildQuery(
       {
         datasource: '7__table',
@@ -1529,7 +1529,7 @@ describe('crosstab buildQuery', () => {
           serverColumnPageTuplesPage: 0,
           serverColumnPageTuples: [['2026-05-01', 'Shop A', 'US']],
           serverColumnPageColumnSignature:
-            'biz_date\u001fshop_name\u001fcountry',
+            'biz_date\u001Fshop_name\u001Fcountry',
         },
       } as never,
     );
@@ -1558,7 +1558,7 @@ describe('crosstab buildQuery', () => {
     );
   });
 
-  it('rejects server column pagination without effective metrics', () => {
+  test('rejects server column pagination without effective metrics', () => {
     expect(() =>
       buildQuery({
         datasource: '7__table',
@@ -1571,7 +1571,7 @@ describe('crosstab buildQuery', () => {
     ).toThrow(ERR_SERVER_COLUMN_PAGINATION_SHAPE);
   });
 
-  it('rejects calculated fields on business matrix row dimensions', () => {
+  test('rejects calculated fields on business matrix row dimensions', () => {
     expect(() =>
       buildQuery({
         datasource: '7__table',

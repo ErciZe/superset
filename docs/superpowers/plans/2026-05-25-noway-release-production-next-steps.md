@@ -437,4 +437,3 @@ curl -fsS --connect-timeout 10 http://111.230.91.24:8088/health
 ```
 
 Expected: container health is `healthy` and public health returns `OK`.
-

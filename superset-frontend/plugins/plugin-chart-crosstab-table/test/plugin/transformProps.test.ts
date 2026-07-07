@@ -218,7 +218,7 @@ function createProps(props: CrosstabChartPropsConfig) {
 }
 
 describe('crosstab transformProps', () => {
-  it('includes numeric parameter values in effective metric signature', () => {
+  test('includes numeric parameter values in effective metric signature', () => {
     const baseProps = createProps({
       formData: canonicalParameterizedCalculatedFormData,
       queriesData: [
@@ -242,7 +242,7 @@ describe('crosstab transformProps', () => {
     expect(signatureA).not.toBe(signatureB);
   });
 
-  it('includes every numeric parameter value in effective metric signature', () => {
+  test('includes every numeric parameter value in effective metric signature', () => {
     const baseProps = createProps({
       formData: {
         ...canonicalParameterizedCalculatedFormData,
@@ -287,7 +287,7 @@ describe('crosstab transformProps', () => {
     expect(signatureA).not.toBe(signatureB);
   });
 
-  it('passes resolved runtime parameter values to renderer props', () => {
+  test('passes resolved runtime parameter values to renderer props', () => {
     const props = transformProps(
       createProps({
         formData: {
@@ -332,7 +332,7 @@ describe('crosstab transformProps', () => {
     });
   });
 
-  it('passes cell formatter expressions through to renderer props unchanged', () => {
+  test('passes cell formatter expressions through to renderer props unchanged', () => {
     const formatterExpression =
       "({ value }) => (value == null ? 'formatterSentinelEmpty' : value)";
     const props = transformProps(
@@ -360,7 +360,7 @@ describe('crosstab transformProps', () => {
     );
   });
 
-  it('rejects v4 charts when render-time metrics only exist under legacy formData.metrics', () => {
+  test('rejects v4 charts when render-time metrics only exist under legacy formData.metrics', () => {
     expect(() =>
       transformProps(
         createProps({
@@ -389,7 +389,7 @@ describe('crosstab transformProps', () => {
     ).toThrow(ERR_CROSSTAB_V4_METRIC_CONFIG);
   });
 
-  it('converts query data into renderer props', () => {
+  test('converts query data into renderer props', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,
@@ -456,7 +456,7 @@ describe('crosstab transformProps', () => {
     ]);
   });
 
-  it('builds fixed three-level column headers without a duplicate metric layer for one metric', () => {
+  test('builds fixed three-level column headers without a duplicate metric layer for one metric', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,
@@ -520,7 +520,7 @@ describe('crosstab transformProps', () => {
     ]);
   });
 
-  it('uses the selected dynamic group-by column for generated headers', () => {
+  test('uses the selected dynamic group-by column for generated headers', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,
@@ -535,7 +535,7 @@ describe('crosstab transformProps', () => {
       ownState: {
         selectedDynamicGroupByColumn: 'country',
         effectiveGroupBySignature:
-          'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
+          'rows=metric_name_with_unit|columns=biz_date\u001Fcountry',
       },
       queriesData: [
         {
@@ -566,7 +566,7 @@ describe('crosstab transformProps', () => {
     expect(props.selectedDynamicGroupBy).toEqual({ __legacy__: 'country' });
     expect(props.selectedDynamicGroupByColumn).toBe('country');
     expect(props.effectiveGroupBySignature).toBe(
-      'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
+      'rows=metric_name_with_unit|columns=biz_date\u001Fcountry',
     );
     expect(props.columnTree).toEqual([
       expect.objectContaining({
@@ -585,7 +585,7 @@ describe('crosstab transformProps', () => {
     ]);
   });
 
-  it('passes canonical multi-slot dynamic group-by state to renderer props', () => {
+  test('passes canonical multi-slot dynamic group-by state to renderer props', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,
@@ -603,7 +603,7 @@ describe('crosstab transformProps', () => {
           level3: 'msku',
         },
         effectiveGroupBySignature:
-          'rows=metric_name_with_unit|columns=biz_date\u001fcountry\u001fmsku',
+          'rows=metric_name_with_unit|columns=biz_date\u001Fcountry\u001Fmsku',
       },
       queriesData: [
         {
@@ -638,7 +638,7 @@ describe('crosstab transformProps', () => {
     });
     expect(props.dynamicGroupByConfig).toEqual(canonicalMultiSlotGroupBy);
     expect(props.effectiveGroupBySignature).toBe(
-      'rows=metric_name_with_unit|columns=biz_date\u001fcountry\u001fmsku',
+      'rows=metric_name_with_unit|columns=biz_date\u001Fcountry\u001Fmsku',
     );
     expect(props.columnTree).toEqual([
       expect.objectContaining({
@@ -660,7 +660,7 @@ describe('crosstab transformProps', () => {
     ]);
   });
 
-  it('does not reset dynamic group-by own state when the signature is current', () => {
+  test('does not reset dynamic group-by own state when the signature is current', () => {
     const setDataMask = jest.fn();
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
@@ -676,7 +676,7 @@ describe('crosstab transformProps', () => {
       ownState: {
         selectedDynamicGroupByColumn: 'country',
         effectiveGroupBySignature:
-          'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
+          'rows=metric_name_with_unit|columns=biz_date\u001Fcountry',
       },
       hooks: {
         setDataMask,
@@ -701,11 +701,11 @@ describe('crosstab transformProps', () => {
     expect(setDataMask).not.toHaveBeenCalled();
     expect(props.rowData).not.toEqual([]);
     expect(props.effectiveGroupBySignature).toBe(
-      'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
+      'rows=metric_name_with_unit|columns=biz_date\u001Fcountry',
     );
   });
 
-  it('clears stale server column pagination own state when the dynamic signature changes', () => {
+  test('clears stale server column pagination own state when the dynamic signature changes', () => {
     const setDataMask = jest.fn();
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
@@ -723,12 +723,12 @@ describe('crosstab transformProps', () => {
       ownState: {
         selectedDynamicGroupByColumn: 'country',
         effectiveGroupBySignature:
-          'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+          'rows=metric_name_with_unit|columns=biz_date\u001Fshop_name',
         currentColumnPage: 3,
         currentColumnPageSize: 5,
         expandedRowPaths: ['stale-row'],
         unrelatedOwnStateField: 'preserved',
-        serverColumnPageColumnSignature: 'biz_date\u001fshop_name',
+        serverColumnPageColumnSignature: 'biz_date\u001Fshop_name',
         serverColumnPageTuples: [['2026-05-01', 'Shop A']],
         serverColumnPageTuplesPage: 3,
         serverColumnPageTuplesPageSize: 5,
@@ -770,7 +770,7 @@ describe('crosstab transformProps', () => {
         unrelatedOwnStateField: 'preserved',
         selectedDynamicGroupBy: { __legacy__: 'country' },
         effectiveGroupBySignature:
-          'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
+          'rows=metric_name_with_unit|columns=biz_date\u001Fcountry',
         currentColumnPage: 0,
         currentColumnPageSize: 5,
         serverColumnPageTuples: [],
@@ -786,11 +786,11 @@ describe('crosstab transformProps', () => {
     expect(props.rowData).toEqual([]);
     expect(props.isServerColumnLoading).toBe(true);
     expect(props.effectiveGroupBySignature).toBe(
-      'rows=metric_name_with_unit|columns=biz_date\u001fcountry',
+      'rows=metric_name_with_unit|columns=biz_date\u001Fcountry',
     );
   });
 
-  it('resets stale server column pagination own state for canonical dynamic group-by slots', () => {
+  test('resets stale server column pagination own state for canonical dynamic group-by slots', () => {
     const setDataMask = jest.fn();
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
@@ -812,12 +812,12 @@ describe('crosstab transformProps', () => {
         },
         selectedDynamicGroupByColumn: 'shop_name',
         effectiveGroupBySignature:
-          'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+          'rows=metric_name_with_unit|columns=biz_date\u001Fshop_name',
         currentColumnPage: 3,
         currentColumnPageSize: 5,
         expandedRowPaths: ['stale-row'],
         unrelatedOwnStateField: 'preserved',
-        serverColumnPageColumnSignature: 'biz_date\u001fshop_name',
+        serverColumnPageColumnSignature: 'biz_date\u001Fshop_name',
         serverColumnPageTuples: [['2026-05-01', 'Shop A']],
         serverColumnPageTuplesPage: 3,
         serverColumnPageTuplesPageSize: 5,
@@ -864,7 +864,7 @@ describe('crosstab transformProps', () => {
           level3: 'msku',
         },
         effectiveGroupBySignature:
-          'rows=metric_name_with_unit|columns=biz_date\u001fcountry\u001fmsku',
+          'rows=metric_name_with_unit|columns=biz_date\u001Fcountry\u001Fmsku',
         currentColumnPage: 0,
         currentColumnPageSize: 5,
         serverColumnPageTuples: [],
@@ -881,7 +881,7 @@ describe('crosstab transformProps', () => {
     expect(props.isServerColumnLoading).toBe(true);
   });
 
-  it('stores the default dynamic group-by column when resetting stale own state', () => {
+  test('stores the default dynamic group-by column when resetting stale own state', () => {
     const setDataMask = jest.fn();
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
@@ -898,7 +898,7 @@ describe('crosstab transformProps', () => {
       },
       ownState: {
         effectiveGroupBySignature:
-          'rows=metric_name_with_unit|columns=biz_date\u001fstale_dimension',
+          'rows=metric_name_with_unit|columns=biz_date\u001Fstale_dimension',
         currentColumnPage: 2,
         currentColumnPageSize: 5,
         serverColumnPageTuples: [['2026-05-01', 'Stale']],
@@ -930,7 +930,7 @@ describe('crosstab transformProps', () => {
       ownState: {
         selectedDynamicGroupBy: { __legacy__: 'shop_name' },
         effectiveGroupBySignature:
-          'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+          'rows=metric_name_with_unit|columns=biz_date\u001Fshop_name',
         currentColumnPage: 0,
         currentColumnPageSize: 5,
         serverColumnPageTuples: [],
@@ -943,7 +943,7 @@ describe('crosstab transformProps', () => {
     expect(props.selectedDynamicGroupByColumn).toBe('shop_name');
   });
 
-  it('passes dynamic metric state to renderer props and renders the selected metric', () => {
+  test('passes dynamic metric state to renderer props and renders the selected metric', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,
@@ -1042,7 +1042,7 @@ describe('crosstab transformProps', () => {
     ]);
   });
 
-  it('uses selected dynamic metric semantics for SQL summary values', () => {
+  test('uses selected dynamic metric semantics for SQL summary values', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,
@@ -1134,7 +1134,7 @@ describe('crosstab transformProps', () => {
     );
   });
 
-  it('uses row value summaries when reconstructing SQL summary planning', () => {
+  test('uses row value summaries when reconstructing SQL summary planning', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,
@@ -1222,7 +1222,7 @@ describe('crosstab transformProps', () => {
     );
   });
 
-  it('renders additive row total from planned SQL summary values', () => {
+  test('renders additive row total from planned SQL summary values', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,
@@ -1278,7 +1278,7 @@ describe('crosstab transformProps', () => {
     );
   });
 
-  it('requires SQL column totals when grand total rows are enabled', () => {
+  test('requires SQL column totals when grand total rows are enabled', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,
@@ -1312,7 +1312,7 @@ describe('crosstab transformProps', () => {
     );
   });
 
-  it('fails when required summary queries reach the row limit', () => {
+  test('fails when required summary queries reach the row limit', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,
@@ -1360,7 +1360,7 @@ describe('crosstab transformProps', () => {
     );
   });
 
-  it('sorts business metric rows by configured hidden sort field', () => {
+  test('sorts business metric rows by configured hidden sort field', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,
@@ -1412,7 +1412,7 @@ describe('crosstab transformProps', () => {
     );
   });
 
-  it('sorts generated columns by configured column sort when data arrives unsorted', () => {
+  test('sorts generated columns by configured column sort when data arrives unsorted', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,
@@ -1470,7 +1470,7 @@ describe('crosstab transformProps', () => {
     ]);
   });
 
-  it('clears stale metric server column caches and preserves expanded rows', () => {
+  test('clears stale metric server column caches and preserves expanded rows', () => {
     const setDataMask = jest.fn();
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
@@ -1496,7 +1496,7 @@ describe('crosstab transformProps', () => {
           primary_metric: 'profit',
         },
         effectiveGroupBySignature:
-          'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+          'rows=metric_name_with_unit|columns=biz_date\u001Fshop_name',
         effectiveMetricSignature: getMetricConfigSignature([
           { metric: 'amount', label: 'Amount', semantic: 'additive' },
         ]),
@@ -1504,7 +1504,7 @@ describe('crosstab transformProps', () => {
         currentColumnPageSize: 5,
         expandedRowPaths: ['kept-row'],
         unrelatedOwnStateField: 'preserved',
-        serverColumnPageColumnSignature: 'biz_date\u001fshop_name',
+        serverColumnPageColumnSignature: 'biz_date\u001Fshop_name',
         serverColumnPageTuples: [['2026-05-01', 'Shop A']],
         serverColumnPageTuplesPage: 3,
         serverColumnPageTuplesPageSize: 5,
@@ -1547,7 +1547,7 @@ describe('crosstab transformProps', () => {
         expandedRowPaths: ['kept-row'],
         unrelatedOwnStateField: 'preserved',
         effectiveGroupBySignature:
-          'rows=metric_name_with_unit|columns=biz_date\u001fshop_name',
+          'rows=metric_name_with_unit|columns=biz_date\u001Fshop_name',
         selectedDynamicMetric: { primary_metric: 'profit' },
         effectiveMetricSignature: getMetricConfigSignature([
           { metric: 'profit', label: 'Profit', semantic: 'additive' },
@@ -1571,7 +1571,7 @@ describe('crosstab transformProps', () => {
     );
   });
 
-  it.each([
+  test.each([
     ['missing dynamic metric config', undefined],
     [
       'disabled dynamic metric config',
@@ -1621,7 +1621,7 @@ describe('crosstab transformProps', () => {
     },
   );
 
-  it('stores server column page tuples after loading the column domain query', () => {
+  test('stores server column page tuples after loading the column domain query', () => {
     const setDataMask = jest.fn();
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
@@ -1670,7 +1670,7 @@ describe('crosstab transformProps', () => {
       ownState: {
         currentColumnPage: 1,
         currentColumnPageSize: 5,
-        serverColumnPageColumnSignature: 'biz_date\u001fshop_name\u001fcountry',
+        serverColumnPageColumnSignature: 'biz_date\u001Fshop_name\u001Fcountry',
         serverColumnPageTuples: [['2026-05-02', 'Shop B', 'US']],
         serverColumnPageTuplesPage: 1,
         serverColumnPageTuplesPageSize: 5,
@@ -1679,7 +1679,7 @@ describe('crosstab transformProps', () => {
     });
   });
 
-  it('ignores old full server column data when stored page tuple signature is stale', () => {
+  test('ignores old full server column data when stored page tuple signature is stale', () => {
     const setDataMask = jest.fn();
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
@@ -1704,7 +1704,7 @@ describe('crosstab transformProps', () => {
       ownState: {
         currentColumnPage: 0,
         currentColumnPageSize: 5,
-        serverColumnPageColumnSignature: 'biz_date\u001fshop_name',
+        serverColumnPageColumnSignature: 'biz_date\u001Fshop_name',
         serverColumnPageTuples: [['2026-05-01', 'Shop A']],
         serverColumnPageTuplesPage: 0,
         serverColumnPageTuplesPageSize: 5,
@@ -1745,7 +1745,7 @@ describe('crosstab transformProps', () => {
     expect(setDataMask).not.toHaveBeenCalled();
   });
 
-  it('bootstraps server column pagination without existing own state', () => {
+  test('bootstraps server column pagination without existing own state', () => {
     const setDataMask = jest.fn();
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
@@ -1792,7 +1792,7 @@ describe('crosstab transformProps', () => {
       ownState: {
         currentColumnPage: 0,
         currentColumnPageSize: 98,
-        serverColumnPageColumnSignature: 'biz_date\u001fshop_name\u001fcountry',
+        serverColumnPageColumnSignature: 'biz_date\u001Fshop_name\u001Fcountry',
         serverColumnPageTuples: [['2026-05-02', 'Shop B', 'US']],
         serverColumnPageTuplesPage: 0,
         serverColumnPageTuplesPageSize: 98,
@@ -1801,7 +1801,7 @@ describe('crosstab transformProps', () => {
     });
   });
 
-  it('bootstraps server column pagination for multiple metrics', () => {
+  test('bootstraps server column pagination for multiple metrics', () => {
     const setDataMask = jest.fn();
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
@@ -1845,7 +1845,7 @@ describe('crosstab transformProps', () => {
       ownState: {
         currentColumnPage: 0,
         currentColumnPageSize: 98,
-        serverColumnPageColumnSignature: 'biz_date\u001fshop_name',
+        serverColumnPageColumnSignature: 'biz_date\u001Fshop_name',
         serverColumnPageTuples: [['2026-05-02', 'Shop B']],
         serverColumnPageTuplesPage: 0,
         serverColumnPageTuplesPageSize: 98,
@@ -1854,7 +1854,7 @@ describe('crosstab transformProps', () => {
     });
   });
 
-  it('uses server page data and full row totals for server column pagination', () => {
+  test('uses server page data and full row totals for server column pagination', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,
@@ -1967,7 +1967,7 @@ describe('crosstab transformProps', () => {
     );
   });
 
-  it('uses server page data for multiple metrics', () => {
+  test('uses server page data for multiple metrics', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,
@@ -2045,7 +2045,7 @@ describe('crosstab transformProps', () => {
     ]);
   });
 
-  it('uses SQL row and grand totals for ratio rows resolved by row-value semantic overrides', () => {
+  test('uses SQL row and grand totals for ratio rows resolved by row-value semantic overrides', () => {
     const chartProps = new ChartProps<CrosstabFormData>({
       width: 800,
       height: 400,

@@ -35,7 +35,7 @@ describe('column view scheme state utilities', () => {
     { field: 'margin', headerName: 'Margin' },
   ];
 
-  it('captures compact column state with scheme metadata and order', () => {
+  test('captures compact column state with scheme metadata and order', () => {
     const columnState: ColumnViewColumnState[] = [
       { colId: 'sales_total', hide: false, width: 180, sort: 'desc' },
       { colId: 'country', hide: true, width: 120 },
@@ -84,7 +84,7 @@ describe('column view scheme state utilities', () => {
     expect(state.raw_column_state).not.toBe(columnState);
   });
 
-  it('omits sort state when sort replay is disabled', () => {
+  test('omits sort state when sort replay is disabled', () => {
     const state = captureColumnViewState(
       [
         {
@@ -117,7 +117,7 @@ describe('column view scheme state utilities', () => {
     ).toEqual({ colId: 'sales_total', hide: false, width: 180 });
   });
 
-  it('ignores removed columns and appends new columns', () => {
+  test('ignores removed columns and appends new columns', () => {
     const savedState = captureColumnViewState(
       [
         { colId: 'removed', hide: false, width: 80 },
@@ -138,13 +138,13 @@ describe('column view scheme state utilities', () => {
     ]);
   });
 
-  it('builds a stable signature regardless of column order', () => {
+  test('builds a stable signature regardless of column order', () => {
     expect(buildColumnSignature(colDefs)).toBe(
       buildColumnSignature([colDefs[2], colDefs[0], colDefs[1]]),
     );
   });
 
-  it('builds editable setting items from current column state', () => {
+  test('builds editable setting items from current column state', () => {
     expect(
       buildColumnSettingItems(
         [
@@ -179,7 +179,7 @@ describe('column view scheme state utilities', () => {
     ]);
   });
 
-  it('creates column state from hidden and reordered settings', () => {
+  test('creates column state from hidden and reordered settings', () => {
     const nextState = buildColumnStateFromSettings(
       [
         { colId: 'country', hide: false, width: 120 },
@@ -219,7 +219,7 @@ describe('column view scheme state utilities', () => {
     ]);
   });
 
-  it('appends newly configured columns when settings were based on older defs', () => {
+  test('appends newly configured columns when settings were based on older defs', () => {
     const nextState = buildColumnStateFromSettings(
       [{ colId: 'country', hide: false, width: 120 }],
       [
@@ -241,7 +241,7 @@ describe('column view scheme state utilities', () => {
     ]);
   });
 
-  it('keeps generated matrix columns in column signatures and reconciliation', () => {
+  test('keeps generated matrix columns in column signatures and reconciliation', () => {
     const matrixColDefs: SchemeColDef[] = [
       { field: 'metric_name', headerName: 'Metric' },
       {

@@ -20,7 +20,7 @@ import { render, screen, userEvent } from '@superset-ui/core/spec';
 import ColumnViewSettingsModal from '../../src/columnViewSchemes/ColumnViewSettingsModal';
 
 describe('ColumnViewSettingsModal', () => {
-  it('uses Chinese text for the column drag handle', () => {
+  test('uses Chinese text for the column drag handle', () => {
     render(
       <ColumnViewSettingsModal
         columnSettings={[
@@ -43,7 +43,7 @@ describe('ColumnViewSettingsModal', () => {
     expect(screen.getByLabelText('拖拽列')).toBeInTheDocument();
   });
 
-  it('moves a newly pinned selected column after existing pinned columns', () => {
+  test('moves a newly pinned selected column after existing pinned columns', () => {
     render(
       <ColumnViewSettingsModal
         columnSettings={[

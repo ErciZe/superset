@@ -50,7 +50,7 @@ const records = [
 ];
 
 describe('buildCrosstab', () => {
-  it('generates row hierarchy, complete column tuples, and metric leaves', () => {
+  test('generates row hierarchy, complete column tuples, and metric leaves', () => {
     const result = buildCrosstab(records, {
       rowFields: ['contract_type', 'year'],
       columnFields: ['pay_type'],
@@ -171,7 +171,7 @@ describe('buildCrosstab', () => {
     ]);
   });
 
-  it('generates deterministic subtotal rows and one grand total row', () => {
+  test('generates deterministic subtotal rows and one grand total row', () => {
     const result = buildCrosstab(records, {
       rowFields: ['contract_type', 'year'],
       columnFields: ['pay_type'],
@@ -218,7 +218,7 @@ describe('buildCrosstab', () => {
     ]);
   });
 
-  it('makes the additive multi-metric total baseline explicit', () => {
+  test('makes the additive multi-metric total baseline explicit', () => {
     const result = buildCrosstab(records, {
       rowFields: ['contract_type', 'year'],
       columnFields: ['pay_type'],
@@ -255,7 +255,7 @@ describe('buildCrosstab', () => {
     });
   });
 
-  it('uses SQL row total summary for additive totals instead of summing visible columns', () => {
+  test('uses SQL row total summary for additive totals instead of summing visible columns', () => {
     const rowTotal = buildSummaryResultMap({
       records: [{ metric_name_with_unit: '销量（件）', 指标值: 100 }],
       rowFields: ['metric_name_with_unit'],
@@ -295,7 +295,7 @@ describe('buildCrosstab', () => {
     });
   });
 
-  it('fails when an additive row total is marked summary-required but no summary map is present', () => {
+  test('fails when an additive row total is marked summary-required but no summary map is present', () => {
     expect(() =>
       buildCrosstab(
         [
@@ -322,7 +322,7 @@ describe('buildCrosstab', () => {
     ).toThrow(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   });
 
-  it('fails when totals are enabled for rows with unknown semantics', () => {
+  test('fails when totals are enabled for rows with unknown semantics', () => {
     expect(() =>
       buildCrosstab(
         [
@@ -348,7 +348,7 @@ describe('buildCrosstab', () => {
     ).toThrow(ERR_CROSSTAB_UNKNOWN_METRIC_SEMANTIC);
   });
 
-  it('fails when multi-metric row totals require SQL summary values', () => {
+  test('fails when multi-metric row totals require SQL summary values', () => {
     expect(() =>
       buildCrosstab(
         [
@@ -377,7 +377,7 @@ describe('buildCrosstab', () => {
     ).toThrow(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   });
 
-  it('orders rows by optional row comparator without exposing hidden sort fields', () => {
+  test('orders rows by optional row comparator without exposing hidden sort fields', () => {
     const result = buildCrosstab(
       [
         {
@@ -417,7 +417,7 @@ describe('buildCrosstab', () => {
     );
   });
 
-  it('keeps generated column order in source record order when only row comparator is configured', () => {
+  test('keeps generated column order in source record order when only row comparator is configured', () => {
     const result = buildCrosstab(
       [
         {
@@ -462,7 +462,7 @@ describe('buildCrosstab', () => {
     ]);
   });
 
-  it('orders generated columns by optional column comparator', () => {
+  test('orders generated columns by optional column comparator', () => {
     const result = buildCrosstab(
       [
         {
@@ -508,7 +508,7 @@ describe('buildCrosstab', () => {
     ]);
   });
 
-  it('uses injected SQL values for non-additive row and grand totals', () => {
+  test('uses injected SQL values for non-additive row and grand totals', () => {
     const rowTotal = buildSummaryResultMap({
       records: [{ metric_name_with_unit: '毛利率（%）', 指标值: -9.5145 }],
       rowFields: ['metric_name_with_unit'],
@@ -573,7 +573,7 @@ describe('buildCrosstab', () => {
     });
   });
 
-  it('uses SQL summaries for non-additive subtotal and column-total surfaces', () => {
+  test('uses SQL summaries for non-additive subtotal and column-total surfaces', () => {
     const rowTotal = buildSummaryResultMap({
       records: [
         {
@@ -715,7 +715,7 @@ describe('buildCrosstab', () => {
     });
   });
 
-  it('fails fast when a SQL row total map is missing', () => {
+  test('fails fast when a SQL row total map is missing', () => {
     const grandTotal = buildSummaryResultMap({
       records: [{ 指标值: -9.5145 }],
       rowFields: [],
@@ -750,7 +750,7 @@ describe('buildCrosstab', () => {
     ).toThrow(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   });
 
-  it('fails fast when a SQL grand total map is missing', () => {
+  test('fails fast when a SQL grand total map is missing', () => {
     const rowTotal = buildSummaryResultMap({
       records: [{ metric_name_with_unit: '毛利率（%）', 指标值: -9.5145 }],
       rowFields: ['metric_name_with_unit'],
@@ -785,7 +785,7 @@ describe('buildCrosstab', () => {
     ).toThrow(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   });
 
-  it('fails fast for mixed grand total semantics', () => {
+  test('fails fast for mixed grand total semantics', () => {
     const rowTotal = buildSummaryResultMap({
       records: [
         { metric_name_with_unit: '毛利率（%）', 指标值: -9.5145 },
@@ -834,7 +834,7 @@ describe('buildCrosstab', () => {
     ).toThrow(ERR_CROSSTAB_MIXED_GRAND_TOTAL_SEMANTICS);
   });
 
-  it('fails fast for mixed grand total semantics before using complete SQL summary maps', () => {
+  test('fails fast for mixed grand total semantics before using complete SQL summary maps', () => {
     const rowTotal = buildSummaryResultMap({
       records: [
         { metric_name_with_unit: '毛利率（%）', 指标值: -9.5145 },
@@ -889,7 +889,7 @@ describe('buildCrosstab', () => {
     ).toThrow(ERR_CROSSTAB_MIXED_GRAND_TOTAL_SEMANTICS);
   });
 
-  it('honors configured row subtotal depths', () => {
+  test('honors configured row subtotal depths', () => {
     const result = buildCrosstab(
       [
         {
@@ -936,7 +936,7 @@ describe('buildCrosstab', () => {
     ]);
   });
 
-  it('removes subtotal and grand total rows when disabled', () => {
+  test('removes subtotal and grand total rows when disabled', () => {
     const result = buildCrosstab(records, {
       rowFields: ['contract_type', 'year'],
       columnFields: ['pay_type'],
@@ -958,7 +958,7 @@ describe('buildCrosstab', () => {
     ).toBe(false);
   });
 
-  it('adds stable column subtotal nodes only when enabled', () => {
+  test('adds stable column subtotal nodes only when enabled', () => {
     const disabled = buildCrosstab(records, {
       rowFields: ['contract_type'],
       columnFields: ['year', 'pay_type'],
@@ -1000,7 +1000,7 @@ describe('buildCrosstab', () => {
     });
   });
 
-  it('keeps missing generated cells blank and excludes blanks from totals', () => {
+  test('keeps missing generated cells blank and excludes blanks from totals', () => {
     const result = buildCrosstab(records, {
       rowFields: ['contract_type'],
       columnFields: ['pay_type'],
@@ -1021,7 +1021,7 @@ describe('buildCrosstab', () => {
     });
   });
 
-  it('omits total columns when column totals are disabled', () => {
+  test('omits total columns when column totals are disabled', () => {
     const result = buildCrosstab(records, {
       rowFields: ['contract_type'],
       columnFields: ['pay_type'],
@@ -1040,7 +1040,7 @@ describe('buildCrosstab', () => {
     );
   });
 
-  it('builds nested column tree nodes for multiple column dimensions', () => {
+  test('builds nested column tree nodes for multiple column dimensions', () => {
     const result = buildCrosstab(records, {
       rowFields: ['contract_type'],
       columnFields: ['year', 'pay_type'],
@@ -1074,7 +1074,7 @@ describe('buildCrosstab', () => {
     ]);
   });
 
-  it('uses field labels for row and metric display headers', () => {
+  test('uses field labels for row and metric display headers', () => {
     const result = buildCrosstab(records, {
       rowFields: ['contract_type'],
       columnFields: ['pay_type'],
@@ -1104,7 +1104,7 @@ describe('buildCrosstab', () => {
     ]);
   });
 
-  it('formats date-like column headers instead of exposing timestamps', () => {
+  test('formats date-like column headers instead of exposing timestamps', () => {
     const result = buildCrosstab(
       [{ metric_name: '利润', biz_date: 1736812800000, amount: 10 }],
       {
@@ -1128,7 +1128,7 @@ describe('buildCrosstab', () => {
     ]);
   });
 
-  it('fails for missing required fields and non-numeric totals', () => {
+  test('fails for missing required fields and non-numeric totals', () => {
     expect(() =>
       buildCrosstab(records, {
         rowFields: [],
@@ -1158,7 +1158,7 @@ describe('buildCrosstab', () => {
     ).toThrow(ERR_NON_NUMERIC_TOTAL);
   });
 
-  it('fails for non-finite metric values', () => {
+  test('fails for non-finite metric values', () => {
     expect(() =>
       buildCrosstab(
         [{ contract_type: 'A', pay_type: 'Cash', amount: Infinity }],
@@ -1177,7 +1177,7 @@ describe('buildCrosstab', () => {
     ).toThrow(ERR_NON_NUMERIC_TOTAL);
   });
 
-  it('counts metric fan-out against the generated column limit', () => {
+  test('counts metric fan-out against the generated column limit', () => {
     expect(() =>
       buildCrosstab(records, {
         rowFields: ['contract_type'],
@@ -1193,7 +1193,7 @@ describe('buildCrosstab', () => {
     ).toThrow(ERR_COLUMN_LIMIT(4, 3));
   });
 
-  it('keeps generated columns over the visible page size when under the configured limit', () => {
+  test('keeps generated columns over the visible page size when under the configured limit', () => {
     const wideRecords = Array.from({ length: 101 }, (_, index) => ({
       metric_name: '指标项',
       biz_date: '2026-05-01',
@@ -1230,7 +1230,7 @@ describe('buildCrosstab', () => {
     ]);
   });
 
-  it('fails fast for invalid options and reserved generated field names', () => {
+  test('fails fast for invalid options and reserved generated field names', () => {
     expect(() =>
       buildCrosstab(records, {
         rowFields: ['contract_type'],

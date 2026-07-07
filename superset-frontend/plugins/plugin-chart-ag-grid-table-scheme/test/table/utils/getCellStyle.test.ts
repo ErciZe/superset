@@ -19,7 +19,7 @@
 import getCellStyle from '../../../src/table/utils/getCellStyle';
 
 describe('getCellStyle', () => {
-  it('merges additional cell styles with existing alignment', () => {
+  test('merges additional cell styles with existing alignment', () => {
     const style = getCellStyle({
       value: 15,
       colDef: { field: 'value' },
@@ -45,7 +45,7 @@ describe('getCellStyle', () => {
     });
   });
 
-  it('merges additional formatter styles after color styles', () => {
+  test('merges additional formatter styles after color styles', () => {
     const style = getCellStyle({
       value: 15,
       colDef: { field: 'value' },

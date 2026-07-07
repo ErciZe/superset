@@ -60,7 +60,7 @@ describe('ColumnViewSchemeToolbar', () => {
     });
   });
 
-  it('uses Chinese text for scheme toolbar actions', () => {
+  test('uses Chinese text for scheme toolbar actions', () => {
     renderToolbar();
 
     expect(screen.getByText(/保\s*存/)).toBeInTheDocument();
@@ -69,7 +69,7 @@ describe('ColumnViewSchemeToolbar', () => {
     expect(screen.getByText(/删\s*除/)).toBeInTheDocument();
   });
 
-  it('requires confirmation before deleting the active scheme', () => {
+  test('requires confirmation before deleting the active scheme', () => {
     renderToolbar();
 
     userEvent.click(screen.getByRole('button', { name: /删\s*除/ }));
@@ -87,7 +87,7 @@ describe('ColumnViewSchemeToolbar', () => {
     expect(deleteActiveScheme).toHaveBeenCalledTimes(1);
   });
 
-  it('warns when deleting the default scheme', () => {
+  test('warns when deleting the default scheme', () => {
     renderToolbar();
 
     userEvent.click(screen.getByRole('button', { name: /删\s*除/ }));

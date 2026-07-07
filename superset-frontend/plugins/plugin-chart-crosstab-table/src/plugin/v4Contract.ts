@@ -31,10 +31,10 @@ function hasValue(value: unknown): boolean {
 export function hasCanonicalV4Definitions(formData: CrosstabFormData): boolean {
   return Boolean(
     hasValue(formData.crosstabParameters) ||
-      hasValue(formData.crosstabCalculatedFields) ||
-      (formData.crosstabFieldConfig?.metrics ?? []).some(
-        metric => metric.calculatedFieldId !== undefined,
-      ),
+    hasValue(formData.crosstabCalculatedFields) ||
+    (formData.crosstabFieldConfig?.metrics ?? []).some(
+      metric => metric.calculatedFieldId !== undefined,
+    ),
   );
 }
 

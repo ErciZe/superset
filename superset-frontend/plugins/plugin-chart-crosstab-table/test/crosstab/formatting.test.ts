@@ -24,20 +24,20 @@ import {
 } from '../../src/crosstab/formatting';
 
 describe('crosstab formatting', () => {
-  it('formats missing values as blank strings', () => {
+  test('formats missing values as blank strings', () => {
     expect(formatCrosstabValue(null, ',.2f')).toBe('');
     expect(formatCrosstabValue(undefined, ',.2f')).toBe('');
   });
 
-  it('formats numbers with the configured number format', () => {
+  test('formats numbers with the configured number format', () => {
     expect(formatCrosstabValue(1234.56, ',.1f')).toBe('1,234.6');
   });
 
-  it('stringifies non-numeric values', () => {
+  test('stringifies non-numeric values', () => {
     expect(formatCrosstabValue('North', ',.1f')).toBe('North');
   });
 
-  it('resolves the first matching numeric conditional style', () => {
+  test('resolves the first matching numeric conditional style', () => {
     expect(
       resolveConditionalStyle(10, [
         {
@@ -60,7 +60,7 @@ describe('crosstab formatting', () => {
     });
   });
 
-  it('supports all conditional operators and ignores non-numeric values', () => {
+  test('supports all conditional operators and ignores non-numeric values', () => {
     expect(
       resolveConditionalStyle(9, [
         { operator: '<', value: 10, color: 'green' },
@@ -88,7 +88,7 @@ describe('crosstab formatting', () => {
     ).toEqual({});
   });
 
-  it('parses declarative JSON conditional formatting rules', () => {
+  test('parses declarative JSON conditional formatting rules', () => {
     expect(
       parseConditionalFormatting(
         '[{"metric":"amount","operator":">","value":0,"color":"#137333","backgroundColor":"#e6f4ea","arrow":"up"}]',
@@ -105,7 +105,7 @@ describe('crosstab formatting', () => {
     ]);
   });
 
-  it('rejects invalid conditional formatting rules without evaluation', () => {
+  test('rejects invalid conditional formatting rules without evaluation', () => {
     expect(() => parseConditionalFormatting('not json')).toThrow(
       ERR_CONDITIONAL_FORMATTING,
     );

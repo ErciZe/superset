@@ -266,4 +266,3 @@ the implementation plan:
 2. Capture console and `/api/v1/chart/data`.
 3. Save Explore and Dashboard screenshots.
 4. Update this report with browser evidence and final verdict.
-

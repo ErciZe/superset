@@ -47,7 +47,7 @@ const params = {
 };
 
 describe('crosstab cell formatter', () => {
-  it('treats empty, blank, and comment-only expressions as disabled', () => {
+  test('treats empty, blank, and comment-only expressions as disabled', () => {
     expect(createCrosstabCellFormatter(undefined)).toBeUndefined();
     expect(createCrosstabCellFormatter(null)).toBeUndefined();
     expect(createCrosstabCellFormatter('   \n\t  ')).toBeUndefined();
@@ -57,14 +57,14 @@ describe('crosstab cell formatter', () => {
     expect(validateCrosstabCellFormatterCallback('/* disabled */')).toBe(false);
   });
 
-  it('ships a disabled Chinese default comment with an example marker', () => {
+  test('ships a disabled Chinese default comment with an example marker', () => {
     expect(CROSSTAB_CELL_FORMATTER_CALLBACK_DEFAULT).toContain('回调示例');
     expect(
       createCrosstabCellFormatter(CROSSTAB_CELL_FORMATTER_CALLBACK_DEFAULT),
     ).toBeUndefined();
   });
 
-  it('compiles function callbacks with the expected runtime context', () => {
+  test('compiles function callbacks with the expected runtime context', () => {
     const formatter = createCrosstabCellFormatter(`function formatter(ctx) {
       return ctx.row.region + ':' + ctx.cell.field + ':' + ctx.value + ':' + ctx.rawValue + ':' + ctx.column.label + ':' + ctx.column.metric + ':' + ctx.rowIndex + ':' + ctx.colDef.headerName;
     }`);
@@ -74,7 +74,7 @@ describe('crosstab cell formatter', () => {
     });
   });
 
-  it('compiles arrow callbacks with the expected runtime context', () => {
+  test('compiles arrow callbacks with the expected runtime context', () => {
     const formatter = createCrosstabCellFormatter(
       '({ cell }) => ({ text: cell.formattedValue, tooltip: String(cell.rawValue) })',
     );
@@ -85,7 +85,7 @@ describe('crosstab cell formatter', () => {
     });
   });
 
-  it('normalizes primitive callback returns to text', () => {
+  test('normalizes primitive callback returns to text', () => {
     expect(
       createCrosstabCellFormatter('() => "formatted"')?.(params, columnInfo),
     ).toEqual({ text: 'formatted' });
@@ -100,7 +100,7 @@ describe('crosstab cell formatter', () => {
     ).toBeUndefined();
   });
 
-  it('supports object results with text, html, tooltip, className, and whitelisted style', () => {
+  test('supports object results with text, html, tooltip, className, and whitelisted style', () => {
     const formatter = createCrosstabCellFormatter(`() => ({
       text: 'Revenue',
       html: '<strong>Revenue</strong>',
@@ -134,7 +134,7 @@ describe('crosstab cell formatter', () => {
     });
   });
 
-  it('rejects unsupported result fields', () => {
+  test('rejects unsupported result fields', () => {
     const formatter = createCrosstabCellFormatter(
       "() => ({ text: 'ok', onClick: () => {} })",
     );
@@ -144,7 +144,7 @@ describe('crosstab cell formatter', () => {
     );
   });
 
-  it('rejects invalid supported result field value types during validation', () => {
+  test('rejects invalid supported result field value types during validation', () => {
     expect(() =>
       validateCrosstabCellFormatterCallback('() => ({ text: { bad: true } })'),
     ).toThrow('text');
@@ -159,7 +159,7 @@ describe('crosstab cell formatter', () => {
     ).toThrow('className');
   });
 
-  it('rejects unsupported style fields', () => {
+  test('rejects unsupported style fields', () => {
     const formatter = createCrosstabCellFormatter(
       "() => ({ style: { color: 'red', position: 'absolute' } })",
     );
@@ -169,7 +169,7 @@ describe('crosstab cell formatter', () => {
     );
   });
 
-  it('rejects invalid style containers during validation', () => {
+  test('rejects invalid style containers during validation', () => {
     expect(() =>
       validateCrosstabCellFormatterCallback('() => ({ style: "color: red" })'),
     ).toThrow('style must be an object');
@@ -178,7 +178,7 @@ describe('crosstab cell formatter', () => {
     ).toThrow('style must be an object');
   });
 
-  it('rejects unsupported style value types during validation', () => {
+  test('rejects unsupported style value types during validation', () => {
     expect(() =>
       validateCrosstabCellFormatterCallback(
         '() => ({ style: { backgroundColor: { bad: true } } })',
@@ -186,7 +186,7 @@ describe('crosstab cell formatter', () => {
     ).toThrow('unsupported style value for field "backgroundColor"');
   });
 
-  it('validates callbacks that depend on representative Crosstab row fields', () => {
+  test('validates callbacks that depend on representative Crosstab row fields', () => {
     expect(() =>
       validateCrosstabCellFormatterCallback(
         '({ row }) => row.metric_name === "Sales" ? { text: row.metric_name_with_unit } : undefined',
@@ -204,7 +204,7 @@ describe('crosstab cell formatter', () => {
     ).not.toThrow();
   });
 
-  it('rejects source that does not produce a function', () => {
+  test('rejects source that does not produce a function', () => {
     expect(() => createCrosstabCellFormatter('({ text: "nope" })')).toThrow(
       'must be a function',
     );
@@ -216,7 +216,7 @@ describe('crosstab cell formatter', () => {
     );
   });
 
-  it('formats valid formatter source with Prettier after validation', async () => {
+  test('formats valid formatter source with Prettier after validation', async () => {
     await expect(
       formatCrosstabCellFormatterCallback(
         "({value})=>({text:value,style:{color:'red'}})",

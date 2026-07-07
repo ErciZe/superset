@@ -81,7 +81,7 @@ const getControlVisibility = (
 };
 
 describe('AG Grid table scheme control panel', () => {
-  it('keeps column view controls in Options after Customize columns', () => {
+  test('keeps column view controls in Options after Customize columns', () => {
     const sections = controlPanel.controlPanelSections.filter(
       (section): section is NonNullable<typeof section> => Boolean(section),
     );
@@ -126,7 +126,7 @@ describe('AG Grid table scheme control panel', () => {
     );
   });
 
-  it('puts the matrix mode switch before aggregate fields', () => {
+  test('puts the matrix mode switch before aggregate fields', () => {
     const sections = controlPanel.controlPanelSections.filter(
       (section): section is NonNullable<typeof section> => Boolean(section),
     );
@@ -150,7 +150,7 @@ describe('AG Grid table scheme control panel', () => {
     );
   });
 
-  it('hides regular aggregate controls while matrix mode is enabled', () => {
+  test('hides regular aggregate controls while matrix mode is enabled', () => {
     const sections = controlPanel.controlPanelSections.filter(
       (section): section is NonNullable<typeof section> => Boolean(section),
     );
@@ -190,7 +190,7 @@ describe('AG Grid table scheme control panel', () => {
     });
   });
 
-  it('restores regular aggregate controls when matrix mode is disabled', () => {
+  test('restores regular aggregate controls when matrix mode is disabled', () => {
     const sections = controlPanel.controlPanelSections.filter(
       (section): section is NonNullable<typeof section> => Boolean(section),
     );
@@ -233,7 +233,7 @@ describe('AG Grid table scheme control panel', () => {
     });
   });
 
-  it('keeps filters, row limit, and matrix details available in matrix mode', () => {
+  test('keeps filters, row limit, and matrix details available in matrix mode', () => {
     const sections = controlPanel.controlPanelSections.filter(
       (section): section is NonNullable<typeof section> => Boolean(section),
     );
@@ -264,7 +264,7 @@ describe('AG Grid table scheme control panel', () => {
     });
   });
 
-  it('does not require matrix value while raw records mode is active', () => {
+  test('does not require matrix value while raw records mode is active', () => {
     const sections = controlPanel.controlPanelSections.filter(
       (section): section is NonNullable<typeof section> => Boolean(section),
     );
@@ -295,7 +295,7 @@ describe('AG Grid table scheme control panel', () => {
     expect(mappedState?.externalValidationErrors).toEqual([]);
   });
 
-  it('requires matrix value only while matrix mode is active', () => {
+  test('requires matrix value only while matrix mode is active', () => {
     const sections = controlPanel.controlPanelSections.filter(
       (section): section is NonNullable<typeof section> => Boolean(section),
     );
@@ -329,7 +329,7 @@ describe('AG Grid table scheme control panel', () => {
     ).toEqual([]);
   });
 
-  it('uses Chinese labels for matrix-specific controls', () => {
+  test('uses Chinese labels for matrix-specific controls', () => {
     const sections = controlPanel.controlPanelSections.filter(
       (section): section is NonNullable<typeof section> => Boolean(section),
     );
@@ -401,7 +401,7 @@ describe('AG Grid table scheme control panel', () => {
     ).toBeUndefined();
   });
 
-  it('adds matrix cell conditional coloring with a matrix value target', () => {
+  test('adds matrix cell conditional coloring with a matrix value target', () => {
     const controls = controlPanel.controlPanelSections
       .filter((section): section is NonNullable<typeof section> =>
         Boolean(section),
@@ -475,7 +475,7 @@ describe('AG Grid table scheme control panel', () => {
     );
   });
 
-  it('hides official conditional formatting while matrix mode is enabled', () => {
+  test('hides official conditional formatting while matrix mode is enabled', () => {
     const controls = controlPanel.controlPanelSections
       .filter((section): section is NonNullable<typeof section> =>
         Boolean(section),

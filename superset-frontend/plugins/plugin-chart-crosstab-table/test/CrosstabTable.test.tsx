@@ -60,6 +60,11 @@ jest.mock('@superset-ui/core/components', () => {
       data: Record<string, unknown>;
     }) => CSSProperties | undefined;
     groupDefaultExpanded?: number;
+    localeText?: {
+      contains?: string;
+      filterOoo?: string;
+      applyFilter?: string;
+    };
     rowData: Record<string, unknown>[];
     style?: CSSProperties;
     treeData?: boolean;
@@ -73,6 +78,7 @@ jest.mock('@superset-ui/core/components', () => {
     allowClear?: boolean;
     allowSelectAll?: boolean;
     ariaLabel?: string;
+    disabled?: boolean;
     onChange?: (value: string) => void;
     onClear?: () => void;
     options: MockSelectOption[];
@@ -122,6 +128,7 @@ jest.mock('@superset-ui/core/components', () => {
         getDataPath,
         getRowStyle,
         groupDefaultExpanded,
+        localeText,
         rowData,
         style,
         treeData,
@@ -129,7 +136,13 @@ jest.mock('@superset-ui/core/components', () => {
       const { groups, leaves } = flattenColumnDefs(columnDefs);
 
       return (
-        <div className={className} style={style}>
+        <div
+          className={className}
+          data-locale-apply-filter={localeText?.applyFilter ?? ''}
+          data-locale-contains={localeText?.contains ?? ''}
+          data-locale-filter={localeText?.filterOoo ?? ''}
+          style={style}
+        >
           <div className="ag-center-cols-viewport" />
           <table
             data-group-depth={groupDefaultExpanded}
@@ -274,6 +287,7 @@ jest.mock('@superset-ui/core/components', () => {
       allowClear,
       allowSelectAll,
       ariaLabel,
+      disabled,
       onChange,
       onClear,
       options,
@@ -285,6 +299,7 @@ jest.mock('@superset-ui/core/components', () => {
           aria-label={ariaLabel}
           data-allow-select-all={allowSelectAll ? 'true' : 'false'}
           data-has-sort-comparator={sortComparator ? 'true' : 'false'}
+          disabled={disabled}
           onChange={event => onChange?.(event.target.value)}
           value={value ?? ''}
         >
@@ -367,6 +382,16 @@ describe('CrosstabTable', () => {
       throw new Error('Unable to find dynamic group-by select');
     }
     return select;
+  }
+
+  function getToolbar() {
+    const toolbar = container.querySelector(
+      '[data-test="crosstab-table-toolbar"]',
+    );
+    if (!(toolbar instanceof HTMLDivElement)) {
+      throw new Error('Unable to find crosstab table toolbar');
+    }
+    return toolbar;
   }
 
   function getDynamicGroupByClearButton(slotId: string) {
@@ -534,6 +559,77 @@ describe('CrosstabTable', () => {
     } as unknown as CrosstabChartProps;
   }
 
+  function threeDimensionDynamicGroupByProps({
+    selectedDynamicGroupBy = {
+      dimension1: 'date',
+      dimension2: 'shop',
+      dimension3: 'country',
+    },
+    setDataMask,
+  }: {
+    selectedDynamicGroupBy?: Record<string, string>;
+    setDataMask?: jest.Mock;
+  } = {}) {
+    const options = [
+      { id: 'none', label: '无', columns: [] },
+      { id: 'date', label: '日期', columns: ['biz_date'] },
+      { id: 'shop', label: '店铺', columns: ['shop_name'] },
+      { id: 'country', label: '国家', columns: ['country'] },
+      { id: 'msku', label: 'MSKU', columns: ['msku'] },
+    ];
+
+    return {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        generatedColumnWidth: 120,
+        viz_type: 'crosstab_table',
+      },
+      hooks: setDataMask ? { setDataMask } : undefined,
+      ownState: {
+        selectedDynamicGroupBy,
+      },
+      selectedDynamicGroupBy,
+      rowData: [],
+      columns: [],
+      columnTree: [],
+      generatedColumnIds: [],
+      dynamicGroupByConfig: {
+        enabled: true,
+        slots: [
+          {
+            id: 'dimension1',
+            label: '维度1',
+            placement: 'columns',
+            slotIndex: 0,
+            spliceCount: 1,
+            defaultOptionId: 'date',
+            options,
+          },
+          {
+            id: 'dimension2',
+            label: '维度2',
+            placement: 'columns',
+            slotIndex: 1,
+            spliceCount: 1,
+            defaultOptionId: 'shop',
+            options,
+          },
+          {
+            id: 'dimension3',
+            label: '维度3',
+            placement: 'columns',
+            slotIndex: 2,
+            spliceCount: 1,
+            defaultOptionId: 'country',
+            options,
+          },
+        ],
+      },
+    } as unknown as CrosstabChartProps;
+  }
+
   function baseFormatterProps(
     crosstabCellFormatterExpression: string,
     overrides: Partial<CrosstabChartProps> = {},
@@ -583,7 +679,7 @@ describe('CrosstabTable', () => {
     } as unknown as CrosstabChartProps;
   }
 
-  it('renders row dimension values and formatted generated cells', () => {
+  test('renders row dimension values and formatted generated cells', () => {
     const props = {
       height: 400,
       width: 800,
@@ -643,7 +739,7 @@ describe('CrosstabTable', () => {
     expect(getByText('1,234.6')).toBeInTheDocument();
   });
 
-  it('keeps the grid inside the remaining chart height below toolbar controls', () => {
+  test('keeps the grid inside the remaining chart height below toolbar controls', () => {
     const props = {
       height: 400,
       width: 800,
@@ -667,6 +763,9 @@ describe('CrosstabTable', () => {
         overflow: 'hidden',
       },
     );
+    expect(getToolbar()).toHaveStyle({
+      marginBottom: '5px',
+    });
     expect(getGridContainer()).toHaveStyle({
       flex: '1 1 auto',
       minHeight: '0',
@@ -675,7 +774,30 @@ describe('CrosstabTable', () => {
     });
   });
 
-  it('renders conditional arrows and total row styling', () => {
+  test('passes localized AG Grid filter text to the table', () => {
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+      },
+      rowData: [],
+      columns: [],
+      columnTree: [],
+      generatedColumnIds: [],
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    const grid = container.querySelector('[data-locale-contains]');
+
+    expect(grid).toHaveAttribute('data-locale-contains', 'Contains');
+    expect(grid).toHaveAttribute('data-locale-filter', 'Filter');
+    expect(grid).toHaveAttribute('data-locale-apply-filter', 'Apply Filter');
+  });
+
+  test('renders conditional arrows and total row styling', () => {
     const props = {
       height: 400,
       width: 800,
@@ -758,7 +880,7 @@ describe('CrosstabTable', () => {
     });
   });
 
-  it('uses formatter text for generated matrix value cells and exposes column metric', () => {
+  test('uses formatter text for generated matrix value cells and exposes column metric', () => {
     renderChart(
       baseFormatterProps(
         `({ value, column }) => ({
@@ -771,7 +893,7 @@ describe('CrosstabTable', () => {
     expect(() => getByText('1,234.6')).toThrow('Unable to find text: 1,234.6');
   });
 
-  it('sanitizes formatter html before rendering generated matrix value cells', () => {
+  test('sanitizes formatter html before rendering generated matrix value cells', () => {
     renderChart(
       baseFormatterProps(
         `() => ({
@@ -785,7 +907,7 @@ describe('CrosstabTable', () => {
     expect(cell.innerHTML).not.toContain('onerror');
   });
 
-  it('applies formatter style, tooltip, and className to generated matrix value cells', () => {
+  test('applies formatter style, tooltip, and className to generated matrix value cells', () => {
     renderChart(
       baseFormatterProps(
         `({ rowIndex }) => ({
@@ -809,7 +931,7 @@ describe('CrosstabTable', () => {
     });
   });
 
-  it('reuses one formatter result for generated cell rendering, style, class, and tooltip', () => {
+  test('reuses one formatter result for generated cell rendering, style, class, and tooltip', () => {
     renderChart(
       baseFormatterProps(
         `(() => {
@@ -837,7 +959,7 @@ describe('CrosstabTable', () => {
     expect(cell).toHaveStyle({ color: 'rgb(10, 20, 1)' });
   });
 
-  it('recomputes formatter output when the same row object moves to a different rowIndex', () => {
+  test('recomputes formatter output when the same row object moves to a different rowIndex', () => {
     const formData = {
       datasource: '1__table',
       viz_type: 'crosstab_table',
@@ -905,7 +1027,7 @@ describe('CrosstabTable', () => {
     expect(getByText('row-1')).toBeInTheDocument();
   });
 
-  it('keeps default display, conditional formatting, and arrows when formatter returns undefined or null', () => {
+  test('keeps default display, conditional formatting, and arrows when formatter returns undefined or null', () => {
     renderChart(
       baseFormatterProps(
         `({ rowIndex }) => (rowIndex === 0 ? undefined : null)`,
@@ -958,7 +1080,7 @@ describe('CrosstabTable', () => {
     `);
   });
 
-  it('lets formatter style override conditional formatting colors', () => {
+  test('lets formatter style override conditional formatting colors', () => {
     renderChart(
       baseFormatterProps(
         `() => ({
@@ -1000,7 +1122,7 @@ describe('CrosstabTable', () => {
     `);
   });
 
-  it('does not apply the cell formatter to row dimension cells', () => {
+  test('does not apply the cell formatter to row dimension cells', () => {
     renderChart(
       baseFormatterProps(
         `() => ({
@@ -1014,7 +1136,7 @@ describe('CrosstabTable', () => {
     expect(container.querySelectorAll('td')).toHaveLength(2);
   });
 
-  it('does not apply the cell formatter to the total column', () => {
+  test('does not apply the cell formatter to the total column', () => {
     renderChart(
       baseFormatterProps(`() => ({ text: "formatted" })`, {
         rowData: [
@@ -1056,7 +1178,7 @@ describe('CrosstabTable', () => {
     expect(container.querySelectorAll('td')).toHaveLength(3);
   });
 
-  it('renders pinned row columns and nested column group headers', () => {
+  test('renders pinned row columns and nested column group headers', () => {
     const props = {
       height: 400,
       width: 800,
@@ -1122,7 +1244,7 @@ describe('CrosstabTable', () => {
     expect(getTable()).toHaveAttribute('data-tree-data', 'false');
   });
 
-  it('uses defaultRowExpandedDepth to control initially visible hierarchy rows', () => {
+  test('uses defaultRowExpandedDepth to control initially visible hierarchy rows', () => {
     renderChart(baseHierarchicalProps(0));
 
     expect(getByText('▸ A')).toBeInTheDocument();
@@ -1137,7 +1259,7 @@ describe('CrosstabTable', () => {
     expect(getByText('Subtotal')).toBeInTheDocument();
   });
 
-  it('uses expandedRowPaths ownState before default expanded depth', () => {
+  test('uses expandedRowPaths ownState before default expanded depth', () => {
     renderChart(baseHierarchicalProps(1, []));
 
     expect(getByText('▸ A')).toBeInTheDocument();
@@ -1145,7 +1267,7 @@ describe('CrosstabTable', () => {
     expect(container).not.toHaveTextContent('Subtotal');
   });
 
-  it('paginates generated columns while keeping row and total columns visible', () => {
+  test('paginates generated columns while keeping row and total columns visible', () => {
     const setDataMask = jest.fn();
     const generatedColumnIds = Array.from(
       { length: 101 },
@@ -1264,7 +1386,7 @@ describe('CrosstabTable', () => {
     expect(container).not.toHaveTextContent(/D5/);
   });
 
-  it('updates own state for server column pagination instead of slicing local columns', () => {
+  test('updates own state for server column pagination instead of slicing local columns', () => {
     const setDataMask = jest.fn();
     const generatedColumnIds = Array.from(
       { length: 5 },
@@ -1351,7 +1473,7 @@ describe('CrosstabTable', () => {
     });
   });
 
-  it('computes the server column page size from chart width and generated column width', () => {
+  test('computes the server column page size from chart width and generated column width', () => {
     const setDataMask = jest.fn();
     const generatedColumnIds = Array.from(
       { length: 5 },
@@ -1419,7 +1541,7 @@ describe('CrosstabTable', () => {
     });
   });
 
-  it('computes server column page size from the rendered grid viewport width', () => {
+  test('computes server column page size from the rendered grid viewport width', () => {
     const clientWidthDescriptor = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,
       'clientWidth',
@@ -1521,7 +1643,7 @@ describe('CrosstabTable', () => {
     }
   });
 
-  it('renders dynamic group-by select with configured label, options, and value', () => {
+  test('renders dynamic group-by select with configured label, options, and value', () => {
     const props = {
       height: 400,
       width: 800,
@@ -1576,7 +1698,7 @@ describe('CrosstabTable', () => {
     ]);
   });
 
-  it('falls back to a valid dynamic group-by option for stale selected values', () => {
+  test('falls back to a valid dynamic group-by option for stale selected values', () => {
     const props = {
       height: 400,
       width: 800,
@@ -1613,7 +1735,7 @@ describe('CrosstabTable', () => {
     expect(getDynamicGroupBySelect('__legacy__')).toHaveValue('country');
   });
 
-  it('resets crosstab column cache when dynamic group-by selection changes', () => {
+  test('resets crosstab column cache when dynamic group-by selection changes', () => {
     const setDataMask = jest.fn();
     const props = {
       height: 400,
@@ -1701,7 +1823,7 @@ describe('CrosstabTable', () => {
     );
   });
 
-  it('ignores invalid dynamic group-by change values', () => {
+  test('ignores invalid dynamic group-by change values', () => {
     const setDataMask = jest.fn();
     const props = {
       height: 400,
@@ -1746,7 +1868,7 @@ describe('CrosstabTable', () => {
     expect(setDataMask).not.toHaveBeenCalled();
   });
 
-  it('renders one dynamic group-by selector per normalized slot', () => {
+  test('renders one dynamic group-by selector per normalized slot', () => {
     const props = {
       height: 400,
       width: 800,
@@ -1798,7 +1920,7 @@ describe('CrosstabTable', () => {
     expect(getDynamicGroupBySelect('level3')).toHaveValue('msku');
   });
 
-  it('updates one slot while preserving other selected slots', () => {
+  test('updates one slot while preserving other selected slots', () => {
     const setDataMask = jest.fn();
     const props = {
       height: 400,
@@ -1900,7 +2022,7 @@ describe('CrosstabTable', () => {
     );
   });
 
-  it('makes selected dynamic group-by values mutually exclusive across slots', () => {
+  test('makes selected dynamic group-by values mutually exclusive across slots', () => {
     const setDataMask = jest.fn();
     const props = {
       height: 400,
@@ -2007,7 +2129,7 @@ describe('CrosstabTable', () => {
     expect(setDataMask).not.toHaveBeenCalled();
   });
 
-  it('clears a dynamic group-by slot to its empty option', () => {
+  test('clears a dynamic group-by slot to its empty option', () => {
     const setDataMask = jest.fn();
     const props = {
       height: 400,
@@ -2096,7 +2218,7 @@ describe('CrosstabTable', () => {
         selectedDynamicGroupBy: {
           dimension1: 'date',
           dimension2: 'none',
-          dimension3: 'country',
+          dimension3: 'none',
         },
         currentColumnPage: 0,
         currentColumnPageSize: 7,
@@ -2107,7 +2229,53 @@ describe('CrosstabTable', () => {
     });
   });
 
-  it('prevents clearing the last active dynamic group-by slot for a placement', () => {
+  test('disables later dynamic group-by slots after an empty previous slot', () => {
+    const setDataMask = jest.fn();
+    const props = threeDimensionDynamicGroupByProps({
+      selectedDynamicGroupBy: {
+        dimension1: 'date',
+        dimension2: 'none',
+        dimension3: 'country',
+      },
+      setDataMask,
+    });
+
+    renderChart(props);
+
+    const secondSelect = getDynamicGroupBySelect('dimension2');
+    const thirdSelect = getDynamicGroupBySelect('dimension3');
+
+    expect(secondSelect).not.toBeDisabled();
+    expect(thirdSelect).toBeDisabled();
+    expect(thirdSelect).toHaveValue('none');
+
+    act(() => {
+      thirdSelect.value = 'msku';
+      thirdSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(setDataMask).not.toHaveBeenCalled();
+  });
+
+  test('enables a later dynamic group-by slot when the previous slot is active', () => {
+    const props = threeDimensionDynamicGroupByProps({
+      selectedDynamicGroupBy: {
+        dimension1: 'date',
+        dimension2: 'shop',
+        dimension3: 'none',
+      },
+    });
+
+    renderChart(props);
+
+    const thirdSelect = getDynamicGroupBySelect('dimension3');
+
+    expect(thirdSelect).not.toBeDisabled();
+    expect(getSelectOption(thirdSelect, 'country').disabled).toBe(false);
+    expect(getSelectOption(thirdSelect, 'msku').disabled).toBe(false);
+  });
+
+  test('prevents clearing the last active dynamic group-by slot for a placement', () => {
     const setDataMask = jest.fn();
     const props = {
       height: 400,
@@ -2198,7 +2366,7 @@ describe('CrosstabTable', () => {
     expect(setDataMask).not.toHaveBeenCalled();
   });
 
-  it('renders a numeric parameter control and writes own-state on change', () => {
+  test('renders a numeric parameter control and writes own-state on change', () => {
     const setDataMask = jest.fn();
     const props = {
       height: 400,
@@ -2285,7 +2453,7 @@ describe('CrosstabTable', () => {
     );
   });
 
-  it('renders numeric runtime parameters from canonical config', () => {
+  test('renders numeric runtime parameters from canonical config', () => {
     const props = {
       height: 400,
       width: 800,
@@ -2326,7 +2494,7 @@ describe('CrosstabTable', () => {
     expect(numberInput).toHaveValue(1);
   });
 
-  it('writes runtime numeric parameter own-state and resets column pagination', () => {
+  test('writes runtime numeric parameter own-state and resets column pagination', () => {
     const setDataMask = jest.fn();
     const props = {
       height: 400,
@@ -2418,7 +2586,7 @@ describe('CrosstabTable', () => {
     );
   });
 
-  it('rejects invalid numeric parameter max and step values before writing own-state', () => {
+  test('rejects invalid numeric parameter max and step values before writing own-state', () => {
     const setDataMask = jest.fn();
     const props = {
       height: 400,
@@ -2487,7 +2655,7 @@ describe('CrosstabTable', () => {
     expect(setDataMask).not.toHaveBeenCalled();
   });
 
-  it('renders one dynamic metric selector per configured slot', () => {
+  test('renders one dynamic metric selector per configured slot', () => {
     const props = {
       height: 400,
       width: 800,
@@ -2540,7 +2708,7 @@ describe('CrosstabTable', () => {
     expect(getDynamicMetricSelect('secondary')).toHaveValue('margin');
   });
 
-  it('uses selected dynamic metric values with per-slot default fallback', () => {
+  test('uses selected dynamic metric values with per-slot default fallback', () => {
     const props = {
       height: 400,
       width: 800,
@@ -2595,7 +2763,7 @@ describe('CrosstabTable', () => {
     expect(getDynamicMetricSelect('secondary')).toHaveValue('margin');
   });
 
-  it('updates one dynamic metric slot while preserving other selected metric entries', () => {
+  test('updates one dynamic metric slot while preserving other selected metric entries', () => {
     const setDataMask = jest.fn();
     const props = {
       height: 400,
@@ -2681,7 +2849,7 @@ describe('CrosstabTable', () => {
     });
   });
 
-  it('preserves expanded row paths when a dynamic metric changes', () => {
+  test('preserves expanded row paths when a dynamic metric changes', () => {
     const setDataMask = jest.fn();
     const props = {
       height: 400,
@@ -2742,7 +2910,7 @@ describe('CrosstabTable', () => {
     });
   });
 
-  it('removes stale server-column cache keys when a dynamic metric changes', () => {
+  test('removes stale server-column cache keys when a dynamic metric changes', () => {
     const setDataMask = jest.fn();
     const props = {
       height: 400,
@@ -2838,7 +3006,7 @@ describe('CrosstabTable', () => {
     );
   });
 
-  it('ignores invalid dynamic metric selected values and option changes', () => {
+  test('ignores invalid dynamic metric selected values and option changes', () => {
     const setDataMask = jest.fn();
     const props = {
       height: 400,
@@ -2887,7 +3055,7 @@ describe('CrosstabTable', () => {
     expect(setDataMask).not.toHaveBeenCalled();
   });
 
-  it('does not render dynamic group-by select without an enabled config', () => {
+  test('does not render dynamic group-by select without an enabled config', () => {
     const props = {
       height: 400,
       width: 800,

@@ -25,7 +25,7 @@ import {
 } from '../../src/plugin/metricSemantics';
 
 describe('crosstab metric semantics', () => {
-  it('defaults metrics without semantics to unknown', () => {
+  test('defaults metrics without semantics to unknown', () => {
     expect(
       resolveMetricSemantic({
         metric: '指标值',
@@ -34,7 +34,7 @@ describe('crosstab metric semantics', () => {
     ).toBe('unknown');
   });
 
-  it('uses the metric default semantic when no row override matches', () => {
+  test('uses the metric default semantic when no row override matches', () => {
     expect(
       resolveMetricSemantic({
         metric: 'amount',
@@ -43,7 +43,7 @@ describe('crosstab metric semantics', () => {
     ).toBe('additive');
   });
 
-  it('uses row-value overrides for production metric rows', () => {
+  test('uses row-value overrides for production metric rows', () => {
     expect(
       resolveMetricSemantic({
         metric: '指标值',
@@ -58,7 +58,7 @@ describe('crosstab metric semantics', () => {
     ).toBe('ratio');
   });
 
-  it('resolves row value summaries before legacy semantic overrides', () => {
+  test('resolves row value summaries before legacy semantic overrides', () => {
     const semantic = resolveMetricSemantic({
       metric: '指标值',
       row: { metric_name_with_unit: '毛利率（%）' },
@@ -74,7 +74,7 @@ describe('crosstab metric semantics', () => {
     expect(semantic).toBe('ratio');
   });
 
-  it('treats row value summaries as configured summary semantics even when additive', () => {
+  test('treats row value summaries as configured summary semantics even when additive', () => {
     expect(
       hasConfiguredSummarySemantics([{ metric: '指标值' }], [], {
         field: 'metric_name_with_unit',
@@ -83,7 +83,7 @@ describe('crosstab metric semantics', () => {
     ).toBe(true);
   });
 
-  it('keeps legacy SQL summary semantic config behavior for ratio metric configs', () => {
+  test('keeps legacy SQL summary semantic config behavior for ratio metric configs', () => {
     expect(
       hasSqlSummarySemanticConfig(
         [{ metric: '指标值', semantic: 'ratio' }],
@@ -92,7 +92,7 @@ describe('crosstab metric semantics', () => {
     ).toBe(true);
   });
 
-  it('treats ratio row value summaries as SQL summary semantic config', () => {
+  test('treats ratio row value summaries as SQL summary semantic config', () => {
     expect(
       hasSqlSummarySemanticConfig([], [], {
         field: 'metric_name_with_unit',
@@ -101,7 +101,7 @@ describe('crosstab metric semantics', () => {
     ).toBe(true);
   });
 
-  it('does not treat additive row value summaries as SQL summary semantic config', () => {
+  test('does not treat additive row value summaries as SQL summary semantic config', () => {
     expect(
       hasSqlSummarySemanticConfig([], [], {
         field: 'metric_name_with_unit',
@@ -110,7 +110,7 @@ describe('crosstab metric semantics', () => {
     ).toBe(false);
   });
 
-  it('fails fast when summaries include an unknown semantic', () => {
+  test('fails fast when summaries include an unknown semantic', () => {
     expect(() =>
       validateSummarySemantics([
         { metric: '指标值', semantic: 'unknown', summaryLabel: 'row total' },

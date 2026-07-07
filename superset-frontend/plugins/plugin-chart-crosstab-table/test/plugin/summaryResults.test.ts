@@ -24,7 +24,7 @@ import {
 } from '../../src/plugin/summaryResults';
 
 describe('crosstab summary results', () => {
-  it('indexes row and column summary values with typed tuple keys', () => {
+  test('indexes row and column summary values with typed tuple keys', () => {
     const map = buildSummaryResultMap({
       records: [
         {
@@ -47,7 +47,7 @@ describe('crosstab summary results', () => {
     ).toBe(-9.5145);
   });
 
-  it('fails fast when a required summary value is missing', () => {
+  test('fails fast when a required summary value is missing', () => {
     const map = buildSummaryResultMap({
       records: [],
       rowFields: ['metric_name_with_unit'],
@@ -64,7 +64,7 @@ describe('crosstab summary results', () => {
     ).toThrow(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   });
 
-  it('fails fast when a SQL summary value is not numeric', () => {
+  test('fails fast when a SQL summary value is not numeric', () => {
     expect(() =>
       buildSummaryResultMap({
         records: [{ metric_name_with_unit: '毛利率（%）', 指标值: 'bad' }],
@@ -75,7 +75,7 @@ describe('crosstab summary results', () => {
     ).toThrow(ERR_CROSSTAB_NON_NUMERIC_SQL_SUMMARY);
   });
 
-  it('fails fast when a SQL summary record is missing the metric field', () => {
+  test('fails fast when a SQL summary record is missing the metric field', () => {
     expect(() =>
       buildSummaryResultMap({
         records: [{ metric_name_with_unit: '毛利率（%）' }],
@@ -86,7 +86,7 @@ describe('crosstab summary results', () => {
     ).toThrow(ERR_CROSSTAB_MISSING_SQL_SUMMARY);
   });
 
-  it('indexes null SQL summary values and returns null', () => {
+  test('indexes null SQL summary values and returns null', () => {
     const map = buildSummaryResultMap({
       records: [{ metric_name_with_unit: '毛利率（%）', 指标值: null }],
       rowFields: ['metric_name_with_unit'],

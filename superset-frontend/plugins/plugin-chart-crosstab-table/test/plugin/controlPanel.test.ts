@@ -152,7 +152,7 @@ const existingProfitRateField = {
 };
 
 describe('crosstab controlPanel', () => {
-  it('exposes the crosstab field entry with totals, formatting, and display controls', () => {
+  test('exposes the crosstab field entry with totals, formatting, and display controls', () => {
     const controlNames = getControlNames();
 
     expect(controlNames).toEqual(
@@ -179,7 +179,7 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('keeps datasource saved metrics in hidden form data for calculated fields', () => {
+  test('keeps datasource saved metrics in hidden form data for calculated fields', () => {
     const config = getControlConfig('datasourceMetrics') as {
       hidden?: boolean;
       mapStateToProps?: (state: {
@@ -201,7 +201,7 @@ describe('crosstab controlPanel', () => {
     });
   });
 
-  it('places dynamic slot controls before crosstab totals controls', () => {
+  test('places dynamic slot controls before crosstab totals controls', () => {
     const crosstabControlNames = getControlNamesForSection('Crosstab');
     const dynamicGroupByIndex = crosstabControlNames.indexOf('dynamicGroupBy');
     const dynamicMetricIndex = crosstabControlNames.indexOf('dynamicMetric');
@@ -230,7 +230,7 @@ describe('crosstab controlPanel', () => {
     });
   });
 
-  it('keeps crosstab field config, dynamic slots, and server pagination in order', () => {
+  test('keeps crosstab field config, dynamic slots, and server pagination in order', () => {
     const controlNames = getControlNames();
     const crosstabFieldConfigIndex = controlNames.indexOf(
       'crosstabFieldConfig',
@@ -253,7 +253,7 @@ describe('crosstab controlPanel', () => {
     expect(serverColumnPaginationIndex).toBeGreaterThan(calculatedFieldsIndex);
   });
 
-  it('exposes dynamic group-by as a chart-local slot editor', () => {
+  test('exposes dynamic group-by as a chart-local slot editor', () => {
     expect(getControlConfig('dynamicGroupBy')).toEqual(
       expect.objectContaining({
         type: 'CrosstabDynamicGroupByControl',
@@ -265,7 +265,7 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('exposes dynamic metrics as a chart-local slot editor', () => {
+  test('exposes dynamic metrics as a chart-local slot editor', () => {
     expect(getControlConfig('dynamicMetric')).toEqual(
       expect.objectContaining({
         type: 'CrosstabDynamicMetricControl',
@@ -277,7 +277,7 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('exposes crosstab parameters and calculated fields as chart-local controls', () => {
+  test('exposes crosstab parameters and calculated fields as chart-local controls', () => {
     expect(getControlConfig('crosstabParameters')).toEqual(
       expect.objectContaining({
         type: 'CrosstabParametersControl',
@@ -296,7 +296,7 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('exposes crosstab cell formatter as a JavaScript editor control', () => {
+  test('exposes crosstab cell formatter as a JavaScript editor control', () => {
     expect(getControlConfig('crosstabCellFormatterExpression')).toEqual(
       expect.objectContaining({
         type: 'TextAreaControl',
@@ -308,7 +308,7 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('validates crosstab cell formatter callback source', () => {
+  test('validates crosstab cell formatter callback source', () => {
     const config = getControlConfig('crosstabCellFormatterExpression') as {
       validators?: Array<(value: string) => false | string>;
     };
@@ -324,14 +324,14 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('registers dynamic slot and v4 control component types', () => {
+  test('registers dynamic slot and v4 control component types', () => {
     expect(CrosstabDynamicGroupByControl).toBeDefined();
     expect(CrosstabDynamicMetricControl).toBeDefined();
     expect(CrosstabParametersControl).toBeDefined();
     expect(CrosstabCalculatedFieldsControl).toBeDefined();
   });
 
-  it('registers string control types in the shared Explore control registry', () => {
+  test('registers string control types in the shared Explore control registry', () => {
     expect(
       (sharedControlComponents as Record<string, unknown>)
         .CrosstabParametersControl,
@@ -342,7 +342,7 @@ describe('crosstab controlPanel', () => {
     ).toBe(CrosstabCalculatedFieldsControl);
   });
 
-  it('creates canonical numeric crosstab parameters and clears legacy parameters', () => {
+  test('creates canonical numeric crosstab parameters and clears legacy parameters', () => {
     const onChange = jest.fn();
     const onControlChange = jest.fn();
     const { rerender } = render(
@@ -442,7 +442,7 @@ describe('crosstab controlPanel', () => {
     ]);
   });
 
-  it('rejects invalid crosstab parameter numeric input', () => {
+  test('rejects invalid crosstab parameter numeric input', () => {
     const onChange = jest.fn();
 
     render(
@@ -471,7 +471,7 @@ describe('crosstab controlPanel', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('keeps parameter edit targets stable when another parameter is deleted', () => {
+  test('keeps parameter edit targets stable when another parameter is deleted', () => {
     const onChange = jest.fn();
     const value = [
       {
@@ -524,7 +524,7 @@ describe('crosstab controlPanel', () => {
     ]);
   });
 
-  it('saves a pct calculated field and appends crosstab metric config', () => {
+  test('saves a pct calculated field and appends crosstab metric config', () => {
     const onChange = jest.fn();
     const onControlChange = jest.fn();
     const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
@@ -590,7 +590,7 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('shows a structured preview and validation summary for calculated-field drafts', () => {
+  test('shows a structured preview and validation summary for calculated-field drafts', () => {
     render(
       createElement(CrosstabCalculatedFieldsControl, {
         actions: { setControlValue: jest.fn() },
@@ -617,7 +617,7 @@ describe('crosstab controlPanel', () => {
     expect(screen.getByText('Ready to save.')).toBeInTheDocument();
   });
 
-  it('duplicates a calculated field and clears legacy v4 write-through controls', () => {
+  test('duplicates a calculated field and clears legacy v4 write-through controls', () => {
     const onChange = jest.fn();
     const actions = { setControlValue: jest.fn() };
 
@@ -687,7 +687,7 @@ describe('crosstab controlPanel', () => {
     ]);
   });
 
-  it('creates pct fields from saved metric names and datasource metric records', () => {
+  test('creates pct fields from saved metric names and datasource metric records', () => {
     const onChange = jest.fn();
     const onControlChange = jest.fn();
 
@@ -729,7 +729,7 @@ describe('crosstab controlPanel', () => {
     ]);
   });
 
-  it('edits calculated field refs from saved metrics when only placeholder is selected', () => {
+  test('edits calculated field refs from saved metrics when only placeholder is selected', () => {
     const onChange = jest.fn();
     const onControlChange = jest.fn();
     const field = {
@@ -808,7 +808,7 @@ describe('crosstab controlPanel', () => {
     ]);
   });
 
-  it('resolves verbose-name metric refs to the correct saved metrics when editing', () => {
+  test('resolves verbose-name metric refs to the correct saved metrics when editing', () => {
     const onChange = jest.fn();
     const onControlChange = jest.fn();
     const field = {
@@ -887,7 +887,7 @@ describe('crosstab controlPanel', () => {
     ]);
   });
 
-  it('preserves alias-based visible metric selections when editing calculated fields', () => {
+  test('preserves alias-based visible metric selections when editing calculated fields', () => {
     const onChange = jest.fn();
     const onControlChange = jest.fn();
     const field = {
@@ -968,7 +968,7 @@ describe('crosstab controlPanel', () => {
     ]);
   });
 
-  it('updates an existing calculated field and metric config without duplicates', () => {
+  test('updates an existing calculated field and metric config without duplicates', () => {
     const onChange = jest.fn();
     const onControlChange = jest.fn();
     const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
@@ -1049,7 +1049,7 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('rejects new calculated fields that duplicate an existing id', () => {
+  test('rejects new calculated fields that duplicate an existing id', () => {
     const onChange = jest.fn();
     const onControlChange = jest.fn();
     const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
@@ -1097,7 +1097,7 @@ describe('crosstab controlPanel', () => {
     expect(onControlChange).not.toHaveBeenCalled();
   });
 
-  it('rejects new calculated fields that duplicate ids or metric labels', () => {
+  test('rejects new calculated fields that duplicate ids or metric labels', () => {
     const onChange = jest.fn();
     const onControlChange = jest.fn();
     const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
@@ -1145,7 +1145,7 @@ describe('crosstab controlPanel', () => {
     expect(onControlChange).not.toHaveBeenCalled();
   });
 
-  it('deletes calculated fields and only their matching metric config', () => {
+  test('deletes calculated fields and only their matching metric config', () => {
     const onChange = jest.fn();
     const onControlChange = jest.fn();
     const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
@@ -1209,7 +1209,7 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('rejects saving calculated fields without crosstab field config updates', () => {
+  test('rejects saving calculated fields without crosstab field config updates', () => {
     const onChange = jest.fn();
     const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
     const profitMetric = sqlMetric('profit', 'SUM(gross_profit)');
@@ -1248,7 +1248,7 @@ describe('crosstab controlPanel', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('rejects non-SQL saved metrics for calculated fields', () => {
+  test('rejects non-SQL saved metrics for calculated fields', () => {
     const onChange = jest.fn();
     const setControlValue = jest.fn();
 
@@ -1286,7 +1286,7 @@ describe('crosstab controlPanel', () => {
     expect(setControlValue).not.toHaveBeenCalled();
   });
 
-  it('rejects saved metric records that only expose non-SQL metric objects', () => {
+  test('rejects saved metric records that only expose non-SQL metric objects', () => {
     const onChange = jest.fn();
     const setControlValue = jest.fn();
 
@@ -1336,7 +1336,7 @@ describe('crosstab controlPanel', () => {
     expect(setControlValue).not.toHaveBeenCalled();
   });
 
-  it('resolves calculated field metrics after selected chart metrics load', () => {
+  test('resolves calculated field metrics after selected chart metrics load', () => {
     const onChange = jest.fn();
     const setControlValue = jest.fn();
     const salesMetric = sqlMetric('sales', 'SUM(sales_amount)');
@@ -1384,7 +1384,7 @@ describe('crosstab controlPanel', () => {
     ]);
   });
 
-  it('renders dynamic metric control when saved value omits slots', () => {
+  test('renders dynamic metric control when saved value omits slots', () => {
     render(
       createElement(CrosstabDynamicMetricControl, {
         name: 'dynamicMetric',
@@ -1397,7 +1397,7 @@ describe('crosstab controlPanel', () => {
     expect(screen.getByText('Add slot')).toBeInTheDocument();
   });
 
-  it('renders dynamic metric control from saved JSON string values', () => {
+  test('renders dynamic metric control from saved JSON string values', () => {
     render(
       createElement(CrosstabDynamicMetricControl, {
         name: 'dynamicMetric',
@@ -1429,7 +1429,7 @@ describe('crosstab controlPanel', () => {
     expect(screen.getByText('Metric slot')).toBeInTheDocument();
   });
 
-  it('renders dynamic group-by control when saved value omits slots', () => {
+  test('renders dynamic group-by control when saved value omits slots', () => {
     render(
       createElement(CrosstabDynamicGroupByControl, {
         name: 'dynamicGroupBy',
@@ -1442,7 +1442,7 @@ describe('crosstab controlPanel', () => {
     expect(screen.getByText('Add slot')).toBeInTheDocument();
   });
 
-  it('renders dynamic group-by control from saved JSON string values', () => {
+  test('renders dynamic group-by control from saved JSON string values', () => {
     render(
       createElement(CrosstabDynamicGroupByControl, {
         name: 'dynamicGroupBy',
@@ -1472,7 +1472,7 @@ describe('crosstab controlPanel', () => {
     expect(screen.getByText('维度1')).toBeInTheDocument();
   });
 
-  it('keeps legacy field controls hidden for saved chart compatibility', () => {
+  test('keeps legacy field controls hidden for saved chart compatibility', () => {
     expect(getControlConfig('groupbyRows')).toEqual(
       expect.objectContaining({ hidden: true }),
     );
@@ -1484,7 +1484,7 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('renders field options without alias or row-column transfer actions', () => {
+  test('renders field options without alias or row-column transfer actions', () => {
     render(
       createElement(CrosstabFieldConfigControl, {
         name: 'crosstabFieldConfig',
@@ -1503,7 +1503,7 @@ describe('crosstab controlPanel', () => {
     expect(screen.queryByText('To rows')).not.toBeInTheDocument();
   });
 
-  it('opens a field sort modal and saves sort changes', async () => {
+  test('opens a field sort modal and saves sort changes', async () => {
     const onChange = jest.fn();
 
     render(
@@ -1562,7 +1562,7 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('cancels field sort modal changes without emitting', async () => {
+  test('cancels field sort modal changes without emitting', async () => {
     const onChange = jest.fn();
 
     render(
@@ -1595,7 +1595,7 @@ describe('crosstab controlPanel', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('opens dynamic group-by option sort modal and saves changes', async () => {
+  test('opens dynamic group-by option sort modal and saves changes', async () => {
     const onChange = jest.fn();
 
     render(
@@ -1675,7 +1675,7 @@ describe('crosstab controlPanel', () => {
     );
   });
 
-  it('renders one visible field-zone heading per zone', () => {
+  test('renders one visible field-zone heading per zone', () => {
     render(
       createElement(CrosstabFieldConfigControl, {
         name: 'crosstabFieldConfig',
@@ -1693,7 +1693,7 @@ describe('crosstab controlPanel', () => {
     expect(screen.getAllByText('Metrics')).toHaveLength(1);
   });
 
-  it('updates only the selected metric semantic', () => {
+  test('updates only the selected metric semantic', () => {
     const onChange = jest.fn();
 
     render(
@@ -1725,7 +1725,7 @@ describe('crosstab controlPanel', () => {
     });
   });
 
-  it('clears hidden metrics when canonical v4 metric selection is edited', () => {
+  test('clears hidden metrics when canonical v4 metric selection is edited', () => {
     const onChange = jest.fn();
     const actions = { setControlValue: jest.fn() };
 
@@ -1762,7 +1762,7 @@ describe('crosstab controlPanel', () => {
     expect(actions.setControlValue).toHaveBeenCalledWith('metrics', []);
   });
 
-  it('ignores invalid metric semantic values', () => {
+  test('ignores invalid metric semantic values', () => {
     const onChange = jest.fn();
 
     render(
@@ -1782,7 +1782,7 @@ describe('crosstab controlPanel', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('renders calculated field metrics as local removable chips', () => {
+  test('renders calculated field metrics as local removable chips', () => {
     render(
       createElement(CrosstabFieldConfigControl, {
         name: 'crosstabFieldConfig',
@@ -1805,7 +1805,7 @@ describe('crosstab controlPanel', () => {
     expect(screen.queryByLabelText('显示信息提示')).not.toBeInTheDocument();
   });
 
-  it('rejects invalid semantic override JSON without emitting changes', () => {
+  test('rejects invalid semantic override JSON without emitting changes', () => {
     const onChange = jest.fn();
 
     render(
@@ -1828,7 +1828,7 @@ describe('crosstab controlPanel', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('parses valid semantic override JSON', () => {
+  test('parses valid semantic override JSON', () => {
     const onChange = jest.fn();
 
     render(
@@ -1864,7 +1864,7 @@ describe('crosstab controlPanel', () => {
     });
   });
 
-  it('accepts non-string semantic override values from JSON', () => {
+  test('accepts non-string semantic override values from JSON', () => {
     const onChange = jest.fn();
 
     render(

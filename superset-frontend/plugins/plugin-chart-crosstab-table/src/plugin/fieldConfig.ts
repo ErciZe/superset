@@ -37,9 +37,9 @@ export const ERR_CROSSTAB_V4_METRIC_CONFIG = 'ERR_CROSSTAB_V4_METRIC_CONFIG';
 function hasFieldConfig(config?: CrosstabFieldConfig) {
   return Boolean(
     config &&
-      ((config.rows?.length ?? 0) > 0 ||
-        (config.columns?.length ?? 0) > 0 ||
-        (config.metrics?.length ?? 0) > 0),
+    ((config.rows?.length ?? 0) > 0 ||
+      (config.columns?.length ?? 0) > 0 ||
+      (config.metrics?.length ?? 0) > 0),
   );
 }
 

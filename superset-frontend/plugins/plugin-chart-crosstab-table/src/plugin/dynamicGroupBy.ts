@@ -470,7 +470,7 @@ function createGroupBySignature(
   const rowKeys = rowDimensions.map(getColumnLabel);
   const columnKeys = columnDimensions.map(getColumnLabel);
 
-  return `rows=${rowKeys.join('\u001f')}|columns=${columnKeys.join('\u001f')}`;
+  return `rows=${rowKeys.join('\u001F')}|columns=${columnKeys.join('\u001F')}`;
 }
 
 function getDimensionsForPlacement(
@@ -527,6 +527,88 @@ function resolveSelectedOptionId(
   }
 
   return slot.defaultOptionId;
+}
+
+function getSelectedOptionIdsBySlot(
+  slots: CrosstabDynamicGroupBySlot[],
+  ownState: CrosstabOwnState | undefined,
+): Record<string, string> {
+  return slots.reduce<Record<string, string>>(
+    (selectedOptionIds, slot) => ({
+      ...selectedOptionIds,
+      [slot.id]: resolveSelectedOptionId(slot, ownState),
+    }),
+    {},
+  );
+}
+
+function getDynamicGroupByOption(
+  slot: CrosstabDynamicGroupBySlot,
+  optionId: string,
+): CrosstabDynamicGroupByOption {
+  const option = slot.options.find(
+    candidateOption => candidateOption.id === optionId,
+  );
+
+  if (!option) {
+    throw getDynamicGroupBySlotError(
+      new Error(ERR_DYNAMIC_SLOT_INVALID_OPTION),
+    );
+  }
+
+  return option;
+}
+
+function getClearDynamicGroupByOption(
+  slot: CrosstabDynamicGroupBySlot,
+): CrosstabDynamicGroupByOption {
+  const option = slot.options.find(
+    candidateOption => candidateOption.columns.length === 0,
+  );
+
+  if (!option) {
+    throw new Error(ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG);
+  }
+
+  return option;
+}
+
+export function resolveSequentialDynamicGroupByOptionIds(
+  slots: CrosstabDynamicGroupBySlot[],
+  selectedOptionIdsBySlot?: Record<string, string>,
+): Record<string, string> {
+  const sequentialOptionIdsBySlot: Record<string, string> = {};
+  const slotsByPlacement = slots.reduce<
+    Map<DynamicGroupByPlacement, CrosstabDynamicGroupBySlot[]>
+  >((slotsByPlacement, slot) => {
+    slotsByPlacement.set(slot.placement, [
+      ...(slotsByPlacement.get(slot.placement) ?? []),
+      slot,
+    ]);
+
+    return slotsByPlacement;
+  }, new Map());
+
+  slotsByPlacement.forEach(placementSlots => {
+    let previousOptionHasColumns = true;
+
+    [...placementSlots]
+      .sort((leftSlot, rightSlot) => leftSlot.slotIndex - rightSlot.slotIndex)
+      .forEach(slot => {
+        const requestedOption = getDynamicGroupByOption(
+          slot,
+          selectedOptionIdsBySlot?.[slot.id] ?? slot.defaultOptionId,
+        );
+        const option = previousOptionHasColumns
+          ? requestedOption
+          : getClearDynamicGroupByOption(slot);
+
+        sequentialOptionIdsBySlot[slot.id] = option.id;
+        previousOptionHasColumns = option.columns.length > 0;
+      });
+  });
+
+  return sequentialOptionIdsBySlot;
 }
 
 function validateSlotBounds(
@@ -686,12 +768,9 @@ function resolveSelectedDynamicGroupByOptions(
   slots: CrosstabDynamicGroupBySlot[],
   ownState: CrosstabOwnState | undefined,
 ): SelectedDynamicGroupBySlotOption[] {
-  const selectedOptionIdsBySlot = slots.reduce<Record<string, string>>(
-    (selectedOptionIds, slot) => ({
-      ...selectedOptionIds,
-      [slot.id]: resolveSelectedOptionId(slot, ownState),
-    }),
-    {},
+  const selectedOptionIdsBySlot = resolveSequentialDynamicGroupByOptionIds(
+    slots,
+    getSelectedOptionIdsBySlot(slots, ownState),
   );
 
   try {

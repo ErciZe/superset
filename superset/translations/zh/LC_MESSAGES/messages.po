@@ -2897,6 +2897,168 @@ msgstr "列数据类型"
 msgid "Columnar upload"
 msgstr "列式存储文件"
 
+msgid "Contains"
+msgstr "包含"
+
+msgid "Apply Filter"
+msgstr "应用筛选"
+
+msgid "Clear Filter"
+msgstr "清除筛选"
+
+msgid "Reset Filter"
+msgstr "重置筛选"
+
+msgid "Cancel Filter"
+msgstr "取消筛选"
+
+msgid "Text Filter"
+msgstr "文本筛选"
+
+msgid "Number Filter"
+msgstr "数字筛选"
+
+msgid "Date Filter"
+msgstr "日期筛选"
+
+msgid "Set Filter"
+msgstr "集合筛选"
+
+msgid "Choose one"
+msgstr "请选择"
+
+msgid "Select All"
+msgstr "全选"
+
+msgid "Blanks"
+msgstr "空白"
+
+msgid "Equals"
+msgstr "等于"
+
+msgid "Not Equal"
+msgstr "不等于"
+
+msgid "Less Than"
+msgstr "小于"
+
+msgid "Greater Than"
+msgstr "大于"
+
+msgid "Less Than or Equal"
+msgstr "小于或等于"
+
+msgid "Greater Than or Equal"
+msgstr "大于或等于"
+
+msgid "In Range"
+msgstr "在范围内"
+
+msgid "From"
+msgstr "从"
+
+msgid "To"
+msgstr "到"
+
+msgid "Not Contains"
+msgstr "不包含"
+
+msgid "Starts With"
+msgstr "开头为"
+
+msgid "Ends With"
+msgstr "结尾为"
+
+msgid "Blank"
+msgstr "空白"
+
+msgid "Not blank"
+msgstr "非空白"
+
+msgid "Filter Input"
+msgstr "筛选输入框"
+
+msgid "AND"
+msgstr "且"
+
+msgid "OR"
+msgstr "或"
+
+msgid "Group"
+msgstr "分组"
+
+msgid "Groups"
+msgstr "分组"
+
+msgid "Values"
+msgstr "值"
+
+msgid "Pivots"
+msgstr "透视"
+
+msgid "Page"
+msgstr "页"
+
+msgid "to"
+msgstr "至"
+
+msgid "of"
+msgstr "共"
+
+msgid "Value Columns"
+msgstr "值列"
+
+msgid "Pivot Mode"
+msgstr "透视模式"
+
+msgid "Tool Panel"
+msgstr "工具面板"
+
+msgid "Pin Column"
+msgstr "固定列"
+
+msgid "Value Aggregation"
+msgstr "值聚合"
+
+msgid "Autosize This Column"
+msgstr "自动调整此列"
+
+msgid "Autosize All Columns"
+msgstr "自动调整所有列"
+
+msgid "Ungroup By"
+msgstr "取消分组"
+
+msgid "Reset Columns"
+msgstr "重置列"
+
+msgid "Expand All"
+msgstr "全部展开"
+
+msgid "Collapse All"
+msgstr "全部折叠"
+
+msgid "CSV Export"
+msgstr "导出 CSV"
+
+msgid "Excel Export"
+msgstr "导出 Excel"
+
+msgid "Excel XML Export"
+msgstr "导出 Excel XML"
+
+msgid "Copy with Headers"
+msgstr "复制含表头"
+
+msgid "Paste"
+msgstr "粘贴"
+
+msgid "Sort Ascending"
+msgstr "升序"
+
+msgid "Clear Sort"
+msgstr "清除排序"
+
 msgid "Columns"
 msgstr "列"
 
@@ -3014,9 +3176,8 @@ msgstr "配置"
 msgid "Configure Advanced Time Range "
 msgstr "配置进阶时间范围"
 
-#, fuzzy
 msgid "Configure Time Range: Current..."
-msgstr "配置时间范围：最近..."
+msgstr "配置时间范围：当前..."
 
 msgid "Configure Time Range: Last..."
 msgstr "配置时间范围：最近..."
@@ -3820,7 +3981,7 @@ msgstr ""
 
 #, python-format
 msgid "Days %s"
-msgstr "%s天"
+msgstr "天%s"
 
 msgid "Db engine did not return all queried columns"
 msgstr "数据库引擎未返回所有查询的列"
@@ -4780,7 +4941,10 @@ msgid "End date"
 msgstr "结束日期"
 
 msgid "End date excluded from time range"
-msgstr "从时间范围中排除的结束日期"
+msgstr "结束日期不包含在时间范围内"
+
+msgid "End (exclusive)"
+msgstr "结束时间（不含）"
 
 msgid "End date must be after start date"
 msgstr "结束日期必须大于起始日期"
@@ -5302,6 +5466,18 @@ msgstr "填充"
 msgid "Filter"
 msgstr "过滤器"
 
+msgid "Filter Value"
+msgstr "筛选值"
+
+msgid "Filter from value"
+msgstr "筛选起始值"
+
+msgid "Filter to Value"
+msgstr "筛选结束值"
+
+msgid "Filtering operator"
+msgstr "筛选运算符"
+
 #, fuzzy
 msgid "Filter Configuration"
 msgstr "过滤配置"
@@ -5789,7 +5965,7 @@ msgstr "小时"
 
 #, python-format
 msgid "Hours %s"
-msgstr "%s小时"
+msgstr "小时%s"
 
 msgid "Hours offset"
 msgstr "小时偏移"
@@ -6334,9 +6510,8 @@ msgstr "目标值"
 msgid "Last available value seen on %s"
 msgstr "到 %s 最后一个可用值"
 
-#, fuzzy
 msgid "Last day"
-msgstr "昨天"
+msgstr "最近一天"
 
 #, fuzzy
 msgid "Last login"
@@ -6345,9 +6520,8 @@ msgstr "上一月"
 msgid "Last modified"
 msgstr "最后修改"
 
-#, fuzzy
 msgid "Last month"
-msgstr "上一月"
+msgstr "最近一月"
 
 #, fuzzy
 msgid "Last name"
@@ -6357,20 +6531,17 @@ msgstr "数据集名称"
 msgid "Last name is required"
 msgstr "需要名称"
 
-#, fuzzy
 msgid "Last quarter"
-msgstr "上一季度"
+msgstr "最近一季度"
 
 msgid "Last run"
 msgstr "上次执行"
 
-#, fuzzy
 msgid "Last week"
-msgstr "上一周"
+msgstr "最近一周"
 
-#, fuzzy
 msgid "Last year"
-msgstr "上一年"
+msgstr "最近一年"
 
 #, fuzzy
 msgid "Lat"
@@ -7039,7 +7210,7 @@ msgstr "分钟"
 
 #, python-format
 msgid "Minutes %s"
-msgstr "%s分钟"
+msgstr "分钟%s"
 
 #, fuzzy
 msgid "Minutes value"
@@ -7086,7 +7257,7 @@ msgstr "月"
 
 #, python-format
 msgid "Months %s"
-msgstr "%s月"
+msgstr "月%s"
 
 #, fuzzy
 msgid "More"
@@ -8433,7 +8604,7 @@ msgstr "季度"
 
 #, python-format
 msgid "Quarters %s"
-msgstr " %s 季度"
+msgstr "季度%s"
 
 #, fuzzy
 msgid "Queries"
@@ -8529,6 +8700,9 @@ msgstr "半径（英里）"
 
 msgid "Range"
 msgstr "范围"
+
+msgid "Range type"
+msgstr "范围类型"
 
 msgid "Range filter"
 msgstr "范围过滤"
@@ -9417,7 +9591,7 @@ msgstr "次级Y轴标题"
 
 #, python-format
 msgid "Seconds %s"
-msgstr "%s 秒"
+msgstr "秒%s"
 
 #, fuzzy
 msgid "Seconds value"
@@ -10360,6 +10534,9 @@ msgstr "开始日期"
 
 msgid "Start date included in time range"
 msgstr "开始日期包含在时间范围内"
+
+msgid "Start (inclusive)"
+msgstr "开始时间（含）"
 
 msgid "Start y-axis at 0"
 msgstr "Y轴从0开始"
@@ -13033,7 +13210,7 @@ msgstr "周度季节性"
 
 #, python-format
 msgid "Weeks %s"
-msgstr "周 %s"
+msgstr "周%s"
 
 #, fuzzy
 msgid "Weight"
@@ -13462,7 +13639,7 @@ msgstr "年度季节性"
 
 #, python-format
 msgid "Years %s"
-msgstr "年 %s"
+msgstr "年%s"
 
 msgid "Yes"
 msgstr "是"
@@ -14381,9 +14558,8 @@ msgstr "像素"
 msgid "previous calendar month"
 msgstr "前一月"
 
-#, fuzzy
 msgid "previous calendar quarter"
-msgstr "前一年"
+msgstr "前一季度"
 
 msgid "previous calendar week"
 msgstr "前一周"

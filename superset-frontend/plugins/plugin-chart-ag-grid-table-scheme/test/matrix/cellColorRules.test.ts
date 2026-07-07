@@ -27,7 +27,7 @@ describe('matrix cell color rules', () => {
   const columnId = '__matrix_col__2026-05-01';
   const rawValueField = getMatrixRawValueField(columnId);
 
-  it('matches numeric threshold rules against raw matrix values', () => {
+  test('matches numeric threshold rules against raw matrix values', () => {
     const [formatter] = getMatrixCellColorFormatters({
       rules: [
         {
@@ -56,7 +56,7 @@ describe('matrix cell color rules', () => {
     ).toBe('#00aa00');
   });
 
-  it('does not match null, empty, or non-numeric values', () => {
+  test('does not match null, empty, or non-numeric values', () => {
     const [formatter] = getMatrixCellColorFormatters({
       rules: [
         {
@@ -85,7 +85,7 @@ describe('matrix cell color rules', () => {
     ).toBeUndefined();
   });
 
-  it('supports interval rules and lets later rules override earlier matches', () => {
+  test('supports interval rules and lets later rules override earlier matches', () => {
     const [formatter] = getMatrixCellColorFormatters({
       rules: [
         {
@@ -114,7 +114,7 @@ describe('matrix cell color rules', () => {
     ).toBe('#ff0000');
   });
 
-  it('only creates formatters for generated matrix value columns', () => {
+  test('only creates formatters for generated matrix value columns', () => {
     const formatters = getMatrixCellColorFormatters({
       rules: [
         {
@@ -131,7 +131,7 @@ describe('matrix cell color rules', () => {
     expect(formatters.map(formatter => formatter.column)).toEqual([columnId]);
   });
 
-  it('limits a rule to the configured matrix row value', () => {
+  test('limits a rule to the configured matrix row value', () => {
     const [formatter] = getMatrixCellColorFormatters({
       rules: [
         {
@@ -162,7 +162,7 @@ describe('matrix cell color rules', () => {
     ).toBe('#ff0000');
   });
 
-  it('lets row-specific rules override earlier global matches', () => {
+  test('lets row-specific rules override earlier global matches', () => {
     const [formatter] = getMatrixCellColorFormatters({
       rules: [
         {

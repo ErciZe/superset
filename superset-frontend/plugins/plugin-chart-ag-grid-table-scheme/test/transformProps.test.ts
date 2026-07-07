@@ -64,7 +64,7 @@ describe('ag grid table scheme transformProps', () => {
     });
   });
 
-  it('keeps official props unchanged when matrix mode is disabled', () => {
+  test('keeps official props unchanged when matrix mode is disabled', () => {
     const result = transformProps({
       rawFormData: {
         matrix_mode_enabled: false,
@@ -78,7 +78,7 @@ describe('ag grid table scheme transformProps', () => {
     expect(result.additionalCellStyle).toBeUndefined();
   });
 
-  it('keeps official props while matrix mode configuration is incomplete', () => {
+  test('keeps official props while matrix mode configuration is incomplete', () => {
     const result = transformProps({
       rawFormData: {
         query_mode: 'aggregate',
@@ -107,7 +107,7 @@ describe('ag grid table scheme transformProps', () => {
     expect((result as any).metrics).toBeUndefined();
   });
 
-  it('builds matrix cell coloring from chart-level threshold rules', () => {
+  test('builds matrix cell coloring from chart-level threshold rules', () => {
     const result = transformProps({
       rawFormData: {
         query_mode: 'aggregate',
@@ -173,7 +173,7 @@ describe('ag grid table scheme transformProps', () => {
     });
   });
 
-  it('passes a matrix cell callback formatter to the base AG Grid chart', () => {
+  test('passes a matrix cell callback formatter to the base AG Grid chart', () => {
     const result = transformProps({
       rawFormData: {
         query_mode: 'aggregate',

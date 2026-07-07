@@ -49,7 +49,7 @@ function createFormData(
 }
 
 describe('crosstab field config', () => {
-  it('uses crosstabFieldConfig before legacy controls', () => {
+  test('uses crosstabFieldConfig before legacy controls', () => {
     const formData = createFormData({
       groupbyRows: ['legacy_row'],
       groupbyColumns: ['legacy_column'],
@@ -71,7 +71,7 @@ describe('crosstab field config', () => {
     });
   });
 
-  it('falls back to legacy controls when canonical config is empty', () => {
+  test('falls back to legacy controls when canonical config is empty', () => {
     const formData = createFormData({
       groupbyRows: ['legacy_row'],
       groupbyColumns: ['legacy_column'],
@@ -89,7 +89,7 @@ describe('crosstab field config', () => {
     expect(getCrosstabFieldLabels(formData)).toEqual({});
   });
 
-  it('derives row subtotal depths from row field switches', () => {
+  test('derives row subtotal depths from row field switches', () => {
     const formData = createFormData({
       crosstabFieldConfig: {
         rows: [
@@ -103,7 +103,7 @@ describe('crosstab field config', () => {
     expect(getCrosstabRowSubtotalDepths(formData)).toEqual([1]);
   });
 
-  it('extracts metric semantic config without falling back to legacy metrics', () => {
+  test('extracts metric semantic config without falling back to legacy metrics', () => {
     const metricConfigs: MetricFieldConfig[] = [
       { metric: 'amount', semantic: 'additive' },
       { metric: 'margin_rate', semantic: 'ratio' },
@@ -118,7 +118,7 @@ describe('crosstab field config', () => {
     expect(getCrosstabMetricConfigs(formData)).toEqual(metricConfigs);
   });
 
-  it('returns persisted metric configs unchanged', () => {
+  test('returns persisted metric configs unchanged', () => {
     const metricConfigs: MetricFieldConfig[] = [
       {
         metric: 'amount',
@@ -162,7 +162,7 @@ describe('crosstab field config', () => {
     ]);
   });
 
-  it('requires persisted metric configs for canonical v4 charts', () => {
+  test('requires persisted metric configs for canonical v4 charts', () => {
     expect(() =>
       getEffectiveCrosstabMetricConfigs(
         createFormData({
@@ -185,7 +185,7 @@ describe('crosstab field config', () => {
     ).toThrow(ERR_CROSSTAB_V4_METRIC_CONFIG);
   });
 
-  it('keeps legacy metric fallback when canonical v4 arrays are cleared', () => {
+  test('keeps legacy metric fallback when canonical v4 arrays are cleared', () => {
     expect(
       getEffectiveCrosstabMetricConfigs(
         createFormData({
@@ -202,7 +202,7 @@ describe('crosstab field config', () => {
     ).toEqual([{ metric: 'legacy_amount' }]);
   });
 
-  it('extracts semantic override config with empty defaults', () => {
+  test('extracts semantic override config with empty defaults', () => {
     const semanticOverrides: MetricSemanticOverride[] = [
       { value: '销售额（金额）', semantic: 'additive' },
       { value: '毛利率（%）', semantic: 'ratio' },
@@ -222,7 +222,7 @@ describe('crosstab field config', () => {
     expect(getCrosstabSemanticOverrides(createFormData())).toEqual([]);
   });
 
-  it('returns configured row and column dimension configs with sort metadata', () => {
+  test('returns configured row and column dimension configs with sort metadata', () => {
     const formData = {
       crosstabFieldConfig: {
         rows: [
@@ -279,7 +279,7 @@ describe('crosstab field config', () => {
     ]);
   });
 
-  it('returns configured row value summaries before legacy semantic overrides', () => {
+  test('returns configured row value summaries before legacy semantic overrides', () => {
     const formData = {
       crosstabFieldConfig: {
         rowValueSummaries: {

@@ -89,7 +89,7 @@ function resolve(
 }
 
 describe('dynamic metric resolver', () => {
-  it('returns persisted metrics and signature when config is disabled', () => {
+  test('returns persisted metrics and signature when config is disabled', () => {
     const result = resolve(
       createFormData({
         dynamicMetric: {
@@ -105,7 +105,7 @@ describe('dynamic metric resolver', () => {
     expect(result.signature).toBe(getMetricConfigSignature(persistedMetrics));
   });
 
-  it('returns persisted metrics when disabled saved config omits slots', () => {
+  test('returns persisted metrics when disabled saved config omits slots', () => {
     const result = resolve(
       createFormData({
         dynamicMetric: {
@@ -120,7 +120,7 @@ describe('dynamic metric resolver', () => {
     expect(result.signature).toBe(getMetricConfigSignature(persistedMetrics));
   });
 
-  it('uses default option selection', () => {
+  test('uses default option selection', () => {
     const result = resolve(
       createFormData({
         dynamicMetric: dynamicMetricConfig,
@@ -137,7 +137,7 @@ describe('dynamic metric resolver', () => {
     );
   });
 
-  it('uses runtime selected option from ownState', () => {
+  test('uses runtime selected option from ownState', () => {
     const result = resolve(
       createFormData({
         dynamicMetric: dynamicMetricConfig,
@@ -160,7 +160,7 @@ describe('dynamic metric resolver', () => {
     );
   });
 
-  it('parses string config', () => {
+  test('parses string config', () => {
     const result = resolve(
       createFormData({
         dynamicMetric: JSON.stringify(dynamicMetricConfig),
@@ -171,7 +171,7 @@ describe('dynamic metric resolver', () => {
     expect(result.selectedDynamicMetric).toEqual({ primary: 'margin' });
   });
 
-  it('rejects enabled config with no slots', () => {
+  test('rejects enabled config with no slots', () => {
     expect(() =>
       resolve(
         createFormData({
@@ -184,7 +184,7 @@ describe('dynamic metric resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_METRIC_CONFIG);
   });
 
-  it('rejects invalid metric objects in dynamic metric options', () => {
+  test('rejects invalid metric objects in dynamic metric options', () => {
     expect(() =>
       resolve(
         createFormData({
@@ -211,7 +211,7 @@ describe('dynamic metric resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_METRIC_CONFIG);
   });
 
-  it('rejects invalid metric semantic values', () => {
+  test('rejects invalid metric semantic values', () => {
     expect(() =>
       resolve(
         createFormData({
@@ -244,7 +244,7 @@ describe('dynamic metric resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_METRIC_CONFIG);
   });
 
-  it('rejects splice count mismatches', () => {
+  test('rejects splice count mismatches', () => {
     expect(() =>
       resolve(
         createFormData({
@@ -274,7 +274,7 @@ describe('dynamic metric resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_METRIC_SPLICE_COUNT);
   });
 
-  it('rejects duplicate effective metric labels', () => {
+  test('rejects duplicate effective metric labels', () => {
     expect(() =>
       resolve(
         createFormData({
@@ -289,7 +289,7 @@ describe('dynamic metric resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_METRIC_DUPLICATE);
   });
 
-  it('changes signature for the same label with different metrics', () => {
+  test('changes signature for the same label with different metrics', () => {
     expect(
       getMetricConfigSignature([{ metric: 'sales', label: 'Value' }]),
     ).not.toBe(
@@ -297,7 +297,7 @@ describe('dynamic metric resolver', () => {
     );
   });
 
-  it('changes signature for the same label with different semantics', () => {
+  test('changes signature for the same label with different semantics', () => {
     expect(
       getMetricConfigSignature([
         { metric: 'sales', label: 'Value', semantic: 'additive' },
@@ -309,7 +309,7 @@ describe('dynamic metric resolver', () => {
     );
   });
 
-  it('rejects effective metric count above the limit', () => {
+  test('rejects effective metric count above the limit', () => {
     const tooManyMetrics = Array.from({ length: 9 }, (_, index) => ({
       metric: `metric_${index}`,
       label: `Metric ${index}`,
@@ -342,7 +342,7 @@ describe('dynamic metric resolver', () => {
     ).toThrow(ERR_CROSSTAB_DYNAMIC_METRIC_MAX_METRICS);
   });
 
-  it('rejects unknown selected options', () => {
+  test('rejects unknown selected options', () => {
     expect(() =>
       resolve(
         createFormData({

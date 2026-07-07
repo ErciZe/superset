@@ -68,7 +68,7 @@ type UseColDefsProps = {
 
 type ValueRange = [number, number];
 
-const FORMATTER_CACHE_KEY_SEPARATOR = '\u001f';
+const FORMATTER_CACHE_KEY_SEPARATOR = '\u001F';
 
 const getFormatterCacheKey = (
   params: AdditionalCellFormatterParams,

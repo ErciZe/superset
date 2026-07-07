@@ -37,14 +37,14 @@ const records = [
 ];
 
 describe('crosstab domain', () => {
-  it('derives one domain per column dimension from query results', () => {
+  test('derives one domain per column dimension from query results', () => {
     expect(buildColumnDomains(records, ['biz_date', 'shop_name'])).toEqual([
       ['2026-05-01', '2026-05-02'],
       ['A', 'B'],
     ]);
   });
 
-  it('generates Cartesian column tuples from derived domains', () => {
+  test('generates Cartesian column tuples from derived domains', () => {
     expect(buildColumnTuples(records, ['biz_date', 'shop_name'], 10)).toEqual([
       ['2026-05-01', 'A'],
       ['2026-05-01', 'B'],
@@ -53,14 +53,14 @@ describe('crosstab domain', () => {
     ]);
   });
 
-  it('fails when generated tuples exceed the configured limit', () => {
+  test('fails when generated tuples exceed the configured limit', () => {
     expectErrorMessage(
       () => buildColumnTuples(records, ['biz_date', 'shop_name'], 3),
       'Crosstab generated 4 columns, which exceeds the limit of 3.',
     );
   });
 
-  it('fails before materializing tuples when domain cardinality exceeds the limit', () => {
+  test('fails before materializing tuples when domain cardinality exceeds the limit', () => {
     const flatMap = jest.spyOn(Array.prototype, 'flatMap');
     const highCardinalityRecords = [
       { month: '2026-05', shop: 'A' },
@@ -85,7 +85,7 @@ describe('crosstab domain', () => {
     }
   });
 
-  it('applies the generated column limit to the empty column tuple', () => {
+  test('applies the generated column limit to the empty column tuple', () => {
     expectErrorMessage(
       () => buildColumnTuples(records, [], 0),
       'Crosstab generated 1 columns, which exceeds the limit of 0.',

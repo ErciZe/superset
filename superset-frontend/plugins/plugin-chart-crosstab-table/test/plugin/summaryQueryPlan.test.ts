@@ -19,7 +19,7 @@
 import { buildCrosstabQueryPlan } from '../../src/plugin/summaryQueryPlan';
 
 describe('crosstab summary query plan', () => {
-  it('keeps one leaf query when all summaries are additive-only', () => {
+  test('keeps one leaf query when all summaries are additive-only', () => {
     const plan = buildCrosstabQueryPlan({
       rowFields: ['metric_name_with_unit'],
       columnFields: ['biz_date', 'shop_name'],
@@ -34,7 +34,7 @@ describe('crosstab summary query plan', () => {
     expect(plan.map(item => item.queryId)).toEqual(['leaf']);
   });
 
-  it('adds full SQL summary plan for non-additive summaries', () => {
+  test('adds full SQL summary plan for non-additive summaries', () => {
     const plan = buildCrosstabQueryPlan({
       rowFields: ['metric_name_with_unit'],
       columnFields: ['biz_date', 'shop_name'],
@@ -56,7 +56,7 @@ describe('crosstab summary query plan', () => {
     ]);
   });
 
-  it('adds row subtotal summary queries for multi-level rows', () => {
+  test('adds row subtotal summary queries for multi-level rows', () => {
     const plan = buildCrosstabQueryPlan({
       rowFields: ['category', 'metric_name_with_unit'],
       columnFields: ['biz_date'],
@@ -78,7 +78,7 @@ describe('crosstab summary query plan', () => {
     ]);
   });
 
-  it('keeps row-total summaries for total columns when grand-total rows are disabled', () => {
+  test('keeps row-total summaries for total columns when grand-total rows are disabled', () => {
     const plan = buildCrosstabQueryPlan({
       rowFields: ['metric_name_with_unit'],
       columnFields: ['biz_date', 'shop_name'],
@@ -99,7 +99,7 @@ describe('crosstab summary query plan', () => {
     ]);
   });
 
-  it('adds row total summary when column totals are enabled for additive rows', () => {
+  test('adds row total summary when column totals are enabled for additive rows', () => {
     const plan = buildCrosstabQueryPlan({
       rowFields: ['metric_name_with_unit'],
       columnFields: ['biz_date'],
@@ -120,7 +120,7 @@ describe('crosstab summary query plan', () => {
     ]);
   });
 
-  it('keeps server column bootstrap to domain and count before page tuples exist', () => {
+  test('keeps server column bootstrap to domain and count before page tuples exist', () => {
     const plan = buildCrosstabQueryPlan({
       rowFields: ['metric_name_with_unit'],
       columnFields: ['biz_date'],
@@ -139,7 +139,7 @@ describe('crosstab summary query plan', () => {
     ]);
   });
 
-  it('adds row-column subtotal summary queries when both subtotal axes are enabled', () => {
+  test('adds row-column subtotal summary queries when both subtotal axes are enabled', () => {
     const plan = buildCrosstabQueryPlan({
       rowFields: ['category', 'metric_name_with_unit'],
       columnFields: ['biz_date', 'shop_name'],
@@ -156,7 +156,7 @@ describe('crosstab summary query plan', () => {
     );
   });
 
-  it('keeps row prefix summary queries for grouped rows when explicit row subtotals are disabled', () => {
+  test('keeps row prefix summary queries for grouped rows when explicit row subtotals are disabled', () => {
     const plan = buildCrosstabQueryPlan({
       rowFields: ['category', 'metric_name_with_unit'],
       columnFields: ['biz_date', 'shop_name'],
@@ -181,7 +181,7 @@ describe('crosstab summary query plan', () => {
     ]);
   });
 
-  it('preserves server column pagination bootstrap queries', () => {
+  test('preserves server column pagination bootstrap queries', () => {
     const plan = buildCrosstabQueryPlan({
       rowFields: ['metric_name_with_unit'],
       columnFields: ['biz_date', 'shop_name', 'country'],
