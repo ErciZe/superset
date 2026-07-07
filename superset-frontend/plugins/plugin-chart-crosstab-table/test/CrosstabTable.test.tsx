@@ -739,6 +739,77 @@ describe('CrosstabTable', () => {
     expect(getByText('1,234.6')).toBeInTheDocument();
   });
 
+  test('indents ratio summary labels in the first row column', () => {
+    const props = {
+      height: 400,
+      width: 800,
+      formData: {
+        datasource: '1__table',
+        viz_type: 'crosstab_table',
+        crosstabFieldConfig: {
+          rowValueSummaries: {
+            field: 'metric_name_with_unit',
+            values: [
+              { value: '利润（$）', semantic: 'additive' },
+              { value: '毛利率（%）', semantic: 'ratio' },
+            ],
+          },
+        },
+      },
+      rowData: [
+        {
+          [CROSSTAB_ROW_PATH]: encodeCrosstabRowPath(['利润（$）']),
+          [CROSSTAB_ROW_LABEL]: '利润（$）',
+          [CROSSTAB_ROW_TYPE]: 'leaf',
+          metric_name_with_unit: '利润（$）',
+          '__crosstab_col__string:4:Cash__metric__amount': 1234.56,
+        },
+        {
+          [CROSSTAB_ROW_PATH]: encodeCrosstabRowPath(['毛利率（%）']),
+          [CROSSTAB_ROW_LABEL]: '毛利率（%）',
+          [CROSSTAB_ROW_TYPE]: 'leaf',
+          metric_name_with_unit: '毛利率（%）',
+          '__crosstab_col__string:4:Cash__metric__amount': 35.12,
+        },
+      ],
+      columns: [
+        {
+          key: 'metric_name_with_unit',
+          label: '指标',
+          dataType: GenericDataType.String,
+        },
+        {
+          key: '__crosstab_col__string:4:Cash__metric__amount',
+          label: 'Cash amount',
+          dataType: GenericDataType.Numeric,
+          isMetric: true,
+          isNumeric: true,
+        },
+      ],
+      columnTree: [
+        {
+          id: 'string:4:Cash',
+          label: 'Cash',
+          field: '__crosstab_col__string:4:Cash__metric__amount',
+          metric: 'amount',
+        },
+      ],
+      generatedColumnIds: ['__crosstab_col__string:4:Cash__metric__amount'],
+    } as unknown as CrosstabChartProps;
+
+    renderChart(props);
+
+    expect(getCellByText('利润（$）')).not.toHaveClass(
+      'crosstab-ratio-row-label',
+    );
+    expect(getCellByText('毛利率（%）')).toHaveClass(
+      'crosstab-ratio-row-label',
+    );
+    expect(getCellByText('毛利率（%）')).toHaveStyle({
+      paddingLeft: '24px',
+    });
+  });
+
   test('keeps the grid inside the remaining chart height below toolbar controls', () => {
     const props = {
       height: 400,

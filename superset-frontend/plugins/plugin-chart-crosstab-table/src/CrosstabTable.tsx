@@ -33,6 +33,7 @@ import { GenericDataType } from '@apache-superset/core/common';
 import { t } from '@apache-superset/core/translation';
 import { useTheme } from '@apache-superset/core/theme';
 import {
+  getColumnLabel,
   sanitizeHtml,
   type DataRecord,
   type DataRecordValue,
@@ -54,6 +55,8 @@ import type {
   CrosstabFormData,
   CrosstabOwnState,
   CrosstabParameter,
+  MetricSemanticOverride,
+  RowValueSummaryConfig,
 } from './types';
 import {
   formatCrosstabValue,
@@ -80,6 +83,7 @@ ModuleRegistry.registerModules([AllCommunityModule, ClientSideRowModelModule]);
 
 const FIRST_ROW_COLUMN_WIDTH = 180;
 const EXTRA_ROW_COLUMN_WIDTH = 120;
+const RATIO_ROW_LABEL_INDENT = '24px';
 const DYNAMIC_SELECTOR_MIN_WIDTH = 112;
 const DYNAMIC_GROUP_BY_PLACEMENT_ORDER = {
   rows: 0,
@@ -138,6 +142,53 @@ type DynamicMetricSelector = {
   value: string;
   valueSet: Set<string>;
 };
+
+type RatioRowMatcher = (row?: DataRecord) => boolean;
+
+function hasMatchingValue(
+  values: DataRecordValue[],
+  value: DataRecordValue | undefined,
+) {
+  return values.some(candidate => Object.is(candidate, value));
+}
+
+function getRatioValues<
+  T extends RowValueSummaryConfig | MetricSemanticOverride,
+>(values: T[] | undefined) {
+  return (
+    values?.filter(item => item.semantic === 'ratio').map(item => item.value) ??
+    []
+  );
+}
+
+function buildRatioRowMatcher(
+  fieldConfig: CrosstabFormData['crosstabFieldConfig'],
+): RatioRowMatcher {
+  const matchers: { field: string; values: DataRecordValue[] }[] = [];
+  const summaryField = fieldConfig?.rowValueSummaries?.field
+    ? getColumnLabel(fieldConfig.rowValueSummaries.field)
+    : undefined;
+  const summaryValues = getRatioValues(fieldConfig?.rowValueSummaries?.values);
+
+  if (summaryField && summaryValues.length > 0) {
+    matchers.push({ field: summaryField, values: summaryValues });
+  }
+
+  const overrideField = fieldConfig?.semanticOverrideField
+    ? getColumnLabel(fieldConfig.semanticOverrideField)
+    : undefined;
+  const overrideValues = getRatioValues(fieldConfig?.semanticOverrides);
+
+  if (overrideField && overrideValues.length > 0) {
+    matchers.push({ field: overrideField, values: overrideValues });
+  }
+
+  return row =>
+    row?.[CROSSTAB_ROW_TYPE] === 'leaf' &&
+    matchers.some(({ field, values }) =>
+      hasMatchingValue(values, row[field] as DataRecordValue | undefined),
+    );
+}
 
 function getMetricFromColumnId(columnId: string) {
   return columnId.split('__metric__')[1] ?? columnId.split('__subtotal__')[1];
@@ -436,6 +487,7 @@ function buildRowColumnDefs(
   totalBackgroundColor: string,
   expandedRowPaths: Set<string>,
   toggleRowPath: (row: DataRecord) => void,
+  isRatioRow: RatioRowMatcher,
 ): ColDef[] {
   return columns
     .filter(column => !column.isMetric)
@@ -447,7 +499,15 @@ function buildRowColumnDefs(
       lockPinned: true,
       width: index === 0 ? FIRST_ROW_COLUMN_WIDTH : EXTRA_ROW_COLUMN_WIDTH,
       minWidth: index === 0 ? FIRST_ROW_COLUMN_WIDTH : EXTRA_ROW_COLUMN_WIDTH,
-      cellClass: ({ data }) => cellClassName(data as DataRecord | undefined),
+      cellClass: ({ data }) =>
+        [
+          cellClassName(data as DataRecord | undefined),
+          index === 0 && isRatioRow(data as DataRecord | undefined)
+            ? 'crosstab-ratio-row-label'
+            : undefined,
+        ]
+          .filter(Boolean)
+          .join(' ') || undefined,
       valueGetter: ({ data }) => {
         const row = data as DataRecord | undefined;
         const value = row?.[column.key];
@@ -496,13 +556,19 @@ function buildRowColumnDefs(
           rowType === 'group' ||
           rowType === 'subtotal' ||
           rowType === 'grand_total';
+        const style = {
+          ...(isTotalRow
+            ? {
+                backgroundColor: totalBackgroundColor,
+                fontWeight: 600,
+              }
+            : {}),
+          ...(index === 0 && isRatioRow(data as DataRecord | undefined)
+            ? { paddingLeft: RATIO_ROW_LABEL_INDENT }
+            : {}),
+        };
 
-        return isTotalRow
-          ? {
-              backgroundColor: totalBackgroundColor,
-              fontWeight: 600,
-            }
-          : undefined;
+        return Object.keys(style).length > 0 ? style : undefined;
       },
     }));
 }
@@ -756,6 +822,10 @@ export default function CrosstabTable({
           !rule.metric || (metric !== undefined && rule.metric === metric),
       ),
     [conditionalFormatting],
+  );
+  const isRatioRow = useMemo(
+    () => buildRatioRowMatcher(formData.crosstabFieldConfig),
+    [formData.crosstabFieldConfig],
   );
   const [columnPage, setColumnPage] = useState(0);
   const serverColumnPagination = Boolean(formData.serverColumnPagination);
@@ -1205,6 +1275,7 @@ export default function CrosstabTable({
       totalBackgroundColor,
       expandedRowPathSet,
       toggleRowPath,
+      isRatioRow,
     );
     const treeColumnDefs = buildColumnDefsFromTree(
       visibleColumnTree,
@@ -1244,6 +1315,7 @@ export default function CrosstabTable({
     totalColumn,
     toggleRowPath,
     visibleColumnTree,
+    isRatioRow,
   ]);
   const defaultColDef = useMemo<ColDef>(
     () => ({
