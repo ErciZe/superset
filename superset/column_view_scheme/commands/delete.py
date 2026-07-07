@@ -28,7 +28,6 @@ from superset.column_view_scheme.models import ColumnViewScheme
 from superset.commands.base import BaseCommand
 from superset.utils.decorators import on_error, transaction
 
-
 MAX_SCHEME_NAME_LENGTH = 128
 DELETED_NAME_SEPARATOR = "__deleted__"
 

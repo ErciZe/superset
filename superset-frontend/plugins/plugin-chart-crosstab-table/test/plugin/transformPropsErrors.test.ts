@@ -16,7 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { ChartProps, supersetTheme } from '@superset-ui/core';
+import { supersetTheme } from '@apache-superset/core/theme';
+import { ChartProps } from '@superset-ui/core';
 import { ERR_CONDITIONAL_FORMATTING } from '../../src/crosstab/formatting';
 import transformProps from '../../src/plugin/transformProps';
 import type { CrosstabFormData } from '../../src/types';

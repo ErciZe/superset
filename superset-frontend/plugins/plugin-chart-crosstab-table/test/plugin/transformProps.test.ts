@@ -16,11 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import {
-  ChartProps,
-  supersetTheme,
-  type ChartPropsConfig,
-} from '@superset-ui/core';
+import { ChartProps, type ChartPropsConfig } from '@superset-ui/core';
+import { supersetTheme } from '@apache-superset/core/theme';
 import type {
   CrosstabDynamicGroupByConfig,
   CrosstabDynamicMetricConfig,

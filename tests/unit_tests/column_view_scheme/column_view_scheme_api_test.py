@@ -16,7 +16,6 @@
 # under the License.
 from __future__ import annotations
 
-import json
 from types import SimpleNamespace
 
 import pytest
@@ -24,8 +23,8 @@ from flask import g
 from pytest_mock import MockerFixture
 
 from superset.column_view_scheme.models import ColumnViewScheme
+from superset.utils import json
 from tests.unit_tests.conftest import with_feature_flags
-
 
 STATE = {
     "state_version": 1,

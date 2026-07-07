@@ -23,8 +23,6 @@ from flask_appbuilder.api import expose, protect, safe
 from marshmallow import ValidationError
 
 from superset import db, is_feature_enabled, security_manager
-from superset.commands.chart.exceptions import ChartNotFoundError
-from superset.commands.exceptions import CommandException
 from superset.column_view_scheme.commands.create import CreateColumnViewSchemeCommand
 from superset.column_view_scheme.commands.delete import DeleteColumnViewSchemeCommand
 from superset.column_view_scheme.commands.set_default import (
@@ -37,6 +35,8 @@ from superset.column_view_scheme.schemas import (
     ColumnViewSchemePutSchema,
     ColumnViewSchemeResponseSchema,
 )
+from superset.commands.chart.exceptions import ChartNotFoundError
+from superset.commands.exceptions import CommandException
 from superset.constants import MODEL_API_RW_METHOD_PERMISSION_MAP
 from superset.daos.chart import ChartDAO
 from superset.extensions import event_logger
@@ -75,13 +75,14 @@ class ColumnViewSchemeRestApi(BaseSupersetApi):
         if (user_id := getattr(user, "id", None)) is not None:
             return user_id
         if security_manager.is_guest_user(user):
-            storage_username = (
-                current_app.config.get("COLUMN_VIEW_SCHEME_GUEST_USERNAME")
-                or getattr(user, "username", None)
-            )
+            storage_username = current_app.config.get(
+                "COLUMN_VIEW_SCHEME_GUEST_USERNAME"
+            ) or getattr(user, "username", None)
             if storage_username:
                 storage_user = security_manager.find_user(username=storage_username)
-                if storage_user is not None and getattr(storage_user, "is_active", True):
+                if storage_user is not None and getattr(
+                    storage_user, "is_active", True
+                ):
                     return getattr(storage_user, "id", None)
         return None
 
@@ -138,6 +139,7 @@ class ColumnViewSchemeRestApi(BaseSupersetApi):
         if access_response is not None:
             return user_id, access_response
         return user_id, None
+
     def _get_user_scheme(
         self,
         scheme_id: int,

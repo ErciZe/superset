@@ -60,6 +60,8 @@
       "@superset-ui/plugin-chart-*": ["./plugins/plugin-chart-*/src"],
       "@superset-ui/legacy-plugin-chart-*": ["./plugins/legacy-plugin-chart-*/src"],
       "@superset-ui/legacy-preset-chart-*": ["./plugins/legacy-preset-chart-*/src"],
+      "react-ace": ["./packages/superset-ui-core/node_modules/react-ace"],
+      "react-ace/*": ["./packages/superset-ui-core/node_modules/react-ace/*"],
       "echarts/types/src/*": ["./node_modules/echarts/types/src/*"]
     }
   },

@@ -39,9 +39,7 @@ class ColumnViewSchemeDAO:
     @classmethod
     def find_by_id(cls, scheme_id: int) -> ColumnViewScheme | None:
         return (
-            cls._active_query()
-            .filter(ColumnViewScheme.id == scheme_id)
-            .one_or_none()
+            cls._active_query().filter(ColumnViewScheme.id == scheme_id).one_or_none()
         )
 
     @classmethod

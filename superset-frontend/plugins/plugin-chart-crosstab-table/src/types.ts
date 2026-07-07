@@ -141,8 +141,7 @@ export type CrosstabCalculatedField = {
 };
 
 export type CrosstabDynamicGroupByInput =
-  | CrosstabDynamicGroupByConfig
-  | LegacyCrosstabDynamicGroupByConfig;
+  CrosstabDynamicGroupByConfig | LegacyCrosstabDynamicGroupByConfig;
 
 export interface CrosstabFormData extends QueryFormData {
   groupbyRows?: QueryFormColumn[];
@@ -191,10 +190,7 @@ export type CrosstabBuildOptions = {
 };
 
 export type CrosstabQueryRole =
-  | 'leaf'
-  | 'server_column_domain'
-  | 'server_column_count'
-  | 'summary';
+  'leaf' | 'server_column_domain' | 'server_column_count' | 'summary';
 
 export type CrosstabSummaryKind =
   | 'row_total'
@@ -248,11 +244,7 @@ export type DimensionFieldConfig = {
 };
 
 export type MetricSemantic =
-  | 'unknown'
-  | 'additive'
-  | 'ratio'
-  | 'average'
-  | 'distinct';
+  'unknown' | 'additive' | 'ratio' | 'average' | 'distinct';
 
 export type CrosstabSummaryValues = {
   rowTotal?: Map<string, number | null>;

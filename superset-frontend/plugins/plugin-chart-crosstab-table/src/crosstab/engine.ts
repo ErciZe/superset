@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+/* eslint-disable no-use-before-define */
 import { GenericDataType } from '@apache-superset/core/common';
 import { type DataRecord, type DataRecordValue } from '@superset-ui/core';
 import type { DataColumnMeta } from '@superset-ui/plugin-chart-ag-grid-table/src/types';

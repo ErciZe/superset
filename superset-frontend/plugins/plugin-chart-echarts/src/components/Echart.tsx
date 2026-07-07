@@ -64,7 +64,12 @@ import {
   MarkLineComponent,
 } from 'echarts/components';
 import { LabelLayout } from 'echarts/features';
-import { EchartsHandler, EchartsProps, EchartsStylesProps } from '../types';
+import {
+  EchartsHandler,
+  EchartsProps,
+  EchartsStylesProps,
+  QueryEventHandlers,
+} from '../types';
 import { DEFAULT_LOCALE } from '../constants';
 import { mergeEchartsThemeOverrides } from '../utils/themeOverrides';
 
@@ -116,14 +121,42 @@ use([
   LabelLayout,
 ]);
 
+type EchartsLocale = Parameters<typeof registerLocale>[1];
+type EchartsLocaleModule = { default: EchartsLocale };
+
+const localeLoaders: Record<string, () => Promise<EchartsLocaleModule>> = {
+  AR: () => import('echarts/i18n/langAR.js'),
+  CS: () => import('echarts/i18n/langCS.js'),
+  DE: () => import('echarts/i18n/langDE.js'),
+  EL: () => import('echarts/i18n/langEL.js'),
+  EN: () => import('echarts/i18n/langEN.js'),
+  ES: () => import('echarts/i18n/langES.js'),
+  FA: () => import('echarts/i18n/langFA.js'),
+  FI: () => import('echarts/i18n/langFI.js'),
+  FR: () => import('echarts/i18n/langFR.js'),
+  HU: () => import('echarts/i18n/langHU.js'),
+  IT: () => import('echarts/i18n/langIT.js'),
+  JA: () => import('echarts/i18n/langJA.js'),
+  KO: () => import('echarts/i18n/langKO.js'),
+  LV: () => import('echarts/i18n/langLV.js'),
+  NL: () => import('echarts/i18n/langNL.js'),
+  'NB-NO': () => import('echarts/i18n/langnb-NO.js'),
+  PL: () => import('echarts/i18n/langPL.js'),
+  'PT-BR': () => import('echarts/i18n/langPT-br.js'),
+  RO: () => import('echarts/i18n/langRO.js'),
+  RU: () => import('echarts/i18n/langRU.js'),
+  SI: () => import('echarts/i18n/langSI.js'),
+  SV: () => import('echarts/i18n/langSV.js'),
+  TH: () => import('echarts/i18n/langTH.js'),
+  TR: () => import('echarts/i18n/langTR.js'),
+  UK: () => import('echarts/i18n/langUK.js'),
+  VI: () => import('echarts/i18n/langVI.js'),
+  ZH: () => import('echarts/i18n/langZH.js'),
+};
+
 const loadLocale = async (locale: string) => {
-  let lang;
-  try {
-    lang = await import(`echarts/lib/i18n/lang${locale}`);
-  } catch {
-    // Locale not supported in ECharts
-  }
-  return lang?.default;
+  const localeLoader = localeLoaders[locale];
+  return localeLoader ? (await localeLoader()).default : undefined;
 };
 
 function Echart(
@@ -132,6 +165,7 @@ function Echart(
     height,
     echartOptions,
     eventHandlers,
+    queryEventHandlers,
     zrEventHandlers,
     selectedValues = {},
     refs,
@@ -147,6 +181,7 @@ function Echart(
   }
   const [didMount, setDidMount] = useState(false);
   const chartRef = useRef<EChartsType>();
+  const previousQueryEventHandlers = useRef<QueryEventHandlers>([]);
   const currentSelection = useMemo(
     () => Object.keys(selectedValues) || [],
     [selectedValues],
@@ -196,10 +231,18 @@ function Echart(
 
   useEffect(() => {
     if (didMount) {
+      previousQueryEventHandlers.current.forEach(({ name, handler }) => {
+        chartRef.current?.off(name, handler);
+      });
       Object.entries(eventHandlers || {}).forEach(([name, handler]) => {
         chartRef.current?.off(name);
         chartRef.current?.on(name, handler);
       });
+
+      (queryEventHandlers || []).forEach(({ name, query, handler }) => {
+        chartRef.current?.on(name, query, handler);
+      });
+      previousQueryEventHandlers.current = queryEventHandlers || [];
 
       Object.entries(zrEventHandlers || {}).forEach(([name, handler]) => {
         chartRef.current?.getZr().off(name);
@@ -336,7 +379,15 @@ function Echart(
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- isDashboardRefreshing intentionally excluded to prevent extra setOption calls
-  }, [didMount, echartOptions, eventHandlers, zrEventHandlers, theme, vizType]);
+  }, [
+    didMount,
+    echartOptions,
+    eventHandlers,
+    queryEventHandlers,
+    zrEventHandlers,
+    theme,
+    vizType,
+  ]);
 
   // Clear tooltip on refresh start to avoid stale content (#39247)
   useEffect(() => {

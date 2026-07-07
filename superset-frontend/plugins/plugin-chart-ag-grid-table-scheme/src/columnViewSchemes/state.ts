@@ -32,7 +32,7 @@ const hashString = (value: string) => {
   let hash = 0;
 
   for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+    hash = Math.trunc(hash * 31 + value.charCodeAt(index));
   }
 
   return `hash:${hash.toString(16)}`;
@@ -208,6 +208,26 @@ export const buildColumnSettingItems = (
 export const buildDefaultColumnSettingItems = (colDefs: SchemeColDef[]) =>
   buildColumnSettingItems([], colDefs);
 
+const removeUndefinedValues = <T extends Record<string, unknown>>(value: T) =>
+  Object.fromEntries(
+    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
+  ) as T;
+
+const pickColumnViewState = (
+  state: ColumnViewColumnState,
+  options: ColumnViewStateOptions,
+): ColumnViewColumnState =>
+  removeUndefinedValues({
+    colId: state.colId,
+    hide: state.hide,
+    width: state.width,
+    pinned: state.pinned,
+    ...(options.includeSort && {
+      sort: state.sort,
+      sortIndex: state.sortIndex,
+    }),
+  });
+
 export const buildColumnStateFromSettings = (
   currentColumnState: ColumnViewColumnState[],
   settings: ColumnSettingItem[],
@@ -260,11 +280,6 @@ export const buildColumnStateFromSettings = (
   });
 };
 
-const removeUndefinedValues = <T extends Record<string, unknown>>(value: T) =>
-  Object.fromEntries(
-    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
-  ) as T;
-
 const compactColumnState = (
   columnState: ColumnViewColumnState[],
   colDefs: SchemeColDef[],
@@ -289,21 +304,6 @@ const compactColumnState = (
     });
   });
 };
-
-const pickColumnViewState = (
-  state: ColumnViewColumnState,
-  options: ColumnViewStateOptions,
-): ColumnViewColumnState =>
-  removeUndefinedValues({
-    colId: state.colId,
-    hide: state.hide,
-    width: state.width,
-    pinned: state.pinned,
-    ...(options.includeSort && {
-      sort: state.sort,
-      sortIndex: state.sortIndex,
-    }),
-  });
 
 export const captureColumnViewState = (
   columnState: ColumnViewColumnState[],

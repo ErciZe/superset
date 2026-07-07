@@ -47,8 +47,7 @@ export const getChartTimeRangeSourceValues = (
 
   const values = chartIds.flatMap(chartId => {
     const formData = charts[chartId]?.form_data as
-      | { adhoc_filters?: AdhocFilter[] }
-      | undefined;
+      { adhoc_filters?: AdhocFilter[] } | undefined;
     const adhocFilters = formData?.adhoc_filters || [];
     return adhocFilters
       .filter(isTemporalRangeFilter)

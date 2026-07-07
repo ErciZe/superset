@@ -16,13 +16,13 @@
 # under the License.
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from superset.column_view_scheme.commands.exceptions import (
     ColumnViewSchemeForbiddenError,
 )
 from superset.column_view_scheme.models import ColumnViewScheme
+from superset.utils import json
 
 
 def ensure_owner(scheme: ColumnViewScheme, user_id: int) -> None:

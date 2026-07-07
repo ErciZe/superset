@@ -46,8 +46,7 @@ const getQueryMode = (controls: ControlStateMapping): QueryMode => {
   }
 
   const rawColumns = controls?.all_columns?.value as
-    | QueryFormColumn[]
-    | undefined;
+    QueryFormColumn[] | undefined;
   return rawColumns?.length ? QueryMode.Raw : QueryMode.Aggregate;
 };
 
