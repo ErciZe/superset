@@ -334,27 +334,37 @@ export const StyledChartContainer = styled.div<{
       display: flex;
       justify-content: flex-end;
       align-items: center;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       gap: ${theme.sizeUnit * 2}px;
       margin-bottom: ${theme.sizeUnit * 3}px;
       min-height: ${theme.sizeUnit * 8}px;
+      min-width: 0;
     }
 
     .advanced-filter-column {
-      min-width: ${theme.sizeUnit * 38}px;
+      flex: 0 0 ${theme.sizeUnit * 38}px;
+      width: ${theme.sizeUnit * 38}px;
+      max-width: ${theme.sizeUnit * 38}px;
+      min-width: 0;
     }
 
     .advanced-filter-operator {
-      min-width: ${theme.sizeUnit * 26}px;
+      flex: 0 0 ${theme.sizeUnit * 26}px;
+      width: ${theme.sizeUnit * 26}px;
+      max-width: ${theme.sizeUnit * 26}px;
+      min-width: 0;
     }
 
     .advanced-filter-value {
+      flex: 0 0 ${theme.sizeUnit * 48}px;
       width: ${theme.sizeUnit * 48}px;
     }
 
     .advanced-filter-container .superset-button {
+      flex: 0 0 auto;
       height: ${theme.sizeUnit * 8}px;
       padding: 0 ${theme.sizeUnit * 3}px;
+      white-space: nowrap;
     }
 
     .dropdown-controls-container {

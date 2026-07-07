@@ -18,6 +18,7 @@
  */
 import { render, screen, userEvent } from '@superset-ui/core/spec';
 import AdvancedFilterBar from '../../../src/table/components/AdvancedFilterBar';
+import { StyledChartContainer } from '../../../src/table/styles';
 
 const searchOptions = [
   { value: 'platform_name', label: '平台' },
@@ -92,4 +93,29 @@ test('clears the local value and notifies the container', () => {
 
   expect(screen.getByLabelText('Filter value')).toHaveValue('');
   expect(onClear).toHaveBeenCalledTimes(1);
+});
+
+test('keeps the advanced filter controls on one row', () => {
+  const { container } = render(
+    <StyledChartContainer height={400}>
+      <AdvancedFilterBar
+        searchOptions={searchOptions}
+        onApply={jest.fn()}
+        onClear={jest.fn()}
+      />
+    </StyledChartContainer>,
+  );
+
+  expect(container.firstChild).toHaveStyleRule('flex-wrap', 'nowrap', {
+    target: '.advanced-filter-container',
+  });
+  expect(container.firstChild).toHaveStyleRule('width', '152px', {
+    target: '.advanced-filter-column',
+  });
+  expect(container.firstChild).toHaveStyleRule('width', '104px', {
+    target: '.advanced-filter-operator',
+  });
+  expect(container.firstChild).toHaveStyleRule('width', '192px', {
+    target: '.advanced-filter-value',
+  });
 });
