@@ -29,8 +29,6 @@ import { t } from '@apache-superset/core/translation';
 import { Button } from '@superset-ui/core/components';
 import { Icons } from '@superset-ui/core/components/Icons';
 import type { ColumnMeta, Metric } from '@superset-ui/chart-controls';
-import { DndColumnSelect } from '../../../../src/explore/components/controls/DndColumnSelectControl/DndColumnSelect';
-import { DndMetricSelect } from '../../../../src/explore/components/controls/DndColumnSelectControl';
 import type {
   CrosstabFieldConfig,
   CrosstabFormData,
@@ -44,6 +42,7 @@ import DimensionSortModal, {
   getColumnMetaLabel,
   getDimensionSortSummary,
 } from './DimensionSortModal';
+import { DndColumnSelect, DndMetricSelect } from './controlAdapters';
 import { getMetricSemanticLabel } from './metricSemantics';
 import { hasCanonicalV4Definitions } from './v4Contract';
 

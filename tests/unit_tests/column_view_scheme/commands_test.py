@@ -16,8 +16,6 @@
 # under the License.
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from superset.column_view_scheme.commands.create import CreateColumnViewSchemeCommand
@@ -33,7 +31,7 @@ from superset.column_view_scheme.commands.update import UpdateColumnViewSchemeCo
 from superset.column_view_scheme.dao import ColumnViewSchemeDAO
 from superset.column_view_scheme.models import ColumnViewScheme
 from superset.extensions import db
-
+from superset.utils import json
 
 STATE = {
     "state_version": 1,
@@ -235,8 +233,8 @@ def test_delete_releases_dashboard_scoped_name_for_repeated_recreate(
     first_suffix = f"__deleted__{first_id}"
     second_suffix = f"__deleted__{second_id}"
     assert deleted_names == [
-        f"{original_name[:128 - len(first_suffix)]}{first_suffix}",
-        f"{original_name[:128 - len(second_suffix)]}{second_suffix}",
+        f"{original_name[: 128 - len(first_suffix)]}{first_suffix}",
+        f"{original_name[: 128 - len(second_suffix)]}{second_suffix}",
     ]
     assert len(set(deleted_names)) == 2
     assert all(len(name) <= 128 for name in deleted_names)

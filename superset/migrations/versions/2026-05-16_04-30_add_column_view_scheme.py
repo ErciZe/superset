@@ -68,9 +68,7 @@ def upgrade():
         sa.UniqueConstraint("uuid"),
     )
     op.create_index("ix_column_view_scheme_chart_id", table_name, ["chart_id"])
-    op.create_index(
-        "ix_column_view_scheme_dashboard_id", table_name, ["dashboard_id"]
-    )
+    op.create_index("ix_column_view_scheme_dashboard_id", table_name, ["dashboard_id"])
     op.create_index("ix_column_view_scheme_dataset_id", table_name, ["dataset_id"])
     op.create_index("ix_column_view_scheme_user_id", table_name, ["user_id"])
 

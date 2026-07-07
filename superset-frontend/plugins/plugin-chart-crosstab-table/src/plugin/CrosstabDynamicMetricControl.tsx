@@ -22,8 +22,6 @@ import { styled } from '@apache-superset/core/theme';
 import { t } from '@apache-superset/core/translation';
 import type { ColumnMeta, Metric } from '@superset-ui/chart-controls';
 import { Button, Checkbox, Input, Select } from '@superset-ui/core/components';
-import ControlHeader from '../../../../src/explore/components/ControlHeader';
-import { DndMetricSelect } from '../../../../src/explore/components/controls/DndColumnSelectControl';
 import type {
   CrosstabDynamicMetricConfig,
   CrosstabDynamicMetricOption,
@@ -38,6 +36,7 @@ import {
   getDynamicMetricConfig,
 } from './dynamicMetric';
 import { validateDynamicSlots } from './dynamicSlots';
+import { ControlHeader, DndMetricSelect } from './controlAdapters';
 import { getMetricSemanticLabel } from './metricSemantics';
 
 const Editor = styled.div`
@@ -514,10 +513,7 @@ export default function CrosstabDynamicMetricControl({
                 name={`${name}-${slot.id}-${option.id}-metrics`}
                 onChange={(
                   nextMetrics:
-                    | QueryFormMetric[]
-                    | QueryFormMetric
-                    | null
-                    | undefined,
+                    QueryFormMetric[] | QueryFormMetric | null | undefined,
                 ) =>
                   updateOption(slot, option, {
                     ...option,

@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+/* eslint-disable no-use-before-define */
 import { getMetricLabel, type QueryFormMetric } from '@superset-ui/core';
 
 import type {
@@ -47,12 +48,7 @@ type ExpandCalculatedFieldMetricConfigsResult = {
 };
 
 type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+  null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 type SavedMetricRecord = Record<string, unknown>;
 

@@ -26,10 +26,7 @@ import type { ConditionalFormattingConfig } from '@superset-ui/chart-controls';
 import type { DataColumnMeta } from '../table/types';
 
 export type MatrixCalculation =
-  | 'raw'
-  | 'contribution'
-  | 'row_contribution'
-  | 'row_rank';
+  'raw' | 'contribution' | 'row_contribution' | 'row_rank';
 
 export type MatrixTotalPosition = 'left' | 'right';
 

@@ -25,7 +25,6 @@ import {
 import { styled } from '@apache-superset/core/theme';
 import { t } from '@apache-superset/core/translation';
 import { Button, Drawer, Input, Select } from '@superset-ui/core/components';
-import ControlHeader from '../../../../src/explore/components/ControlHeader';
 import type {
   CrosstabCalculatedField,
   CrosstabFieldConfig,
@@ -43,6 +42,7 @@ import {
   type ExpressionPreviewLabels,
 } from './calc/builder';
 import { getCalculatedFields } from './calcFields';
+import { ControlHeader } from './controlAdapters';
 import { getCrosstabParameters } from './parameters';
 import { hasCanonicalV4Definitions } from './v4Contract';
 

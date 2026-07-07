@@ -37,8 +37,13 @@ type MatrixCellColorFormatter = {
   ) => string | undefined;
 };
 
+type MatrixConditionalFormattingConfig = ConditionalFormattingConfig & {
+  rowField?: string;
+  rowValue?: DataRecordValue;
+};
+
 type MatrixCellColorFormatterConfig = {
-  rules?: ConditionalFormattingConfig[];
+  rules?: MatrixConditionalFormattingConfig[];
   generatedColumnIds: string[];
   data: DataRecord[];
   theme?: Record<string, any>;
@@ -51,16 +56,16 @@ type MatrixAdditionalCellStyle = (
 const isFiniteNumber = (value: DataRecordValue): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
-const hasRowScope = (rule: ConditionalFormattingConfig) =>
+const hasRowScope = (rule: MatrixConditionalFormattingConfig) =>
   rule.rowField !== undefined || rule.rowValue !== undefined;
 
-const hasCompleteRowScope = (rule: ConditionalFormattingConfig) =>
+const hasCompleteRowScope = (rule: MatrixConditionalFormattingConfig) =>
   typeof rule.rowField === 'string' &&
   rule.rowField.length > 0 &&
   rule.rowValue !== undefined &&
   rule.rowValue !== '';
 
-const isValidRule = (rule: ConditionalFormattingConfig) => {
+const isValidRule = (rule: MatrixConditionalFormattingConfig) => {
   if (
     rule.column !== MATRIX_CELL_COLOR_RULE_COLUMN ||
     rule.operator === undefined ||
@@ -100,7 +105,7 @@ const normalizeRowValue = (value: DataRecordValue | undefined) =>
   value === null || value === undefined ? value : String(value);
 
 const matchesRowScope = (
-  rule: ConditionalFormattingConfig,
+  rule: MatrixConditionalFormattingConfig,
   row: DataRecord | undefined,
 ) => {
   if (!rule.rowField) {

@@ -65,7 +65,10 @@ logger = logging.getLogger(__name__)
         destructiveHint=True,
     ),
 )
-async def execute_sql(request: ExecuteSqlRequest, ctx: Context) -> ExecuteSqlResponse:
+async def execute_sql(  # noqa: C901
+    request: ExecuteSqlRequest,
+    ctx: Context,
+) -> ExecuteSqlResponse:
     """Execute SQL query against database using the unified Database.execute() API."""
     await ctx.info(
         "Starting SQL execution: database_id=%s, timeout=%s, limit=%s, schema=%s"

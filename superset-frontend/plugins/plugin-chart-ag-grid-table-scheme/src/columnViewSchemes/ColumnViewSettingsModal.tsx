@@ -132,7 +132,7 @@ type SortableSelectedItemProps = {
   onTogglePinned: (colId: string) => void;
 };
 
-const SortableSelectedItem = SortableElement(
+const SortableSelectedItem = SortableElement<SortableSelectedItemProps>(
   ({ item, order, onRemove, onTogglePinned }: SortableSelectedItemProps) => (
     <SelectedItem>
       <DragHandle />
@@ -167,7 +167,7 @@ type SortableSelectedListProps = {
   onTogglePinned: (colId: string) => void;
 };
 
-const SortableSelectedList = SortableContainer(
+const SortableSelectedList = SortableContainer<SortableSelectedListProps>(
   ({ items, onRemove, onTogglePinned }: SortableSelectedListProps) => (
     <div>
       {items.map((item, index) => (

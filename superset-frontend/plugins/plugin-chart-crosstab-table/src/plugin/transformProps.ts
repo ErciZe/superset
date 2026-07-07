@@ -186,8 +186,7 @@ function assertRequiredSummaryRowLimits(
   queryPlan: CrosstabQueryPlanItem[],
   queriesByPlan: Map<string, CrosstabQueryData>,
   summaryValueRequirements:
-    | Partial<Record<CrosstabSummaryKind, boolean>>
-    | undefined,
+    Partial<Record<CrosstabSummaryKind, boolean>> | undefined,
   rowLimit: unknown,
 ) {
   if (!summaryValueRequirements) {

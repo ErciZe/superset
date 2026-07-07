@@ -71,10 +71,7 @@ export interface DataColumnMeta {
   originalLabel?: string;
   dataType: GenericDataType;
   formatter?:
-    | TimeFormatter
-    | NumberFormatter
-    | CustomFormatter
-    | CurrencyFormatter;
+    TimeFormatter | NumberFormatter | CustomFormatter | CurrencyFormatter;
   isMetric?: boolean;
   isPercentMetric?: boolean;
   isNumeric?: boolean;
@@ -226,8 +223,8 @@ export interface AgGridTableChartTransformedProps<
 }
 
 export enum ColorSchemeEnum {
-  'Green' = 'Green',
-  'Red' = 'Red',
+  Green = 'Green',
+  Red = 'Red',
 }
 
 export interface SortState {

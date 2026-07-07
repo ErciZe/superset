@@ -26,8 +26,6 @@ import { styled } from '@apache-superset/core/theme';
 import { t } from '@apache-superset/core/translation';
 import type { ColumnMeta } from '@superset-ui/chart-controls';
 import { Button, Checkbox, Input, Select } from '@superset-ui/core/components';
-import ControlHeader from '../../../../src/explore/components/ControlHeader';
-import { DndColumnSelect } from '../../../../src/explore/components/controls/DndColumnSelectControl/DndColumnSelect';
 import type {
   CrosstabDynamicGroupByConfig,
   CrosstabDynamicGroupByOption,
@@ -44,6 +42,7 @@ import {
   ERR_CROSSTAB_DYNAMIC_GROUP_BY_CONFIG,
   normalizeDynamicGroupByConfig,
 } from './dynamicGroupBy';
+import { ControlHeader, DndColumnSelect } from './controlAdapters';
 
 const Editor = styled.div`
   display: grid;

@@ -16,10 +16,11 @@
 # under the License.
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from marshmallow import fields, Schema, validate
+
+from superset.utils import json
 
 
 class ColumnViewSchemeStateSchema(Schema):
