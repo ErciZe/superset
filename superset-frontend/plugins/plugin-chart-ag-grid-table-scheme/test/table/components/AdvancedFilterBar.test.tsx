@@ -134,6 +134,9 @@ test('widens advanced filter controls only for WHM order detail', () => {
   expect(container.firstChild).toHaveStyleRule('overflow-x', 'auto', {
     target: '.advanced-filter-container',
   });
+  expect(container.firstChild).not.toHaveStyleRule('overflow-y', 'hidden', {
+    target: '.advanced-filter-container',
+  });
   expect(container.firstChild).toHaveStyleRule('width', '220px', {
     target: '.advanced-filter-column',
   });

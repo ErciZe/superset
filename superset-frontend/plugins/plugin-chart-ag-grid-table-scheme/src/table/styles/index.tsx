@@ -372,7 +372,6 @@ export const StyledChartContainer = styled.div<{
     css`
       .advanced-filter-container {
         overflow-x: auto;
-        overflow-y: hidden;
       }
 
       .advanced-filter-column {
