@@ -275,8 +275,9 @@ export const SummaryText = styled.div`
 // Table Container Styles
 export const StyledChartContainer = styled.div<{
   height: number;
+  $isWhmOrderDetailChart?: boolean;
 }>`
-  ${({ theme, height }) => css`
+  ${({ theme, height, $isWhmOrderDetailChart }) => css`
     height: ${height}px;
 
     --ag-background-color: ${theme.colorBgBase};
@@ -341,6 +342,13 @@ export const StyledChartContainer = styled.div<{
       min-width: 0;
     }
 
+    .advanced-filter-container .superset-button {
+      flex: 0 0 auto;
+      height: ${theme.sizeUnit * 8}px;
+      padding: 0 ${theme.sizeUnit * 3}px;
+      white-space: nowrap;
+    }
+
     .advanced-filter-column {
       flex: 0 0 ${theme.sizeUnit * 38}px;
       width: ${theme.sizeUnit * 38}px;
@@ -360,12 +368,31 @@ export const StyledChartContainer = styled.div<{
       width: ${theme.sizeUnit * 48}px;
     }
 
-    .advanced-filter-container .superset-button {
-      flex: 0 0 auto;
-      height: ${theme.sizeUnit * 8}px;
-      padding: 0 ${theme.sizeUnit * 3}px;
-      white-space: nowrap;
-    }
+    ${$isWhmOrderDetailChart &&
+    css`
+      .advanced-filter-container {
+        overflow-x: auto;
+        overflow-y: hidden;
+      }
+
+      .advanced-filter-column {
+        flex: 0 0 ${theme.sizeUnit * 55}px;
+        width: ${theme.sizeUnit * 55}px;
+        max-width: ${theme.sizeUnit * 55}px;
+      }
+
+      .advanced-filter-operator {
+        flex: 0 0 ${theme.sizeUnit * 28}px;
+        width: ${theme.sizeUnit * 28}px;
+        max-width: ${theme.sizeUnit * 28}px;
+      }
+
+      .advanced-filter-value {
+        flex: 0 0 ${theme.sizeUnit * 65}px;
+        width: ${theme.sizeUnit * 65}px;
+        max-width: ${theme.sizeUnit * 65}px;
+      }
+    `}
 
     .dropdown-controls-container {
       display: flex;

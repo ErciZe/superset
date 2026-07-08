@@ -95,7 +95,7 @@ test('clears the local value and notifies the container', () => {
   expect(onClear).toHaveBeenCalledTimes(1);
 });
 
-test('keeps the advanced filter controls on one row', () => {
+test('keeps the default advanced filter controls compact', () => {
   const { container } = render(
     <StyledChartContainer height={400}>
       <AdvancedFilterBar
@@ -117,5 +117,46 @@ test('keeps the advanced filter controls on one row', () => {
   });
   expect(container.firstChild).toHaveStyleRule('width', '192px', {
     target: '.advanced-filter-value',
+  });
+});
+
+test('widens advanced filter controls only for WHM order detail', () => {
+  const { container } = render(
+    <StyledChartContainer height={400} $isWhmOrderDetailChart>
+      <AdvancedFilterBar
+        searchOptions={searchOptions}
+        onApply={jest.fn()}
+        onClear={jest.fn()}
+      />
+    </StyledChartContainer>,
+  );
+
+  expect(container.firstChild).toHaveStyleRule('overflow-x', 'auto', {
+    target: '.advanced-filter-container',
+  });
+  expect(container.firstChild).toHaveStyleRule('width', '220px', {
+    target: '.advanced-filter-column',
+  });
+  expect(container.firstChild).toHaveStyleRule('width', '112px', {
+    target: '.advanced-filter-operator',
+  });
+  expect(container.firstChild).toHaveStyleRule('width', '260px', {
+    target: '.advanced-filter-value',
+  });
+});
+
+test('does not add horizontal scroll to non-WHM advanced filters', () => {
+  const { container } = render(
+    <StyledChartContainer height={400}>
+      <AdvancedFilterBar
+        searchOptions={searchOptions}
+        onApply={jest.fn()}
+        onClear={jest.fn()}
+      />
+    </StyledChartContainer>,
+  );
+
+  expect(container.firstChild).not.toHaveStyleRule('overflow-x', 'auto', {
+    target: '.advanced-filter-container',
   });
 });

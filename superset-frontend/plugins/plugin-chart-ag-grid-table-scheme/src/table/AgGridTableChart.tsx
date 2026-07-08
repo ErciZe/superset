@@ -199,6 +199,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   const showAdvancedFilter = Boolean(
     serverPagination && advancedFilterOptions.length,
   );
+  const isWhmOrderDetailChart = slice_id === 17;
 
   const gridHeight = getGridHeight(
     height,
@@ -349,7 +350,11 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   );
 
   return (
-    <StyledChartContainer height={height}>
+    <StyledChartContainer
+      height={height}
+      $isWhmOrderDetailChart={isWhmOrderDetailChart}
+      className={isWhmOrderDetailChart ? 'whm-order-detail-chart' : undefined}
+    >
       {showAdvancedFilter && (
         <AdvancedFilterBar
           searchOptions={advancedFilterOptions}
