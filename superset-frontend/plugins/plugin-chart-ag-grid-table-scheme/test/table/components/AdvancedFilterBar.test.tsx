@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { render, screen, userEvent } from '@superset-ui/core/spec';
+import { render, screen, userEvent, waitFor } from '@superset-ui/core/spec';
 import AdvancedFilterBar from '../../../src/table/components/AdvancedFilterBar';
 import { StyledChartContainer } from '../../../src/table/styles';
 
@@ -146,6 +146,27 @@ test('widens advanced filter controls only for WHM order detail', () => {
   expect(container.firstChild).toHaveStyleRule('width', '260px', {
     target: '.advanced-filter-value',
   });
+});
+
+test('renders advanced filter dropdowns outside the filter row', async () => {
+  render(
+    <StyledChartContainer height={400} $isWhmOrderDetailChart>
+      <AdvancedFilterBar
+        searchOptions={searchOptions}
+        onApply={jest.fn()}
+        onClear={jest.fn()}
+      />
+    </StyledChartContainer>,
+  );
+
+  await userEvent.click(screen.getByRole('combobox', { name: 'Filter column' }));
+  await waitFor(() => {
+    expect(document.querySelector('.ant-select-dropdown')).toBeInTheDocument();
+  });
+
+  const dropdown = document.querySelector('.ant-select-dropdown');
+  expect(dropdown?.closest('.advanced-filter-container')).toBeNull();
+  expect(dropdown?.parentElement).toBe(document.body);
 });
 
 test('does not add horizontal scroll to non-WHM advanced filters', () => {

@@ -48,6 +48,8 @@ const OPERATOR_OPTIONS: {
   { value: 'notBlank', label: '不为空' },
 ];
 
+const getAdvancedFilterPopupContainer = () => document.body;
+
 type AdvancedFilterBarProps = {
   searchOptions: SearchOption[];
   value?: AdvancedFilterState;
@@ -94,6 +96,7 @@ export default function AdvancedFilterBar({
         options={searchOptions}
         onChange={nextColumn => setColumn(String(nextColumn))}
         ariaLabel={t('Filter column')}
+        getPopupContainer={getAdvancedFilterPopupContainer}
       />
       <Select
         className="advanced-filter-operator"
@@ -103,6 +106,7 @@ export default function AdvancedFilterBar({
           setOperator(nextOperator as AdvancedFilterOperator)
         }
         ariaLabel={t('Filter operator')}
+        getPopupContainer={getAdvancedFilterPopupContainer}
       />
       <Input
         className="advanced-filter-value"
