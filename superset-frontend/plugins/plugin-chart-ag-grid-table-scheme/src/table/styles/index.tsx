@@ -349,6 +349,18 @@ export const StyledChartContainer = styled.div<{
       white-space: nowrap;
     }
 
+    .advanced-filter-column,
+    .advanced-filter-operator,
+    .advanced-filter-value {
+      box-sizing: border-box;
+    }
+
+    .advanced-filter-select,
+    .advanced-filter-input {
+      width: 100%;
+      max-width: 100%;
+    }
+
     .advanced-filter-column {
       flex: 0 0 ${theme.sizeUnit * 38}px;
       width: ${theme.sizeUnit * 38}px;
@@ -366,32 +378,36 @@ export const StyledChartContainer = styled.div<{
     .advanced-filter-value {
       flex: 0 0 ${theme.sizeUnit * 48}px;
       width: ${theme.sizeUnit * 48}px;
+      max-width: ${theme.sizeUnit * 48}px;
+      min-width: 0;
     }
 
-    ${$isWhmOrderDetailChart &&
-    css`
-      .advanced-filter-container {
-        overflow-x: auto;
-      }
+    ${
+      $isWhmOrderDetailChart &&
+      css`
+        .advanced-filter-container {
+          overflow-x: auto;
+        }
 
-      .advanced-filter-column {
-        flex: 0 0 ${theme.sizeUnit * 55}px;
-        width: ${theme.sizeUnit * 55}px;
-        max-width: ${theme.sizeUnit * 55}px;
-      }
+        .advanced-filter-column {
+          flex: 0 0 ${theme.sizeUnit * 55}px;
+          width: ${theme.sizeUnit * 55}px;
+          max-width: ${theme.sizeUnit * 55}px;
+        }
 
-      .advanced-filter-operator {
-        flex: 0 0 ${theme.sizeUnit * 28}px;
-        width: ${theme.sizeUnit * 28}px;
-        max-width: ${theme.sizeUnit * 28}px;
-      }
+        .advanced-filter-operator {
+          flex: 0 0 ${theme.sizeUnit * 28}px;
+          width: ${theme.sizeUnit * 28}px;
+          max-width: ${theme.sizeUnit * 28}px;
+        }
 
-      .advanced-filter-value {
-        flex: 0 0 ${theme.sizeUnit * 65}px;
-        width: ${theme.sizeUnit * 65}px;
-        max-width: ${theme.sizeUnit * 65}px;
-      }
-    `}
+        .advanced-filter-value {
+          flex: 0 0 ${theme.sizeUnit * 65}px;
+          width: ${theme.sizeUnit * 65}px;
+          max-width: ${theme.sizeUnit * 65}px;
+        }
+      `
+    }
 
     .dropdown-controls-container {
       display: flex;

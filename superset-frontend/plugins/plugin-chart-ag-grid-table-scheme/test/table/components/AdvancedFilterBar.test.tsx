@@ -118,6 +118,12 @@ test('keeps the default advanced filter controls compact', () => {
   expect(container.firstChild).toHaveStyleRule('width', '192px', {
     target: '.advanced-filter-value',
   });
+  expect(container.firstChild).toHaveStyleRule('width', '100%', {
+    target: '.advanced-filter-select',
+  });
+  expect(container.firstChild).toHaveStyleRule('width', '100%', {
+    target: '.advanced-filter-input',
+  });
 });
 
 test('widens advanced filter controls only for WHM order detail', () => {
@@ -146,6 +152,15 @@ test('widens advanced filter controls only for WHM order detail', () => {
   expect(container.firstChild).toHaveStyleRule('width', '260px', {
     target: '.advanced-filter-value',
   });
+  expect(container.firstChild).toHaveStyleRule('max-width', '260px', {
+    target: '.advanced-filter-value',
+  });
+  expect(container.firstChild).toHaveStyleRule('width', '100%', {
+    target: '.advanced-filter-select',
+  });
+  expect(container.firstChild).toHaveStyleRule('width', '100%', {
+    target: '.advanced-filter-input',
+  });
 });
 
 test('renders advanced filter dropdowns outside the filter row', async () => {
@@ -159,7 +174,9 @@ test('renders advanced filter dropdowns outside the filter row', async () => {
     </StyledChartContainer>,
   );
 
-  await userEvent.click(screen.getByRole('combobox', { name: 'Filter column' }));
+  await userEvent.click(
+    screen.getByRole('combobox', { name: 'Filter column' }),
+  );
   await waitFor(() => {
     expect(document.querySelector('.ant-select-dropdown')).toBeInTheDocument();
   });

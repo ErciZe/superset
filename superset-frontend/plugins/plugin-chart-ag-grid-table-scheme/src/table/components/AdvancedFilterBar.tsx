@@ -90,37 +90,47 @@ export default function AdvancedFilterBar({
 
   return (
     <div className="advanced-filter-container">
-      <Select
-        className="advanced-filter-column"
-        value={effectiveColumn}
-        options={searchOptions}
-        onChange={nextColumn => setColumn(String(nextColumn))}
-        ariaLabel={t('Filter column')}
-        getPopupContainer={getAdvancedFilterPopupContainer}
-      />
-      <Select
-        className="advanced-filter-operator"
-        value={operator}
-        options={OPERATOR_OPTIONS}
-        onChange={nextOperator =>
-          setOperator(nextOperator as AdvancedFilterOperator)
-        }
-        ariaLabel={t('Filter operator')}
-        getPopupContainer={getAdvancedFilterPopupContainer}
-      />
-      <Input
-        className="advanced-filter-value"
-        value={filterValue}
-        disabled={!needsValue}
-        placeholder={needsValue ? '筛选值' : ''}
-        onChange={event => setFilterValue(event.target.value)}
-        onPressEnter={() => {
-          if (!applyDisabled) {
-            onApply({ column: effectiveColumn, operator, value: filterValue });
+      <div className="advanced-filter-column">
+        <Select
+          className="advanced-filter-select"
+          value={effectiveColumn}
+          options={searchOptions}
+          onChange={nextColumn => setColumn(String(nextColumn))}
+          ariaLabel={t('Filter column')}
+          getPopupContainer={getAdvancedFilterPopupContainer}
+        />
+      </div>
+      <div className="advanced-filter-operator">
+        <Select
+          className="advanced-filter-select"
+          value={operator}
+          options={OPERATOR_OPTIONS}
+          onChange={nextOperator =>
+            setOperator(nextOperator as AdvancedFilterOperator)
           }
-        }}
-        aria-label={t('Filter value')}
-      />
+          ariaLabel={t('Filter operator')}
+          getPopupContainer={getAdvancedFilterPopupContainer}
+        />
+      </div>
+      <div className="advanced-filter-value">
+        <Input
+          className="advanced-filter-input"
+          value={filterValue}
+          disabled={!needsValue}
+          placeholder={needsValue ? '筛选值' : ''}
+          onChange={event => setFilterValue(event.target.value)}
+          onPressEnter={() => {
+            if (!applyDisabled) {
+              onApply({
+                column: effectiveColumn,
+                operator,
+                value: filterValue,
+              });
+            }
+          }}
+          aria-label={t('Filter value')}
+        />
+      </div>
       <Button
         buttonStyle="primary"
         disabled={applyDisabled}
