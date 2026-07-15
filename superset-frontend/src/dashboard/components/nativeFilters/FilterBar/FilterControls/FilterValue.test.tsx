@@ -38,7 +38,10 @@ jest.mock('@superset-ui/core', () => {
   return {
     ...original,
     getChartMetadataRegistry: () => ({
-      get: () => ({ enableNoResults: false }),
+      get: (chartType: string) => ({
+        enableNoResults: false,
+        datasourceCount: chartType === 'filter_time' ? 0 : undefined,
+      }),
     }),
     SuperChart: (props: Record<string, unknown>) => (
       <div data-test="mock-super-chart" data-chart-type={props.chartType}>
@@ -186,6 +189,20 @@ test('does not render loading spinner when filter has no data source', () => {
 
   renderFilterValue({ filter: filterWithoutDataSource });
 
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  expect(screen.getByTestId('mock-super-chart')).toBeInTheDocument();
+});
+
+test('does not fetch data for time filters even when they target a dataset', () => {
+  const timeFilter = createMockFilter({
+    filterType: 'filter_time',
+    targets: [{ datasetId: 1, column: { name: 'created_at' } }],
+  });
+  mockGetChartDataRequest.mockReturnValue(new Promise(() => {}));
+
+  renderFilterValue({ filter: timeFilter });
+
+  expect(mockGetChartDataRequest).not.toHaveBeenCalled();
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
   expect(screen.getByTestId('mock-super-chart')).toBeInTheDocument();
 });

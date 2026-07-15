@@ -124,7 +124,12 @@ export default function EchartsTimeseries({
       } else {
         values = [value];
       }
-      const groupbyValues = values.map(value => labelMap[value]);
+      const groupbyValues = values
+        .map(value => labelMap[value])
+        .filter((value): value is string[] => value !== undefined);
+      if (groupbyValues.length !== values.length) {
+        return undefined;
+      }
       return {
         dataMask: {
           extraFormData: {
@@ -202,7 +207,10 @@ export default function EchartsTimeseries({
       if (!emitCrossFilters) {
         return;
       }
-      setDataMask(getCrossFilterDataMask(value).dataMask);
+      const dataMask = getCrossFilterDataMask(value)?.dataMask;
+      if (dataMask) {
+        setDataMask(dataMask);
+      }
     },
     [emitCrossFilters, setDataMask, getCrossFilterDataMask],
   );

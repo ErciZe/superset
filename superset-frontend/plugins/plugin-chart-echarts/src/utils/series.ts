@@ -55,6 +55,15 @@ function isDefined<T>(value: T | undefined | null): boolean {
   return value !== undefined && value !== null;
 }
 
+function normalizeSeriesValue(
+  value: DataRecordValue | undefined,
+): DataRecordValue | undefined {
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    return null;
+  }
+  return value;
+}
+
 const DEFAULT_LEGEND_ITEM_GAP = 10;
 const DEFAULT_LEGEND_ICON_WIDTH = 25;
 const LEGEND_ICON_LABEL_GAP = 5;
@@ -678,7 +687,7 @@ export function extractSeries(
     name,
     data: sortedRows
       .map(({ row, totalStackedValue }, idx) => {
-        const currentValue = row[name];
+        const currentValue = normalizeSeriesValue(row[name]);
         if (
           typeof currentValue === 'number' &&
           currentValue > 0 &&

@@ -150,8 +150,8 @@ const FilterValue: FC<FilterValueProps> = ({
     column = {},
   }: Partial<{ datasetId: number; column: { name?: string } }> = target || {};
   const groupby = column?.name;
-  const hasDataSource = !!datasetId;
-  const [isLoading, setIsLoading] = useState<boolean>(hasDataSource);
+  const shouldFetchFilterData = !!datasetId && metadata?.datasourceCount !== 0;
+  const [isLoading, setIsLoading] = useState<boolean>(shouldFetchFilterData);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const dispatch = useDispatch();
 
@@ -239,7 +239,7 @@ const FilterValue: FC<FilterValueProps> = ({
     ) {
       setFormData(newFormData);
       setOwnState(filterOwnState);
-      if (!hasDataSource) {
+      if (!shouldFetchFilterData) {
         return;
       }
       setIsRefreshing(true);
@@ -294,7 +294,7 @@ const FilterValue: FC<FilterValueProps> = ({
     groupby,
     handleFilterLoadFinish,
     filter,
-    hasDataSource,
+    shouldFetchFilterData,
     isRefreshing,
     shouldRefresh,
     dataMaskSelected,
@@ -432,7 +432,7 @@ const FilterValue: FC<FilterValueProps> = ({
           parentRef={parentRef}
           inputRef={inputRef}
           // For charts that don't have datasource we need workaround for empty placeholder
-          queriesData={hasDataSource ? state : queriesDataPlaceholder}
+          queriesData={shouldFetchFilterData ? state : queriesDataPlaceholder}
           chartType={filterType}
           behaviors={behaviors}
           filterState={filterState}

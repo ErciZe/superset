@@ -587,6 +587,40 @@ describe('extractSeries', () => {
     ]);
   });
 
+  test('should convert non-finite numeric series values to null', () => {
+    const data = [
+      {
+        __timestamp: '2000-01-01',
+        sparse: Number.NaN,
+      },
+      {
+        __timestamp: '2000-02-01',
+        sparse: Number.POSITIVE_INFINITY,
+      },
+      {
+        __timestamp: '2000-03-01',
+        sparse: 10,
+      },
+    ];
+    const totalStackedValues = [0, 0, 10];
+
+    expect(extractSeries(data, { totalStackedValues })).toEqual([
+      [
+        {
+          id: 'sparse',
+          name: 'sparse',
+          data: [
+            ['2000-01-01', null],
+            ['2000-02-01', null],
+            ['2000-03-01', 10],
+          ],
+        },
+      ],
+      totalStackedValues,
+      10,
+    ]);
+  });
+
   test('should do missing value imputation', () => {
     const data = [
       {

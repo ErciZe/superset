@@ -547,6 +547,33 @@ test('does not emit cross-filter when no dimensions and time-based X-axis', asyn
   }
 });
 
+test('ignores dimension cross-filter clicks when the series is absent from the label map', async () => {
+  const setDataMaskMock = jest.fn();
+
+  render(
+    <EchartsTimeseries
+      {...defaultProps}
+      emitCrossFilters
+      setDataMask={setDataMaskMock}
+      groupby={['platform_name']}
+      labelMap={{}}
+    />,
+  );
+
+  const clickHandler = getLatestEchartProps().eventHandlers?.click;
+  expect(clickHandler).toBeDefined();
+  clickHandler?.({
+    componentType: 'series',
+    seriesName: 'Amazon',
+    data: ['2026-07-01', 29967.52],
+    name: '2026-07-01',
+    dataIndex: 0,
+  });
+
+  await new Promise(resolve => setTimeout(resolve, 400));
+  expect(setDataMaskMock).not.toHaveBeenCalled();
+});
+
 // Test for issue #41102: horizontal bar cross-filter must use the category
 // value, not the metric. For horizontal bars the data tuple is value-first
 // (e.g. [100, 'Product A']), so relying on data[0] emitted the metric value.
