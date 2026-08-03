@@ -102,6 +102,7 @@ export type TableChartFormData = QueryFormData & {
   time_grain_sqla?: TimeGranularity;
   column_config?: Record<string, TableColumnConfig>;
   allow_rearrange_columns?: boolean;
+  export_row_limit?: number | string | null;
 };
 
 export interface TableChartProps extends ChartProps {

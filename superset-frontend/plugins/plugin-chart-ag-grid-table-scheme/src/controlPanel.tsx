@@ -295,6 +295,20 @@ const columnViewControls: ControlSetRows = [
   ],
 ];
 
+const exportRowLimitControls: ControlSetRows = [
+  [
+    {
+      name: 'export_row_limit',
+      config: {
+        type: 'TextControl',
+        label: t('数据导出限制行数'),
+        renderTrigger: true,
+        description: t('仅用于下载 CSV、Excel 或 JSON，不影响页面分页查询。'),
+      },
+    },
+  ],
+];
+
 const matrixCellColorControls: ControlSetRows = [
   [
     {
@@ -596,14 +610,18 @@ const controlPanel: ControlPanelConfig = {
     if (index === 0) {
       return {
         ...section,
-        controlSetRows: [
-          ...insertRowsAfterControl(
-            hideControlsInMatrixMode(section.controlSetRows),
-            'query_mode',
-            matrixModeControlRows,
-          ),
-          ...matrixDetailControlRows,
-        ],
+        controlSetRows: insertRowsAfterControl(
+          [
+            ...insertRowsAfterControl(
+              hideControlsInMatrixMode(section.controlSetRows),
+              'query_mode',
+              matrixModeControlRows,
+            ),
+            ...matrixDetailControlRows,
+          ],
+          'row_limit',
+          exportRowLimitControls,
+        ),
       };
     }
 

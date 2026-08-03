@@ -251,7 +251,14 @@ describe('AG Grid table scheme control panel', () => {
     };
 
     expect(queryControlNames).toEqual(
-      expect.arrayContaining(['adhoc_filters', 'row_limit']),
+      expect.arrayContaining([
+        'adhoc_filters',
+        'row_limit',
+        'export_row_limit',
+      ]),
+    );
+    expect(queryControlNames.indexOf('export_row_limit')).toBe(
+      queryControlNames.indexOf('row_limit') + 1,
     );
     ['matrix_rows', 'matrix_columns', 'matrix_value'].forEach(controlName => {
       expect(

@@ -292,7 +292,8 @@ const buildQuery: BuildQuery<TableChartFormData> = (
         formData?.result_type === 'results');
 
     if (isDownloadQuery) {
-      moreProps.row_limit = Number(formDataCopy.row_limit) || 0;
+      moreProps.row_limit =
+        Number(formDataCopy.export_row_limit ?? formDataCopy.row_limit) || 0;
       moreProps.row_offset = 0;
     }
 

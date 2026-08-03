@@ -133,3 +133,15 @@ test('ignores incomplete value-based advanced filters', () => {
 
   expect(query.filters || []).toEqual([]);
 });
+
+test('uses export row limit for download queries without changing page limit', () => {
+  const [query] = buildQuery({
+    ...basicFormData,
+    result_format: 'csv',
+    row_limit: 20000,
+    export_row_limit: 30000,
+  }).queries;
+
+  expect(query.row_limit).toBe(30000);
+  expect(query.row_offset).toBe(0);
+});
