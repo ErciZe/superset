@@ -18,10 +18,18 @@
  */
 import { render } from '@superset-ui/core/spec';
 import TableChart from '../../src/table/AgGridTableChart';
+import type { AgGridTableProps } from '../../src/table/AgGridTable';
 
 jest.mock('../../src/table/AgGridTable', () => ({
   __esModule: true,
-  default: () => <div data-test="ag-grid-table" />,
+  default: ({
+    handleCrossFilter,
+  }: Pick<AgGridTableProps, 'handleCrossFilter'>) => (
+    <div
+      data-test="ag-grid-table"
+      data-cross-filter-enabled={String(Boolean(handleCrossFilter))}
+    />
+  ),
 }));
 
 jest.mock('../../src/table/utils/useColDefs', () => ({
@@ -66,4 +74,20 @@ test('marks only the WHM order detail chart for scoped advanced filter styles', 
 
   expect(whmContainer.firstChild).toHaveClass('whm-order-detail-chart');
   expect(otherContainer.firstChild).not.toHaveClass('whm-order-detail-chart');
+});
+
+test('disables cell click cross-filtering only for the WHM order detail chart', () => {
+  const { container: whmContainer } = render(
+    <TableChart {...baseProps} slice_id={17} />,
+  );
+  const { container: otherContainer } = render(
+    <TableChart {...baseProps} slice_id={130} />,
+  );
+  const whmChart = whmContainer.querySelector('[data-test="ag-grid-table"]');
+  const otherChart = otherContainer.querySelector(
+    '[data-test="ag-grid-table"]',
+  );
+
+  expect(whmChart).toHaveAttribute('data-cross-filter-enabled', 'false');
+  expect(otherChart).toHaveAttribute('data-cross-filter-enabled', 'true');
 });
