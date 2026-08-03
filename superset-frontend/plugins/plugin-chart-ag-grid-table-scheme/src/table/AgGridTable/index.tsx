@@ -89,7 +89,7 @@ export interface AgGridTableProps {
   percentMetrics: string[];
   serverPageLength: number;
   hasServerPageLengthChanged: boolean;
-  handleCrossFilter: (event: CellClickedEvent | IMenuActionParams) => void;
+  handleCrossFilter?: (event: CellClickedEvent | IMenuActionParams) => void;
   isActiveFilterValue: (key: string, val: DataRecordValue) => boolean;
   renderTimeComparisonDropdown: () => JSX.Element | null;
   cleanedTotals: DataRecord;
