@@ -72,6 +72,7 @@ import { CHART_TYPE } from 'src/dashboard/util/componentTypes';
 import { NATIVE_FILTER_DIVIDER_PREFIX } from '../nativeFilters/FiltersConfigModal/utils';
 import { selectFilterConfiguration } from '../nativeFilters/state';
 import { getRootLevelTabsComponent } from './utils';
+import shouldScrollTabPaneIntoView from './utils/shouldScrollTabPaneIntoView';
 
 type DashboardContainerProps = {
   topLevelTabs?: LayoutItem;
@@ -138,8 +139,6 @@ const useRenderedChartIds = () => {
   return renderedChartIds;
 };
 
-const TOP_OF_PAGE_RANGE = 220;
-
 const DashboardContainer: FC<DashboardContainerProps> = ({ topLevelTabs }) => {
   const dispatch = useDispatch();
 
@@ -170,6 +169,7 @@ const DashboardContainer: FC<DashboardContainerProps> = ({ topLevelTabs }) => {
   const prevTabIndexRef = useRef<number>();
   const prevFilterScopesRef = useRef<FilterScopeData[]>([]);
   const prevCustomizationScopesRef = useRef<CustomizationScopeData[]>([]);
+  const isTabNavigationRef = useRef(false);
   const tabIndex = useMemo(() => {
     const nextTabIndex = findTabIndexByComponentId({
       currentComponent: getRootLevelTabsComponent(dashboardLayout),
@@ -328,18 +328,35 @@ const DashboardContainer: FC<DashboardContainerProps> = ({ topLevelTabs }) => {
     };
   }, [onBeforeUnload]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      isTabNavigationRef.current = event.key === 'Tab';
+    };
+    const handlePointerDown = () => {
+      isTabNavigationRef.current = false;
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('pointerdown', handlePointerDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, []);
+
   const renderTabBar = useCallback(() => <></>, []);
   const handleFocus = useCallback((e: ReactFocusEvent<HTMLElement>) => {
     if (
-      // prevent scrolling when tabbing to the tab pane
-      e.target.classList.contains('ant-tabs-tabpane') &&
-      window.scrollY < TOP_OF_PAGE_RANGE
+      shouldScrollTabPaneIntoView(
+        isTabNavigationRef.current,
+        e.target,
+        window.scrollY,
+      )
     ) {
-      // prevent window from jumping down when tabbing
-      // if already at the top of the page
-      // to help with accessibility when using keyboard navigation
       window.scrollTo(window.scrollX, 0);
     }
+    isTabNavigationRef.current = false;
   }, []);
 
   const renderParentSizeChildren = useCallback(
