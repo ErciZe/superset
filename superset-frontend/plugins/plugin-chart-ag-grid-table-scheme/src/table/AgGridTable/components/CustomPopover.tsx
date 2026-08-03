@@ -16,7 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { useEffect, useRef, useState, cloneElement } from 'react';
+import { cloneElement, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { PopoverContainer, PopoverWrapper } from '../../styles';
 
 interface Props {
@@ -86,17 +87,19 @@ const CustomPopover: React.FC<Props> = ({
   return (
     <PopoverWrapper>
       {cloneElement(children, { ref: triggerRef })}
-      {isOpen && (
-        <PopoverContainer
-          ref={popoverRef}
-          style={{
-            top: `${position.top}px`,
-            left: `${position.left}px`,
-          }}
-        >
-          {content}
-        </PopoverContainer>
-      )}
+      {isOpen &&
+        createPortal(
+          <PopoverContainer
+            ref={popoverRef}
+            style={{
+              top: `${position.top}px`,
+              left: `${position.left}px`,
+            }}
+          >
+            {content}
+          </PopoverContainer>,
+          document.body,
+        )}
     </PopoverWrapper>
   );
 };

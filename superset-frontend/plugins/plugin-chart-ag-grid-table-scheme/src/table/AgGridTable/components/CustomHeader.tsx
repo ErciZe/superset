@@ -59,7 +59,7 @@ const CustomHeader: React.FC<CustomHeaderParams> = ({
   setSort,
   context,
   column,
-  api,
+  showFilter,
 }) => {
   const { initialSortState, onColumnHeaderClicked } = context;
   const colId = column?.getColId();
@@ -67,9 +67,8 @@ const CustomHeader: React.FC<CustomHeaderParams> = ({
   const userColDef = column.getUserProvidedColDef() as UserProvidedColDef;
   const isPercentMetric = colDef?.context?.isPercentMetric;
 
-  const [isFilterVisible, setFilterVisible] = useState(false);
   const [isMenuVisible, setMenuVisible] = useState(false);
-  const filterRef = useRef<HTMLDivElement>(null);
+  const filterButtonRef = useRef<HTMLDivElement>(null);
   const isFilterActive = column?.isFilterActive();
 
   const currentSort = initialSortState?.[0];
@@ -102,15 +101,10 @@ const CustomHeader: React.FC<CustomHeaderParams> = ({
     else clearSort();
   };
 
-  const handleFilterClick = async (e: React.MouseEvent) => {
+  const handleFilterClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setFilterVisible(!isFilterVisible);
-
-    const filterInstance = await api.getColumnFilterInstance<any>(column);
-    const filterEl = filterInstance?.eGui;
-    if (filterEl && filterRef.current) {
-      filterRef.current.innerHTML = '';
-      filterRef.current.appendChild(filterEl);
+    if (filterButtonRef.current) {
+      showFilter(filterButtonRef.current);
     }
   };
 
@@ -155,19 +149,14 @@ const CustomHeader: React.FC<CustomHeaderParams> = ({
         </SortIconWrapper>
       </HeaderContainer>
 
-      <CustomPopover
-        content={<div ref={filterRef} />}
-        isOpen={isFilterVisible}
-        onClose={() => setFilterVisible(false)}
+      <FilterIconWrapper
+        ref={filterButtonRef}
+        className="header-filter"
+        onClick={handleFilterClick}
+        isFilterActive={isFilterActive}
       >
-        <FilterIconWrapper
-          className="header-filter"
-          onClick={handleFilterClick}
-          isFilterActive={isFilterActive}
-        >
-          <FilterIcon />
-        </FilterIconWrapper>
-      </CustomPopover>
+        <FilterIcon />
+      </FilterIconWrapper>
 
       {!isPercentMetric && !isTimeComparison && (
         <CustomPopover
