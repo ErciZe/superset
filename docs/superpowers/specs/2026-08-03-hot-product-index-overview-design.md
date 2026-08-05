@@ -49,8 +49,8 @@ sku_month_sales_qty + theoretical_stock_qty > 10
 - 退货使用 `return_goods_count`，不得改用退款量 `return_count`。
 - 漏斗评级直接使用 `dim.dim_product.product_level`，不使用 `product_grade`，不归并 `C1/DD/F1/F2/F3/PS/-` 等原始值。
 - 空或空字符串 `product_level` 显示为“未评级”。
-- 源 SKU 为空时使用 `dim.dim_product_relation_zipper`，有效区间为左闭右开 `[start_date, end_date)`。
-- 2026-06-07 的 `8010A-BL28-FBM` 必须映射到 `8010S-BL28`，而不是已于当日失效的 `ZX-8010S-BL28`。
+- 源 SKU 为空时使用 `dim.dim_product_relation_zipper`，有效区间为闭区间 `[start_date, end_date]`；该口径于 2026-08-05 获得明确批准。
+- `8010A-BL28-FBM` 在 2026-05-29 映射到 `ZX-8010S-BL28`，从 2026-05-30 起映射到 `8010S-BL28`。
 - 时间字段命名规则：真实日期使用有业务含义的 `DATE` 字段；非日期字符串时间键只使用 `ymd`、`yw`、`ym`。同一日期不重复保存 `DATE` 与 `ymd`。
 
 ## Architecture
@@ -93,7 +93,7 @@ Superset 不直接查询领星宽源表，也不在各图表中重复解析 JSON
 | Source                                           | Grain / Key                     | Fields Used                                                                                                                     | Contract                                                    |
 | ------------------------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | `ling_xing.lx_web_product_performance_msku_list` | `ymd_id + sid + msku`           | `ymd_id`, `sid`, `msku`, `sku`, `volume`, `amount`, `gross_profit`, `return_goods_count`, `create_time`                         | P0 唯一经营事实源                                           |
-| `dim.dim_product_relation_zipper`                | `msku + sid + sku + start_date` | `msku`, `sid`, `sku`, `start_date`, `end_date`                                                                                  | 只在源 SKU 为空时使用；按 `[start_date, end_date)` 唯一命中 |
+| `dim.dim_product_relation_zipper`                | `msku + sid + sku + start_date` | `msku`, `sid`, `sku`, `start_date`, `end_date`                                                                                  | 只在源 SKU 为空时使用；按 `[start_date, end_date]` 唯一命中 |
 | `dim.dim_product`                                | `sku`                           | `spu`, `product_sku`, `level1`, `single_box_size`, `color`, `product_developer`, `model`, `product_level`, `category`, `org_id` | 组织限定 `org_id = 1`，品类限定 `category = '拉杆箱'`       |
 | `dim.dim_mp_sellers`                             | 业务上要求 `org_id + sid` 唯一  | `sid`, `sale_channel`, `country`, `org_id`                                                                                      | `channel = sale_channel`；`country = country`               |
 | `ods.product_grade`                              | `ym + SKU`                      | `ym`, `SKU`, `global_label`                                                                                                     | 原值作为“SKU等级”筛选，不做等级归并                         |
@@ -248,7 +248,7 @@ Table: `ads.ads_pdm_lx_hot_product_index_sku_m`
 
 ```sql
 sales_date >= start_date
-AND sales_date < end_date
+AND sales_date <= end_date
 ```
 
 4. 命中 0 条或多于 1 条时，本批次失败并输出 `sales_date, sid, msku` 冲突清单。
@@ -260,16 +260,16 @@ AND sales_date < end_date
 
 | sales_date |  sid | msku             | Expected SKU    |
 | ---------- | ---: | ---------------- | --------------- |
-| 2026-06-06 | 2613 | `8010A-BL28-FBM` | `ZX-8010S-BL28` |
-| 2026-06-07 | 2613 | `8010A-BL28-FBM` | `8010S-BL28`    |
+| 2026-05-29 | 2613 | `8010A-BL28-FBM` | `ZX-8010S-BL28` |
+| 2026-05-30 | 2613 | `8010A-BL28-FBM` | `8010S-BL28`    |
 
 已核验的主源样例必须在目标日表中保持原指标且只出现一次：
 
 | sales_date |  sid | msku             | Expected SKU    | sales_qty | sales_amount_usd |
 | ---------- | ---: | ---------------- | --------------- | --------: | ---------------: |
-| 2026-06-01 | 2613 | `8010A-BL28-FBM` | `ZX-8010S-BL28` |        11 |          2276.89 |
-| 2026-06-02 | 2613 | `8010A-BL28-FBM` | `ZX-8010S-BL28` |         3 |           749.97 |
-| 2026-06-03 | 2613 | `8010A-BL28-FBM` | `ZX-8010S-BL28` |         5 |          1249.95 |
+| 2026-06-01 | 2613 | `8010A-BL28-FBM` | `8010S-BL28` |        11 |          2276.89 |
+| 2026-06-02 | 2613 | `8010A-BL28-FBM` | `8010S-BL28` |         3 |           749.97 |
+| 2026-06-03 | 2613 | `8010A-BL28-FBM` | `8010S-BL28` |         5 |          1249.95 |
 
 ### 2. Enrich Dimensions
 
@@ -305,7 +305,7 @@ is_eligible = eligibility_value > 10
 先在 `ym + sku` 粒度计算资格，再构造候选身份集合：
 
 1. 当月主源中出现、已唯一解析 SKU 且通过 `org_id = 1 AND category = '拉杆箱'` 过滤的 `sid + msku + sku`。
-2. 对每个 `is_eligible = 1` 的 SKU，纳入当月与 `[start_date, end_date)` 有交集、并通过相同拉杆箱维度过滤的全部关系拉链 `sid + msku + sku` 身份。
+2. 对每个 `is_eligible = 1` 的 SKU，纳入当月与 `[start_date, end_date]` 有交集、并通过相同拉杆箱维度过滤的全部关系拉链 `sid + msku + sku` 身份。
 
 第二部分既保证“当月无销量但理论库存大于 10”的 SKU 进入看板，也保证由销量驱动达标的 SKU 在其他有效渠道/MSKU 下拥有完整 SKU 日。若有效 SKU 没有任何有效 `sid + msku` 关系，就无法赋予渠道和国家，分区必须失败并输出清单，不能把它挂到虚构店铺。
 
@@ -313,7 +313,7 @@ DAG 必须保留以下相互独立的发布前结果，作为后续集合验收�
 
 - `candidate_sku_staging(ym, sku)`：由域内已解析主源 SKU 与域内库存 SKU 的并集生成。
 - `eligibility_staging(ym, sku, sku_month_sales_qty, theoretical_stock_qty, eligibility_value, is_eligible)`：由候选集合、域内源销量和库存直接生成，每个候选 SKU 恰好一行。
-- `eligible_identity_staging(ym, sid, msku, sku, identity_start_date, identity_end_date)`：由 `is_eligible = 1` 的 SKU 与有效拉链区间直接生成；身份有效区间保持左闭右开。
+- `eligible_identity_staging(ym, sid, msku, sku, identity_start_date, identity_end_date)`：由 `is_eligible = 1` 的 SKU 与闭区间拉链生成；写入 staging 时把原始 `end_date` 加一天，转换成内部左闭右开范围供日历展开。
 
 这三份 staging 是独立预期集合。若日表和月表同时漏掉一个库存驱动的有效 SKU，验收仍必须通过它们发现缺失，不能形成“目标表验证目标表”的循环证明。
 
@@ -603,11 +603,11 @@ JOIN batch_relation_staging b
       OR (a.start_date = b.start_date AND a.sku < b.sku)
       OR (a.start_date = b.start_date AND a.sku = b.sku
           AND a.end_date < b.end_date))
- AND a.start_date < b.end_date
- AND b.start_date < a.end_date;
+ AND a.start_date <= b.end_date
+ AND b.start_date <= a.end_date;
 ```
 
-必须返回零行；重叠条件明确按排他的 `end_date` 计算。
+必须返回零行；重叠条件按包含 `end_date` 当天的闭区间计算。
 
 ### Source Resolution
 
@@ -620,7 +620,7 @@ LEFT JOIN dim.dim_product_relation_zipper z
   ON s.sid = z.sid
  AND s.msku = z.msku
  AND s.ymd_id >= z.start_date
- AND s.ymd_id < z.end_date
+ AND s.ymd_id <= z.end_date
 WHERE s.ymd_id >= :batch_start_date
   AND s.ymd_id <= :batch_end_date
   AND (s.sku IS NULL OR TRIM(s.sku) = '')

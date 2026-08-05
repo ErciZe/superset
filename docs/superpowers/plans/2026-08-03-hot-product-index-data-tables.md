@@ -14,7 +14,7 @@
 - 权威设计为 `/Volumes/extend/ecode-workspace/superset-source/docs/superpowers/specs/2026-08-03-hot-product-index-overview-design.md`；FineBI 只作视觉参考。
 - 永久业务表只能是 `ads.ads_pdm_lx_hot_product_index_sku_d` 与 `ads.ads_pdm_lx_hot_product_index_sku_m`；运行 staging 不是 BI 数据源。
 - 事实源只能是 `ling_xing.lx_web_product_performance_msku_list`；不得改回 `ling_xing.lx_bp_product_performance_msku`。
-- 源 SKU 为空时，当前批准契约仍是 `sid + msku + [start_date,end_date)` 唯一命中 `dim.dim_product_relation_zipper`；不得加 `msku` 单键 fallback、`ROW_NUMBER() = 1` 或任取一行。
+- 源 SKU 为空时，批准契约是 `sid + msku + [start_date,end_date]` 唯一命中 `dim.dim_product_relation_zipper`；不得加 `msku` 单键 fallback、`ROW_NUMBER() = 1` 或任取一行。该闭区间口径由用户于 2026-08-05 明确批准。
 - `product_level` 只能来自 `dim.dim_product.product_level`；数据库空值或空字符串写“未评级”，其他值原样保留。
 - `sku_level` 只能来自 `ods.product_grade.global_label`；`ods.product_grade.ym` 从 `YYYYMM INT` 显式转为目标 `ym = YYYY-MM`。
 - 资格公式固定为 `sku_month_sales_qty + theoretical_stock_qty > 10`，不判断商品状态；理论库存只能来自 `dws.dws_stock_analysis_monthly_sku.total_stock_qty`。
@@ -39,14 +39,14 @@
 
 任何前三项未完成时，不回到 BI 基线。第四项未完成时，可以验收物理表，但不得把 Superset 连接到会在发布窗口暴露不同批次的两张表。
 
-### Verified Production Snapshot (2026-08-03, Read-Only)
+### Verified Production Snapshot (2026-08-05, Read-Only)
 
 - Doris is `2.1.9-rc02-3390475e02`; the two targets do not exist.
 - The source has zero duplicate groups at `ymd_id,sid,msku`.
-- Exact `sid+msku+[start_date,end_date)` resolution leaves `669622` source keys unresolved in the checked history.
-- The 2026-06-06 and 2026-06-07 zipper rows for `8010A-BL28-FBM` both have `sid IS NULL`; the zipper producer also merges and inserts by `msku` without `sid`.
-- The luggage product dimension has `19` SPUs with conflicting normalized `product_level` values.
-- The zipper begins later than the 2023-02 source history, and no trusted completion Asset exists in this ETL repository for `dws.dws_stock_analysis_monthly_sku`.
+- Exact `sid+msku+[start_date,end_date]` resolution maps 380,460 of 1,030,852 source keys and leaves 650,392 unresolved in the 2026 window; no exact multi-match was observed.
+- The repaired zipper has zero null SIDs. Its 134 transitions all satisfy `next_start = end_date + 1 day`, confirming closed-interval storage; the 2026-05-29/30 boundary for `8010A-BL28-FBM` resolves to `ZX-8010S-BL28` and `8010S-BL28` respectively.
+- The luggage product dimension has `16` SPUs with conflicting normalized `product_level` values in the 2026 candidate scope.
+- The zipper covers the 2026 historical boundary, but 650,392 source keys have no exact `sid+msku` relation, and no trusted completion Asset exists in this ETL repository for `dws.dws_stock_analysis_monthly_sku`.
 
 These are implementation gates, not reasons to weaken the approved contract. Re-run Task 0 against live data because counts can change after upstream repair.
 
@@ -108,10 +108,10 @@ These are implementation gates, not reasons to weaken the approved contract. Re-
 
 **Interfaces:**
 
-- Consumes: the six source contracts from the approved design.
+- Consumes: the source, closed-interval zipper, product, seller, grade, and stock contracts from the approved design.
 - Produces: a read-only result set with columns `check_name VARCHAR`, `error_count BIGINT`; a human evidence report that records Git SHA, Doris version, source coverage and blocker counts.
 
-**Decision Gate 0:** Current production evidence does not satisfy the approved exact mapping contract. `dim.dim_product_relation_zipper` is produced by `msku` only and its boundary rows for `8010A-BL28-FBM` have `sid IS NULL`; therefore exact `sid + msku` matching returns no row on both 2026-06-06 and 2026-06-07. The data owner must repair and backfill zipper `sid` before Tasks 4-10 can publish. Changing to `msku + interval` is a business-contract change and requires updating the approved design and this plan first; the data Agent must not introduce it as fallback.
+**Decision Gate 0:** The 2026-08-05 zipper repair removed all null SIDs and the approved 2026-05-29/30 closed-interval boundary now resolves exactly once. Publication remains blocked because 650,392 source keys still lack an exact `sid + msku` relation and 16 candidate SPUs retain conflicting normalized `product_level` values. Changing to `msku + interval`, order-derived identity, `ROW_NUMBER() = 1`, or any arbitrary-row rule remains an unapproved fallback.
 
 - [ ] **Step 1: Write the failing preflight contract test**
 
@@ -127,6 +127,8 @@ def test_preflight_is_read_only_and_names_every_blocker() -> None:
     assert "source_duplicate_key" in sql
     assert "missing_exact_zipper_mapping" in sql
     assert "zipper_sid_missing" in sql
+    assert "zipper_closed_interval_invalid" in sql
+    assert "zipper_closed_boundary_fixture" in sql
     assert "zipper_history_not_covered" in sql
     assert "product_level_conflict" in sql
     assert "stock_duplicate_key" in sql
@@ -148,6 +150,8 @@ Use CTEs and a final `UNION ALL`; the exact-join section must remain:
 WITH batch_source AS (
   SELECT ymd_id AS sales_date, sid, msku, sku
   FROM ling_xing.lx_web_product_performance_msku_list
+  WHERE ymd_id >= DATE('2026-01-01')
+    AND ymd_id < DATE('2027-01-01')
 ), source_duplicates AS (
   SELECT sales_date, sid, msku
   FROM batch_source
@@ -160,7 +164,7 @@ WITH batch_source AS (
     ON z.sid = s.sid
    AND z.msku = s.msku
    AND s.sales_date >= z.start_date
-   AND s.sales_date < z.end_date
+   AND s.sales_date <= z.end_date
   WHERE (s.sku IS NULL OR TRIM(s.sku) = '')
   GROUP BY s.sales_date, s.sid, s.msku
   HAVING COUNT(z.sku) <> 1
@@ -170,6 +174,34 @@ WITH batch_source AS (
   WHERE org_id = 1 AND category = '拉杆箱'
   GROUP BY spu
   HAVING COUNT(DISTINCT IF(product_level IS NULL OR TRIM(product_level) = '', '未评级', TRIM(product_level))) > 1
+), zipper_transitions AS (
+  SELECT sid, msku, start_date, end_date,
+         LEAD(start_date) OVER (
+           PARTITION BY sid, msku
+           ORDER BY start_date, end_date, sku
+         ) AS next_start
+  FROM dim.dim_product_relation_zipper
+), invalid_closed_intervals AS (
+  SELECT sid, msku
+  FROM zipper_transitions
+  WHERE start_date > end_date
+     OR (next_start IS NOT NULL AND DATEDIFF(next_start, end_date) <> 1)
+), boundary_fixture AS (
+  SELECT DATE('2026-05-29') AS sales_date, '2613' AS sid,
+         '8010A-BL28-FBM' AS msku, 'ZX-8010S-BL28' AS expected_sku
+  UNION ALL
+  SELECT DATE('2026-05-30'), '2613', '8010A-BL28-FBM', '8010S-BL28'
+), invalid_boundary_fixture AS (
+  SELECT f.sales_date, f.sid, f.msku
+  FROM boundary_fixture f
+  LEFT JOIN dim.dim_product_relation_zipper z
+    ON z.sid = f.sid
+   AND z.msku = f.msku
+   AND f.sales_date >= z.start_date
+   AND f.sales_date <= z.end_date
+  GROUP BY f.sales_date, f.sid, f.msku, f.expected_sku
+  HAVING COUNT(z.sku) <> 1
+     OR COALESCE(MAX(z.sku), '') <> f.expected_sku
 )
 SELECT 'source_duplicate_key' AS check_name, COUNT(*) AS error_count FROM source_duplicates
 UNION ALL
@@ -179,7 +211,11 @@ SELECT 'zipper_sid_missing', COUNT(*)
 FROM dim.dim_product_relation_zipper
 WHERE sid IS NULL OR TRIM(sid) = ''
 UNION ALL
-SELECT 'zipper_history_not_covered', IF(MIN(start_date) > DATE('2023-02-01'), 1, 0)
+SELECT 'zipper_closed_interval_invalid', COUNT(*) FROM invalid_closed_intervals
+UNION ALL
+SELECT 'zipper_closed_boundary_fixture', COUNT(*) FROM invalid_boundary_fixture
+UNION ALL
+SELECT 'zipper_history_not_covered', IF(MIN(start_date) > DATE('2026-01-01'), 1, 0)
 FROM dim.dim_product_relation_zipper
 UNION ALL
 SELECT 'product_level_conflict', COUNT(*) FROM level_conflict
@@ -202,16 +238,16 @@ python3 .agents/skills/datawarehouse-schema-explorer/scripts/query_doris.py \
   --no-filter "$(< include/sql/validation/hot_product_index/preflight.sql)"
 ```
 
-Expected static result: PASS. Expected current production result: `source_duplicate_key=0`; the exact mapping, zipper SID/history, and product-level gates remain nonzero until upstream repair. Record actual values rather than changing the query to force green.
+Expected static result: PASS. Current production result has zero source duplicates, null SIDs, invalid closed intervals, history-boundary failures, and stock duplicates; exact identity coverage and product-level conflicts remain nonzero. Record actual values rather than changing the query to force green.
 
 - [ ] **Step 5: Record all hard prerequisites in the evidence report**
 
 The report must include these facts and exit criteria:
 
 ```text
-Mapping: exact sid+msku+[start,end); exit only when the 2026-06-06/07 fixture returns one row each.
-History: every non-empty source month from 2023-02 onward has exact zipper coverage.
-Product level: eligible ym+spu conflict count is zero; the observed 19 conflicts are upstream-owned.
+Mapping: exact sid+msku+[start,end]; exit only when the 2026-05-29/30 fixture returns one row each.
+History: every non-empty source month in the approved 2026 scope has exact zipper coverage.
+Product level: eligible ym+spu conflict count is zero; the observed 16 conflicts are upstream-owned.
 Readiness: ODS daily source and monthly stock expose trusted completion metadata; MAX(date) is not accepted.
 Git: execution SHA is recorded and the implementation worktree is clean before changes.
 Publication: disposable Doris probe proves new partition, replacement and compensating rollback.
@@ -831,13 +867,13 @@ from pathlib import Path
 ROOT = Path("include/sql/ads/pdm/hot_product_index")
 
 
-def test_source_resolution_uses_exact_half_open_relation() -> None:
+def test_source_resolution_uses_exact_closed_relation() -> None:
     sql = (ROOT / "10_build_source_resolution.sql").read_text(encoding="utf-8")
     normalized = " ".join(sql.split()).lower()
     assert "z.sid = s.sid" in normalized
     assert "z.msku = s.msku" in normalized
     assert "s.ymd_id >= z.start_date" in normalized
-    assert "s.ymd_id < z.end_date" in normalized
+    assert "s.ymd_id <= z.end_date" in normalized
     assert "s.ymd_id <= date('{batch_end_date}')" in normalized
     assert "return_goods_count" in normalized
     assert "return_count" not in normalized
@@ -923,7 +959,7 @@ WITH source_rows AS (
    AND z.sid = s.sid
    AND z.msku = s.msku
    AND s.sales_date >= z.start_date
-   AND s.sales_date < z.end_date
+   AND s.sales_date <= z.end_date
 ), mapping AS (
   SELECT sales_date, sid, msku,
          COUNT(sku) AS mapping_count,
@@ -1096,10 +1132,10 @@ For each `is_eligible=1` candidate, insert every exact `sid,msku,sku` relation w
 
 ```sql
 GREATEST(relation.start_date, batch.month_start_date) AS identity_start_date,
-LEAST(relation.end_date, DATE_ADD(batch.coverage_end_date, INTERVAL 1 DAY)) AS identity_end_date
+LEAST(DATE_ADD(relation.end_date, INTERVAL 1 DAY), DATE_ADD(batch.coverage_end_date, INTERVAL 1 DAY)) AS identity_end_date
 ```
 
-The join must remain `relation.sid IS NOT NULL`, `relation.sku = eligibility.sku`, `relation.start_date <= batch.coverage_end_date`, and `relation.end_date > batch.month_start_date`. A source identity for an eligible SKU must match one of these intervals with the same `sid,msku,sku`; otherwise the validation gate fails instead of manufacturing an identity.
+The join must remain `relation.sid IS NOT NULL`, `relation.sku = eligibility.sku`, `relation.start_date <= batch.coverage_end_date`, and `relation.end_date >= batch.month_start_date`. The raw relation is closed; `identity_end_date` adds one day only to create the internal exclusive bound used by calendar expansion. A source identity for an eligible SKU must match one of these intervals with the same `sid,msku,sku`; otherwise the validation gate fails instead of manufacturing an identity.
 
 - [ ] **Step 6: Run and commit the eligibility unit**
 
@@ -1300,7 +1336,7 @@ batch.source_complete_flag = 0 AND source.ymd_id IS NOT NULL
 for any unexpected fact inside an audited source-gap month;
 
 ```sql
-a.start_date < b.end_date AND b.start_date < a.end_date
+a.start_date <= b.end_date AND b.start_date <= a.end_date
 ```
 
 for overlap; and LEFT JOIN match counts from required product/SID/SKU keys so inner joins cannot hide missing dimension rows. Seller matching must use `CAST(seller.sid AS VARCHAR(255))` and `seller.org_id=1`.
@@ -1341,7 +1377,7 @@ COUNT(DISTINCT normalized product_level) = 1 per ym,spu for is_eligible=1
 both target row counts and min/max business periods
 every non-empty source month represented
 2023-06..2024-06 absent from business targets and present in recorded run evidence
-2026-06-06/07 exact half-open mapping
+2026-05-29/30 exact closed-interval mapping
 2026-06-01/02/03 sales_qty and sales_amount_usd source values
 daily/monthly reconciliation
 same global data_through_date and same batch per common ym
@@ -1820,7 +1856,7 @@ git commit -m "docs(ads): record hot product index data acceptance"
 | Requirement                                                   | Owning task    | Required proof                                  |
 | ------------------------------------------------------------- | -------------- | ----------------------------------------------- |
 | Exact table names, fields, keys and partitions                | Task 2         | Static test + production `SHOW CREATE TABLE`    |
-| Exact half-open SKU mapping                                   | Tasks 0, 4, 10 | 06-06/06-07 fixture and zero match-count errors |
+| Exact closed-interval SKU mapping                             | Tasks 0, 4, 10 | 05-29/05-30 fixture and zero match-count errors |
 | Correct product rating source                                 | Tasks 4, 7     | SQL contract + zero `ym,spu` conflict           |
 | `sales + stock > 10` with no status                           | Task 5         | Independent eligibility reconciliation          |
 | Preserve all source facts; zero-fill only eligible identities | Tasks 6, 7     | Two-way source and day-spine set comparisons    |
