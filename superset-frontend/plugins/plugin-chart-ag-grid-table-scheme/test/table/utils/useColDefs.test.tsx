@@ -19,6 +19,7 @@
 import { renderHook } from '@testing-library/react';
 import { GenericDataType } from '@apache-superset/core/common';
 import { useColDefs } from '../../../src/table/utils/useColDefs';
+import { HIERARCHY_META_KEY } from '../../../src/table/types';
 
 const column = {
   key: 'value',
@@ -45,6 +46,7 @@ const defaultProps = {
   emitCrossFilters: false,
   alignPositiveNegative: false,
   slice_id: 1,
+  onToggleHierarchyPath: jest.fn(),
 };
 
 describe('useColDefs', () => {
@@ -80,5 +82,44 @@ describe('useColDefs', () => {
     expect(colDef.cellStyle(params)).toMatchObject({ color: '#d33' });
     expect(colDef.cellRenderer(params).props.title).toBe('Raw value');
     expect(additionalCellFormatter).toHaveBeenCalledTimes(1);
+  });
+
+  test('uses the hierarchy renderer and preserves the configured pin', () => {
+    const onToggleHierarchyPath = jest.fn();
+    const hierarchyMeta = {
+      depth: 0,
+      path: '["8010S"]',
+      firstInGroup: true,
+      hasDescendants: true,
+      expanded: true,
+    };
+    const hierarchyColumn = {
+      ...column,
+      key: 'spu',
+      config: { pinned: 'left' as const },
+    };
+    const row = {
+      spu: '8010S',
+      [HIERARCHY_META_KEY]: { spu: hierarchyMeta },
+    };
+    const { result } = renderHook(() =>
+      useColDefs({
+        ...defaultProps,
+        columns: [hierarchyColumn],
+        data: [row],
+        rowHierarchyFields: ['spu'],
+        onToggleHierarchyPath,
+      }),
+    );
+    const colDef = result.current[0] as any;
+    const rendered = colDef.cellRenderer({
+      data: row,
+      value: row.spu,
+      valueFormatted: row.spu,
+    });
+
+    expect(colDef.pinned).toBe('left');
+    expect(rendered.props.meta).toEqual(hierarchyMeta);
+    expect(rendered.props.onToggle).toBe(onToggleHierarchyPath);
   });
 });

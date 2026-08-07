@@ -23,7 +23,7 @@ import {
 } from '@superset-ui/core';
 import { GenericDataType } from '@apache-superset/core/common';
 import { t } from '@apache-superset/core/translation';
-import { useCallback, useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { isEqual } from 'lodash';
 
 import {
@@ -44,6 +44,7 @@ import AdvancedFilterBar from './components/AdvancedFilterBar';
 import { useColDefs } from './utils/useColDefs';
 import { getCrossFilterDataMask } from './utils/getCrossFilterDataMask';
 import { StyledChartContainer } from './styles';
+import { buildHierarchyView } from './hierarchy';
 
 const getGridHeight = (
   height: number,
@@ -118,6 +119,45 @@ export default function TableChart<D extends DataRecord = DataRecord>(
 
   const [searchOptions, setSearchOptions] = useState<SearchOption[]>([]);
 
+  const rowHierarchyFields = props.formData.row_hierarchy_fields ?? [];
+  const collapsedHierarchyPaths =
+    serverPaginationData.collapsedHierarchyPaths ?? [];
+  const hierarchyView = useMemo(
+    () => buildHierarchyView(data, rowHierarchyFields, collapsedHierarchyPaths),
+    [collapsedHierarchyPaths, data, rowHierarchyFields],
+  );
+  const previousFilters = useRef(filters);
+
+  useEffect(() => {
+    if (isEqual(previousFilters.current, filters)) {
+      return;
+    }
+    previousFilters.current = filters;
+    if (!serverPagination) {
+      return;
+    }
+    const modifiedOwnState = {
+      ...serverPaginationData,
+      currentPage: 0,
+      collapsedHierarchyPaths: [],
+    };
+    updateTableOwnState(setDataMask, modifiedOwnState);
+  }, [filters, serverPagination, serverPaginationData, setDataMask]);
+
+  const handleToggleHierarchyPath = useCallback(
+    (path: string) => {
+      const next = collapsedHierarchyPaths.includes(path)
+        ? collapsedHierarchyPaths.filter(item => item !== path)
+        : [...collapsedHierarchyPaths, path];
+      const modifiedOwnState = {
+        ...serverPaginationData,
+        collapsedHierarchyPaths: next,
+      };
+      updateTableOwnState(setDataMask, modifiedOwnState);
+    },
+    [collapsedHierarchyPaths, serverPaginationData, setDataMask],
+  );
+
   useEffect(() => {
     const options = columns
       .filter(col => col?.dataType === GenericDataType.String)
@@ -178,7 +218,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     columns: isUsingTimeComparison
       ? (filteredColumns as InputColumn[])
       : (columns as InputColumn[]),
-    data,
+    data: hierarchyView.records,
     serverPagination,
     isRawRecords,
     defaultAlignPN: alignPositiveNegative,
@@ -194,6 +234,8 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     emitCrossFilters,
     alignPositiveNegative,
     slice_id,
+    rowHierarchyFields,
+    onToggleHierarchyPath: handleToggleHierarchyPath,
   });
 
   const showAdvancedFilter = Boolean(
@@ -264,6 +306,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         ...serverPaginationData,
         currentPage: pageNumber,
         pageSize,
+        collapsedHierarchyPaths: [],
       };
       updateTableOwnState(setDataMask, modifiedOwnState);
     },
@@ -276,6 +319,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         ...serverPaginationData,
         currentPage: 0,
         pageSize,
+        collapsedHierarchyPaths: [],
       };
       updateTableOwnState(setDataMask, modifiedOwnState);
     },
@@ -288,6 +332,8 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         ...serverPaginationData,
         searchColumn: searchCol,
         searchText: '',
+        currentPage: 0,
+        collapsedHierarchyPaths: [],
       };
       updateTableOwnState(setDataMask, modifiedOwnState);
     }
@@ -301,6 +347,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
           serverPaginationData?.searchColumn || searchOptions[0]?.value,
         searchText,
         currentPage: 0, // Reset to first page when searching
+        collapsedHierarchyPaths: [],
       };
       updateTableOwnState(setDataMask, modifiedOwnState);
     },
@@ -313,6 +360,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         ...serverPaginationData,
         advancedFilter,
         currentPage: 0,
+        collapsedHierarchyPaths: [],
       };
       updateTableOwnState(setDataMask, modifiedOwnState);
     },
@@ -325,6 +373,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     const modifiedOwnState = {
       ...restState,
       currentPage: 0,
+      collapsedHierarchyPaths: [],
     };
     updateTableOwnState(setDataMask, modifiedOwnState);
   }, [serverPaginationData, setDataMask]);
@@ -335,6 +384,8 @@ export default function TableChart<D extends DataRecord = DataRecord>(
       const modifiedOwnState = {
         ...serverPaginationData,
         sortBy,
+        currentPage: 0,
+        collapsedHierarchyPaths: [],
       };
       updateTableOwnState(setDataMask, modifiedOwnState);
     },
@@ -365,7 +416,7 @@ export default function TableChart<D extends DataRecord = DataRecord>(
       )}
       <AgGridDataTable
         gridHeight={gridHeight}
-        data={data || []}
+        data={hierarchyView.records}
         colDefsFromProps={colDefs}
         includeSearch={!!includeSearch}
         allowRearrangeColumns={!!allowRearrangeColumns}
