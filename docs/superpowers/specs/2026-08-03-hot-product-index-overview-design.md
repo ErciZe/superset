@@ -14,7 +14,7 @@ FineBI 页面只作为布局和旧口径的参考，不作为权威数据定义�
 - 用一套可复算的数据契约统一 9 个 KPI、2 个漏斗和 13 个筛选器。
 - 以 SKU 每日销售速度定义爆品指数，避免仅统计有销量日期造成高估。
 - 使用月度销量与理论库存的统一准入规则，不额外判断产品在售状态。
-- 对 SKU 拉链、维度冲突、缺失库存、重复行和汇总差异快速失败。
+- 对 SKU 拉链多重/重叠映射、已解析身份缺失维度、缺失库存、汇率、重复行和汇总差异快速失败；零命中只审计。
 - 回填主源可用的全部历史，并支持按月重算。
 - 分离数据加工、Superset 构建、生产发布和浏览器验收四个阶段。
 
@@ -47,10 +47,13 @@ sku_month_sales_qty + theoretical_stock_qty > 10
 - 理论库存使用 `dws.dws_stock_analysis_monthly_sku.total_stock_qty` 的月度值。
 - 销售额与毛利润直接使用领星产品表现源中的美元口径数值。
 - 退货使用 `return_goods_count`，不得改用退款量 `return_count`。
-- 漏斗评级直接使用 `dim.dim_product.product_level`，不使用 `product_grade`，不归并 `C1/DD/F1/F2/F3/PS/-` 等原始值。
-- 空或空字符串 `product_level` 显示为“未评级”。
-- 源 SKU 为空时使用 `dim.dim_product_relation_zipper`，有效区间为闭区间 `[start_date, end_date]`；该口径于 2026-08-05 获得明确批准。
-- `8010A-BL28-FBM` 在 2026-05-29 映射到 `ZX-8010S-BL28`，从 2026-05-30 起映射到 `8010S-BL28`。
+- `product_level` 是 SKU 行级“SPU最终评级”筛选属性，只能来自 `dim.dim_product.product_level`；空或空字符串显示为“未评级”。同一 SPU 下不同 SKU 的 `product_level` 可以不同，不做 `MAX/MIN`、优先级或任取一行裁决，也不再作为发布阻塞。
+- 两个漏斗按 `spu_previous_month_sales_level` 分组。该字段按 `ym + spu` 固定计算：使用目标月前一个完整自然月的全渠道 SPU 销售额，逐行换算为人民币后汇总，再按本规格阈值评级；不受看板渠道、国家、SKU 等筛选器反向重算。
+- 人民币换算使用销售发生月的 USD 兑人民币月汇率：`ling_xing.lx_sc_finance_currency.code = 'USD'` 的正数 `my_rate`，金额基数为源美元字段。源行 `currency_code` 不参与评级换算；禁止连接本币汇率、缺失汇率默认 1、使用 `rate_org` 回退，或根据国家、站点、卖家币种推断汇率。
+- `spu_previous_month_sales_level` 分档为 `C=[0,50000)`、`B=[50000,100000)`、`A=[100000,300000)`、`S=[300000,1000000)`、`Ps=[1000000,+∞)`；前月完整但 SPU 无销售行、销售额为负数或未落入区间时为 `-`。
+- 源 SKU 为空时使用 `dim.dim_product_relation_zipper`，有效区间为左闭右闭 `[start_date, end_date]`；相邻关系必须满足 `next_start = end_date + 1 day`，该口径获得用户明确批准。
+- 精确拉链命中 0 条是允许的正常数据：保留源经营指标和 `org_id=1` 店铺维度，下游 `sku`、`spu`、商品维度、资格及 SPU 评级字段统一写 `NULL`。命中多于 1 条仍阻断，禁止任取一行。
+- `8010A-BL28-FBM` 在旧关系结束日 2026-05-29 映射到 `ZX-8010S-BL28`，从新关系开始日 2026-05-30 起映射到 `8010S-BL28`。
 - 时间字段命名规则：真实日期使用有业务含义的 `DATE` 字段；非日期字符串时间键只使用 `ymd`、`yw`、`ym`。同一日期不重复保存 `DATE` 与 `ymd`。
 
 ## Architecture
@@ -63,7 +66,9 @@ flowchart LR
   S["dim.dim_mp_sellers<br/>渠道与国家"]
   G["ods.product_grade<br/>月度 SKU 等级筛选"]
   I["dws.dws_stock_analysis_monthly_sku<br/>月度理论库存"]
+  X["ling_xing.lx_sc_finance_currency<br/>销售发生月 USD 兑人民币汇率"]
   E["月度资格中间结果<br/>ym + sku"]
+  R["SPU 上月销售额评级<br/>ym + spu"]
   M["ads.ads_pdm_lx_hot_product_index_sku_m<br/>月度准入与汇总"]
   F["ads.ads_pdm_lx_hot_product_index_sku_d<br/>完整 SKU 日事实"]
   UD["Superset 日度虚拟数据集<br/>流量 KPI + 销售额漏斗"]
@@ -78,7 +83,12 @@ flowchart LR
   P --> E
   Z --> E
   I --> E
+  P --> R
+  Z --> R
+  D --> R
+  X --> R
   E --> F
+  R --> F
   F --> M
   F --> UD
   M --> UM
@@ -92,16 +102,19 @@ Superset 不直接查询领星宽源表，也不在各图表中重复解析 JSON
 
 | Source                                           | Grain / Key                     | Fields Used                                                                                                                     | Contract                                                    |
 | ------------------------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `ling_xing.lx_web_product_performance_msku_list` | `ymd_id + sid + msku`           | `ymd_id`, `sid`, `msku`, `sku`, `volume`, `amount`, `gross_profit`, `return_goods_count`, `create_time`                         | P0 唯一经营事实源                                           |
+| `ling_xing.lx_web_product_performance_msku_list` | `ymd_id + sid + msku`           | `ymd_id`, `sid`, `msku`, `sku`, `volume`, `amount`, `gross_profit`, `return_goods_count`, `create_time`                         | P0 唯一经营事实源；仅处理 `org_id=1` 店铺；`amount` 为评级使用的美元金额 |
 | `dim.dim_product_relation_zipper`                | `msku + sid + sku + start_date` | `msku`, `sid`, `sku`, `start_date`, `end_date`                                                                                  | 只在源 SKU 为空时使用；按 `[start_date, end_date]` 唯一命中 |
 | `dim.dim_product`                                | `sku`                           | `spu`, `product_sku`, `level1`, `single_box_size`, `color`, `product_developer`, `model`, `product_level`, `category`, `org_id` | 组织限定 `org_id = 1`，品类限定 `category = '拉杆箱'`       |
 | `dim.dim_mp_sellers`                             | 业务上要求 `org_id + sid` 唯一  | `sid`, `sale_channel`, `country`, `org_id`                                                                                      | `channel = sale_channel`；`country = country`               |
 | `ods.product_grade`                              | `ym + SKU`                      | `ym`, `SKU`, `global_label`                                                                                                     | 原值作为“SKU等级”筛选，不做等级归并                         |
 | `dws.dws_stock_analysis_monthly_sku`             | `ym + sku`                      | `ym`, `sku`, `total_stock_qty`                                                                                                  | `theoretical_stock_qty = total_stock_qty`                   |
+| `ling_xing.lx_sc_finance_currency`                | `date + code`                   | `date`, `code`, `my_rate`                                                                                                       | `date=YYYY-MM`；评级只使用 `code='USD'` 的正数 `my_rate`，所需月份必须唯一 |
 
 已排除 `ling_xing.lx_bp_product_performance_msku`：生产核验显示其结构不能稳定提供 `ymd + sid + msku + sku` 唯一事实，不能支撑 P0 的 SKU 日口径。
 
 `ods.product_grade.ym` 的源类型为 `INT`、格式为 `YYYYMM`。加工时必须显式解析年月，再写为目标字符串 `ym = YYYY-MM`；不得依赖数据库隐式类型转换。
+
+原 FineBI 已现场核验：`SPU销售额漏斗` 与 `SPU数漏斗` 都使用“上月销售额评级”，前者的颜色、标签和纵轴均绑定该字段。“汇率换算为人民币”步骤把原始 USD“上月销售额” `69.99` 与 USD 月汇率 `7.2` 计算为人民币“销售额” `503.93`，即逐行执行 `ROUND(69.99 * 7.2, 4)` 后再按 SPU 月汇总。另一个 EUR 行同时显示本币汇率 `7.9`、美元汇率 `7.2`、USD 上月销售额 `47.24` 和人民币销售额 `340.09`；考虑显示精度后，只有 USD 汇率能近似复算，使用 EUR 汇率会得到约 `373.20`。因此评级固定选 USD 月汇率，不按源行本币选择汇率。P0 的销售额 KPI 和毛利润仍保留既定美元字段，不因评级计算改口径。
 
 ### Verified Production Preconditions
 
@@ -110,11 +123,15 @@ Superset 不直接查询领星宽源表，也不在各图表中重复解析 JSON
 - 主源已有数据区间为 2023-02-01 至 2023-05-31，以及 2024-07-01 至 2026-08-03；已核验年份内源 `sku` 均为空。
 - 月度库存覆盖 2022-07 至 2026-08。
 - `ods.product_grade` 覆盖 2023-01 至 2026-08。
-- SKU 关系拉链最早 `start_date` 为 2024-01-01。
+- SKU 关系拉链最早 `start_date` 为 2024-01-01，因此 2023 年源事实会形成未配对审计行。
 
-因此“回填主源全部历史”存在明确上游前置条件：`dim_product_relation_zipper` 必须先补齐 2023-02-01 至 2023-05-31 的历史关系。Airflow Agent 不得静默从 2024 年开始回填，也不得用当前 SKU 反填 2023 年；关系补齐前，全历史验收应失败并报告缺失月份及源键数量。
+“回填主源全部历史”不得静默从 2024 年开始，也不得用当前 SKU 反填 2023 年。2023-02-01 至 2023-05-31 的完整源事实必须保留，无法精确命中关系拉链的行按未配对合同写入，商品身份、资格和 SPU 评级字段统一为 `NULL`；该缺口只审计，不阻断。
 
 2023-06 至 2024-06 位于主源两个已知数据区间之间，不能因库存存在就解释为全量零销量。没有“该月经营源已完整同步”的可信完成信号时，只在 Airflow 运行审计中记录缺失月份，不向两张业务目标表发布库存驱动的零销量事实。
+
+截至 2026-08-06，`dws_stock_analysis_monthly_sku` 的真实 owner DAG 已存在并有生产成功记录，但尚未发布独立 `ready_yms/completed_at` Metadata；普通表 Asset 不能替代 readiness。ODS 产品表现 Asset 尚未发布版本化 coverage Metadata。2025-03/04/05 与 2026-06 的月度回填失败，2026-07 尚无已提交完整性证据，因此这些月份均不得标记为 complete，也不得通过源表有行或 `MAX(date)` 推断完成。
+
+实现采用版本化历史 coverage 基线加成功事件增量：历史 complete 必须绑定成功 run ID，audited gap 必须绑定明确审计证据；日常同步和月度回填仅在四个产品表现 DSP 任务全部成功后发布带 source run ID 的不可变事件。目标运行从事件流确定性重建 manifest。库存 owner 仅在全量写入提交且重复键/空库存检查通过后发布独立 Ready Asset。以上代码合同不代表生产已部署或月份已解除门禁。
 
 ### Filter Field Mapping
 
@@ -127,16 +144,16 @@ Superset 不直接查询领星宽源表，也不在各图表中重复解析 JSON
 | SPU         | `spu`                                       | `dim.dim_product.spu`                                          |
 | 国家        | `country`                                   | `dim.dim_mp_sellers.country`                                   |
 | 公司SKU     | `company_sku`                               | `dim.dim_product.product_sku`                                  |
-| SKU         | `sku`                                       | 源 SKU；为空时使用关系拉链                                     |
+| SKU         | `sku`                                       | 源 SKU；为空时尝试关系拉链；0 命中保留为 `NULL`                |
 | 尺寸        | `size`                                      | `dim.dim_product.single_box_size`                              |
 | 颜色        | `color`                                     | `dim.dim_product.color`                                        |
 | 年月        | 日表 `sales_date` / 月表 `month_start_date` | `filter_month_range` 生成整月时间范围；两表同时保留字符串 `ym` |
 | 开发经理    | `developer`                                 | `dim.dim_product.product_developer`                            |
 | 型号        | `model`                                     | `dim.dim_product.model`                                        |
 | SKU等级     | `sku_level`                                 | `ods.product_grade.global_label`                               |
-| SPU最终评级 | `product_level`                             | `dim.dim_product.product_level`                                |
+| 产品等级    | `product_level`                             | `dim.dim_product.product_level`                                |
 
-`company_sku`、`developer`、`sku_level` 等业务本身允许未维护的维度保留 `NULL`；不得从名称、MSKU 或其他字段猜测填充。`product_level` 是唯一例外，其空值按已确认展示规则写为“未评级”。
+`company_sku`、`developer`、`sku_level` 等业务本身允许未维护的维度保留 `NULL`；不得从名称、MSKU 或其他字段猜测填充。已匹配商品的空 `product_level` 按已确认展示规则写为“未评级”；未配对源行的 `product_level` 保持 `NULL`。筛选器中的 `product_level` 与漏斗分组字段 `spu_previous_month_sales_level` 是两个独立概念，不得互相覆盖。
 
 ## Daily Table Contract
 
@@ -160,8 +177,8 @@ Table: `ads.ads_pdm_lx_hot_product_index_sku_d`
 | `sid`                   | `VARCHAR(255)`  |       No | 店铺 SID，与主源类型一致                                 |
 | `msku`                  | `VARCHAR(255)`  |       No | 店铺 MSKU                                                |
 | `ym`                    | `VARCHAR(7)`    |       No | `YYYY-MM`                                                |
-| `sku`                   | `VARCHAR(255)`  |       No | 已唯一解析的本地 SKU                                     |
-| `spu`                   | `VARCHAR(255)`  |       No | `dim_product.spu`                                        |
+| `sku`                   | `VARCHAR(255)`  |      Yes | 唯一解析的本地 SKU；拉链 0 命中时为 `NULL`               |
+| `spu`                   | `VARCHAR(255)`  |      Yes | `dim_product.spu`；未配对时为 `NULL`                     |
 | `company_sku`           | `VARCHAR(255)`  |      Yes | `dim_product.product_sku`                                |
 | `channel`               | `VARCHAR(64)`   |       No | `dim_mp_sellers.sale_channel`                            |
 | `product_line`          | `VARCHAR(100)`  |      Yes | `dim_product.level1`                                     |
@@ -171,15 +188,17 @@ Table: `ads.ads_pdm_lx_hot_product_index_sku_d`
 | `developer`             | `VARCHAR(255)`  |      Yes | `dim_product.product_developer`                          |
 | `model`                 | `VARCHAR(255)`  |      Yes | `dim_product.model`                                      |
 | `sku_level`             | `VARCHAR(255)`  |      Yes | 当月 `product_grade.global_label` 原值                   |
-| `product_level`         | `VARCHAR(255)`  |       No | `dim_product.product_level` 原值；空值写“未评级”         |
+| `product_level`         | `VARCHAR(255)`  |      Yes | 已匹配商品空值写“未评级”；未配对时为 `NULL`             |
+| `spu_previous_month_sales_amount_cny` | `DECIMAL(20,4)` | Yes | 同一 `ym + spu` 的前月全渠道销售额人民币汇总；无前月 SPU 行或前月源不完整时为空 |
+| `spu_previous_month_sales_level` | `VARCHAR(16)` | Yes | 按前月人民币销售额分档；前月源不完整时为空，前月完整但无 SPU 行时为 `-` |
 | `sales_qty`             | `BIGINT`        |       No | 源 `volume`；补零行写 0                                  |
 | `sales_amount_usd`      | `DECIMAL(20,4)` |       No | 源 `amount`；补零行写 0                                  |
 | `gross_profit_usd`      | `DECIMAL(20,4)` |       No | 源 `gross_profit`；补零行写 0                            |
 | `return_goods_qty`      | `BIGINT`        |       No | 源 `return_goods_count`；补零行写 0                      |
-| `sku_month_sales_qty`   | `BIGINT`        |       No | `ym + sku` 全渠道月销量                                  |
-| `theoretical_stock_qty` | `DECIMAL(18,2)` |       No | `ym + sku` 月度 `total_stock_qty`                        |
-| `eligibility_value`     | `DECIMAL(20,2)` |       No | `sku_month_sales_qty + theoretical_stock_qty`            |
-| `is_eligible`           | `TINYINT`       |       No | `eligibility_value > 10` 为 1，否则为 0                  |
+| `sku_month_sales_qty`   | `BIGINT`        |      Yes | `ym + sku` 全渠道月销量；未配对时为 `NULL`               |
+| `theoretical_stock_qty` | `DECIMAL(18,2)` |      Yes | `ym + sku` 月度 `total_stock_qty`；未配对时为 `NULL`     |
+| `eligibility_value`     | `DECIMAL(20,2)` |      Yes | 已匹配时为销量加库存；未配对时为 `NULL`                  |
+| `is_eligible`           | `TINYINT`       |      Yes | 已匹配时按阈值计算；未配对时为 `NULL`                    |
 | `is_generated_zero`     | `TINYINT`       |       No | 日期补齐行标记为 1，源事实行标记为 0                     |
 | `data_through_date`     | `DATE`          |       No | 最近一次成功日常发布确认的全局业务水位；历史回填不得推进 |
 | `source_updated_at`     | `DATETIME`      |       No | 源事实行取其 `create_time`；补零行取可信上游完成信号时间 |
@@ -208,9 +227,9 @@ Table: `ads.ads_pdm_lx_hot_product_index_sku_m`
 | `ym`                    | `VARCHAR(7)`    |       No | `YYYY-MM`                                        |
 | `sid`                   | `VARCHAR(255)`  |       No | 店铺 SID                                         |
 | `msku`                  | `VARCHAR(255)`  |       No | 店铺 MSKU                                        |
-| `sku`                   | `VARCHAR(255)`  |       No | 已唯一解析的本地 SKU                             |
+| `sku`                   | `VARCHAR(255)`  |      Yes | 唯一解析的本地 SKU；未配对时为 `NULL`            |
 | `month_start_date`      | `DATE`          |       No | `ym` 对应自然月第一日，只用于 Superset 时间过滤  |
-| `spu`                   | `VARCHAR(255)`  |       No | `dim_product.spu`                                |
+| `spu`                   | `VARCHAR(255)`  |      Yes | `dim_product.spu`；未配对时为 `NULL`             |
 | `company_sku`           | `VARCHAR(255)`  |      Yes | `dim_product.product_sku`                        |
 | `channel`               | `VARCHAR(64)`   |       No | `dim_mp_sellers.sale_channel`                    |
 | `product_line`          | `VARCHAR(100)`  |      Yes | `dim_product.level1`                             |
@@ -220,15 +239,17 @@ Table: `ads.ads_pdm_lx_hot_product_index_sku_m`
 | `developer`             | `VARCHAR(255)`  |      Yes | `dim_product.product_developer`                  |
 | `model`                 | `VARCHAR(255)`  |      Yes | `dim_product.model`                              |
 | `sku_level`             | `VARCHAR(255)`  |      Yes | 当月 `product_grade.global_label` 原值           |
-| `product_level`         | `VARCHAR(255)`  |       No | `dim_product.product_level` 原值；空值写“未评级” |
+| `product_level`         | `VARCHAR(255)`  |      Yes | 已匹配商品空值写“未评级”；未配对时为 `NULL`     |
+| `spu_previous_month_sales_amount_cny` | `DECIMAL(20,4)` | Yes | 同一 `ym + spu` 的前月全渠道销售额人民币汇总；无前月 SPU 行或前月源不完整时为空 |
+| `spu_previous_month_sales_level` | `VARCHAR(16)` | Yes | 按前月人民币销售额分档；前月源不完整时为空，前月完整但无 SPU 行时为 `-` |
 | `sales_qty`             | `BIGINT`        |       No | `ym + sid + msku + sku` 月销量汇总               |
 | `sales_amount_usd`      | `DECIMAL(20,4)` |       No | 月销售额汇总                                     |
 | `gross_profit_usd`      | `DECIMAL(20,4)` |       No | 月毛利润汇总                                     |
 | `return_goods_qty`      | `BIGINT`        |       No | 月退货量汇总                                     |
-| `sku_month_sales_qty`   | `BIGINT`        |       No | `ym + sku` 全渠道月销量，用于准入                |
-| `theoretical_stock_qty` | `DECIMAL(18,2)` |       No | `ym + sku` 月度理论库存                          |
-| `eligibility_value`     | `DECIMAL(20,2)` |       No | `sku_month_sales_qty + theoretical_stock_qty`    |
-| `is_eligible`           | `TINYINT`       |       No | `eligibility_value > 10` 为 1，否则为 0          |
+| `sku_month_sales_qty`   | `BIGINT`        |      Yes | `ym + sku` 全渠道月销量；未配对时为 `NULL`       |
+| `theoretical_stock_qty` | `DECIMAL(18,2)` |      Yes | `ym + sku` 月度理论库存；未配对时为 `NULL`       |
+| `eligibility_value`     | `DECIMAL(20,2)` |      Yes | 已匹配时为销量加库存；未配对时为 `NULL`          |
+| `is_eligible`           | `TINYINT`       |      Yes | 已匹配时按阈值计算；未配对时为 `NULL`            |
 | `data_through_date`     | `DATE`          |       No | 与日表一致的全局已批准业务水位；历史回填不得推进 |
 | `source_updated_at`     | `DATETIME`      |       No | 该月日表行的最大 `source_updated_at`             |
 | `etl_batch_id`          | `VARCHAR(64)`   |       No | 加工批次标识                                     |
@@ -251,7 +272,7 @@ sales_date >= start_date
 AND sales_date <= end_date
 ```
 
-4. 命中 0 条或多于 1 条时，本批次失败并输出 `sales_date, sid, msku` 冲突清单。
+4. 命中 0 条时保留源行并将下游商品身份、资格和评级字段写 `NULL`；命中多于 1 条时本批次失败并输出 `sales_date, sid, msku` 冲突清单。
 5. 不允许按 `is_current`、SKU 前缀、字典序或最新创建时间猜测映射。
 
 源 SKU 非空时，它只对该源事实日期的 SKU 身份具有权威性。若该身份 `is_eligible = 1` 且需要补齐其他日期，关系拉链必须存在与源 SKU 一致的有效区间；不一致或缺失时分区失败。关系拉链可以证明身份区间，但不得覆盖源记录当天的非空 SKU。
@@ -267,9 +288,9 @@ AND sales_date <= end_date
 
 | sales_date |  sid | msku             | Expected SKU    | sales_qty | sales_amount_usd |
 | ---------- | ---: | ---------------- | --------------- | --------: | ---------------: |
-| 2026-06-01 | 2613 | `8010A-BL28-FBM` | `8010S-BL28` |        11 |          2276.89 |
-| 2026-06-02 | 2613 | `8010A-BL28-FBM` | `8010S-BL28` |         3 |           749.97 |
-| 2026-06-03 | 2613 | `8010A-BL28-FBM` | `8010S-BL28` |         5 |          1249.95 |
+| 2026-06-01 | 2613 | `8010A-BL28-FBM` | `8010S-BL28`    |        11 |          2276.89 |
+| 2026-06-02 | 2613 | `8010A-BL28-FBM` | `8010S-BL28`    |         3 |           749.97 |
+| 2026-06-03 | 2613 | `8010A-BL28-FBM` | `8010S-BL28`    |         5 |          1249.95 |
 
 ### 2. Enrich Dimensions
 
@@ -278,11 +299,42 @@ AND sales_date <= end_date
 - 使用 `sid` 唯一连接 `dim.dim_mp_sellers` 的 `org_id = 1` 行。缺少 SID、同一 SID 多行、渠道或国家为空时，本批次失败。
 - `sku_level` 按目标 `ym + sku` 连接 `ods.product_grade`；没有记录时保留 `NULL`，不影响资格与指标。
 - `product_level` 直接取 `dim_product.product_level`；只有数据库空值和空字符串转成“未评级”，其他值原样保留。
-- 同一 `ym + spu` 的有效 SKU 若产生多个展示用 `product_level`，包括“未评级”与非空等级并存，本月分区失败并输出 SPU、SKU、等级清单。不得用 `MAX()` 或任取一条。
+- 同一 SPU 下多个 SKU 的 `product_level` 可以不同。任务应输出 `ym + spu + sku + product_level` 审计清单，但该现象不阻塞发布；月表只要求同一 `ym + sid + msku + sku` 内该 SKU 行级属性一致。
 
 `dim.dim_product` 与 `dim.dim_mp_sellers` 都不是历史拉链维度，因此商品属性、渠道和国家表达“加工时可见的当前维度”，不伪装为历史时点值。任一维度发生变化时，任务必须重算所有包含受影响 SKU 或 SID 的历史分区；无法定位受影响月份时执行全历史重算，避免不同月份保留不同版本的当前维度。
 
-### 3. Compute Monthly Eligibility
+### 3. Compute SPU Previous-Month Sales Level
+
+该评级独立于 SKU 月资格和看板筛选器，固定在 `target_ym + spu` 粒度计算：
+
+1. 每个目标 `target_ym` 声明其前一个自然月作为 lookback。只有该前月在版本化 manifest 中为 `complete` 时才读取、解析并参与评级；`audited_gap` 或 `untrusted` 前月的任何原始行都不进入 source resolution，评级直接为 NULL。lookback 永不作为目标分区发布。
+2. 使用与主事实相同的 `sid + msku + [start_date,end_date]` SKU 解析、`org_id = 1 AND category = '拉杆箱'` 商品域过滤。评级汇总包含该 SPU 前月全部渠道和全部 SKU 源事实，不使用 `is_eligible` 过滤。
+3. 按销售发生月连接唯一的 USD 兑人民币汇率：
+
+```sql
+DATE_FORMAT(source.sales_date, '%Y-%m') = fx.date
+AND fx.code = 'USD'
+```
+
+4. 先逐行计算 `ROUND(source.sales_amount_usd * CAST(fx.my_rate AS DECIMAL(20,10)), 4)`，再按 `source_ym + spu` 求和。把 `source_ym` 右移一个自然月得到目标 `ym`，禁止用日期天数近似月份偏移。
+5. 依据下列半开区间生成 `spu_previous_month_sales_level`：
+
+```sql
+CASE
+  WHEN previous_month_sales_amount_cny >=       0 AND previous_month_sales_amount_cny <   50000 THEN 'C'
+  WHEN previous_month_sales_amount_cny >=   50000 AND previous_month_sales_amount_cny <  100000 THEN 'B'
+  WHEN previous_month_sales_amount_cny >=  100000 AND previous_month_sales_amount_cny <  300000 THEN 'A'
+  WHEN previous_month_sales_amount_cny >=  300000 AND previous_month_sales_amount_cny < 1000000 THEN 'S'
+  WHEN previous_month_sales_amount_cny >= 1000000 THEN 'Ps'
+  ELSE '-'
+END
+```
+
+前月源已确认完整但某个当前 SPU 没有前月源行时，`spu_previous_month_sales_amount_cny=NULL`、`spu_previous_month_sales_level='-'`。前月源缺少可信完成信号或属于审计断档时，两字段都写 `NULL`，对应目标月的两个漏斗不计算并显示评级源不完整；不得把上游缺口伪装成 `-`。同一目标 `ym + spu` 的金额和评级必须完全一致地写到该 SPU 的全部日/月目标行。
+
+独立的汇率输入门禁必须先于任何评级汇总执行，并在发布前复验：对 `previous_month_source_complete_flag = 1` 的每个所需 lookback 源月，恰好存在一条 `code = 'USD'` 的汇率记录，且 `my_rate` 可转为正数。前月不完整时不要求汇率，直接保留 NULL 评级。源行 `currency_code`、`dim_mp_sellers.currency`、国家和站点均不得参与评级汇率选择；任何必需汇率缺失、重复或非法值都失败，禁止默认汇率或 `rate_org` 回退。
+
+### 4. Compute Monthly Eligibility
 
 资格必须在看板筛选之前、按全渠道 `ym + sku` 固定计算：
 
@@ -313,13 +365,13 @@ DAG 必须保留以下相互独立的发布前结果，作为后续集合验收�
 
 - `candidate_sku_staging(ym, sku)`：由域内已解析主源 SKU 与域内库存 SKU 的并集生成。
 - `eligibility_staging(ym, sku, sku_month_sales_qty, theoretical_stock_qty, eligibility_value, is_eligible)`：由候选集合、域内源销量和库存直接生成，每个候选 SKU 恰好一行。
-- `eligible_identity_staging(ym, sid, msku, sku, identity_start_date, identity_end_date)`：由 `is_eligible = 1` 的 SKU 与闭区间拉链生成；写入 staging 时把原始 `end_date` 加一天，转换成内部左闭右开范围供日历展开。
+- `eligible_identity_staging(ym, sid, msku, sku, identity_start_date, identity_end_date)`：由 `is_eligible = 1` 的 SKU 与原始左闭右闭拉链生成；裁剪后的 `identity_end_date` 仍为包含的右边界，不得额外加一天。
 
 这三份 staging 是独立预期集合。若日表和月表同时漏掉一个库存驱动的有效 SKU，验收仍必须通过它们发现缺失，不能形成“目标表验证目标表”的循环证明。
 
 目标表保留主源中资格为 0 和 1 的已映射事实，便于完整对账；Superset 数据集固定过滤 `is_eligible = 1`。只有资格为 1 的身份需要生成缺失日期补零行，资格为 0 的身份不扩展无业务事实的日期。
 
-### 4. Build the Complete SKU-Day Spine
+### 5. Build the Complete SKU-Day Spine
 
 - 日常运行把 Airflow 逻辑日期对应的北京时间前一自然日作为候选水位。只有上游完成、两张表同批校验与发布均成功后，候选值才成为新的全局已批准 `data_through_date`。
 - 手工历史回填和历史分区重算必须读取并沿用运行开始前的已批准水位，不能用自身逻辑日期推进水位。发布失败或补偿回滚时水位保持不变。
@@ -328,14 +380,15 @@ DAG 必须保留以下相互独立的发布前结果，作为后续集合验收�
 - 对当月有效 SKU 的每个 `sid + msku + sku` 身份生成完整日期行。
 - 源事实缺少该日记录时生成指标全 0、`is_generated_zero = 1` 的行。
 - 不能仅保留销量大于 0 的日期，也不能用源行数直接作为爆品指数分母。
+- 以 `ym + spu` 连接已计算的 `spu_previous_month_sales_amount_cny` 与 `spu_previous_month_sales_level`；同一 SPU 的所有 SKU、SID、MSKU 和补零日必须取得相同值。
 - 同一 SKU 即使属于多个 SID/MSKU，在爆品指数分母中同一天仍只计一次。
 - 任务必须依赖主源“昨日分区已完成”的上游完成信号；仅检查 `MAX(ymd_id)` 不足以证明昨日数据完整。
 - 上游未完成或源数据未覆盖候选水位时不发布新分区，保留上一批正确分区并让页面展示旧的已批准 `data_through_date`。
 
-### 5. Aggregate the Monthly Table
+### 6. Aggregate the Monthly Table
 
 - 仅从日表按 `ym + sid + msku + sku` 聚合可加指标。
-- 维度字段在该粒度必须唯一；不唯一时失败。
+- SKU 行级维度、资格、SPU 上月销售额及评级在该粒度必须唯一；不唯一时失败。不同 SKU 的 `product_level` 不要求在 SPU 粒度唯一。
 - 日表月汇总与月表指标必须完全一致，不允许独立读取另一事实源补数。
 
 ## Superset Serving Datasets
@@ -395,12 +448,12 @@ P0 在两张物理表之上建立两个虚拟数据集。`filter_month_range` �
 
 ## Funnel Definitions
 
-两个漏斗使用和 KPI 相同的资格范围、全局筛选器和时间语义。
+两个漏斗使用和 KPI 相同的资格范围、全局筛选器和时间语义，但分组评级是加工时固定的 `spu_previous_month_sales_level`；筛选器只缩小展示行，不重算评级。
 
 ### SPU销售额漏斗
 
 - 数据源：日表。
-- 分组：`product_level`。
+- 分组：`spu_previous_month_sales_level`。
 - 值：`SUM(sales_amount_usd)`。
 - 占比：该等级销售额除以筛选后全部等级销售额。
 - 各等级金额合计必须等于“销售额”KPI。
@@ -409,19 +462,19 @@ P0 在两张物理表之上建立两个虚拟数据集。`filter_month_range` �
 ### SPU数漏斗
 
 - 数据源：月表筛选结束月份。
-- 分组：`product_level`。
+- 分组：`spu_previous_month_sales_level`。
 - 值：`COUNT(DISTINCT spu)`。
 - 占比：该等级 SPU 数除以筛选后全部有效 SPU 数。
 - 各等级数量合计必须等于“在售spu数”KPI。
 - 标签格式：`1 | 4.76%`。
 
-漏斗展示全部非零原始等级，不只实现截图中可见的 S/A/B/C。固定顺序为：
+漏斗展示全部非零上月销售额等级。固定顺序为：
 
 ```text
-S, A, B, C, C1, DD, F1, F2, F3, PS, -, 未评级
+Ps, S, A, B, C, -
 ```
 
-不在已知顺序中的新原始值排在 `-` 之后、“未评级”之前，并按字典序稳定展示；不得把新值自动归入已有等级。
+`spu_previous_month_sales_level` 只能取 `S/A/B/C/Ps/-` 或表示前月源不完整的 `NULL`；出现其他值时数据验收失败。任一参与范围存在 `NULL` 时两个漏斗均不计算，不把 `NULL` 合并到 `-`。
 
 ## Dashboard Experience
 
@@ -457,13 +510,14 @@ S, A, B, C, C1, DD, F1, F2, F3, PS, -, 未评级
 
 - 创建本规格定义的两张 `ads_pdm` 表，不改变表名、粒度和字段语义。
 - 首次回填主源可用的全部历史月份。
-- 启动全历史回填前，验证拉链覆盖已延伸到主源最小业务日期；未覆盖时直接失败。
+- 启动全历史回填前，审计拉链覆盖与主源最小业务日期；未覆盖的零命中行按未配对合同保留，多重命中仍直接失败。
 - 日常任务在领星日源和月度库存依赖完成后运行。
-- 每日重算北京时间当前月；月初同时重算上一个完整月，以吸收迟到和修订数据。
+- 领星源完成事件必须携带版本化的 `complete_source_yms`、`audited_source_gap_yms` 和 `coverage_manifest_id`；目标月没有权威完成记录时失败，前月没有完整记录时评级写 NULL。不得用源表 `MAX(ymd_id)` 猜测完成状态。
+- 每日只重算“北京时间逻辑日减一天”所得候选水位所在月份；因此每月 1 日只重算刚结束的上月，不创建尚无候选业务日的新月分区。
 - 提供 `start_ym`、`end_ym`（`YYYY-MM` 字符串）参数化回填入口；产品维度、拉链或库存修正后必须重算受影响月份。
-- 日表与月表同批 staging 全部通过质量校验后才能开始发布。发布前保留两张表的旧分区；若平台不支持跨表事务，发布期间必须使用共同批次发布锁或等价读隔离，任一分区替换失败时补偿回滚已替换分区。解锁后两个数据集只能暴露同一 `etl_batch_id`，不能只保证单表原子替换。
+- 日表与月表同批 staging 全部通过质量校验后才能开始发布。发布前保留两张表的旧分区；平台不支持跨表事务时仍须串行化写入，任一分区替换失败时补偿回滚已替换分区。业务明确接受逐表替换窗口内一个数据集为新批次、另一个仍为旧批次的短暂读异常，因此不再要求共同批次发布锁或等价读隔离；发布成功后两个数据集必须收敛到同一 `etl_batch_id`。
 - 全局业务水位是发布协议的一部分：日常运行只在两表同批发布成功后推进；历史回填读取并复制已批准水位。首次全历史发布必须包含最新可发布月份，并在全部分区成功后一次性建立初始水位。
-- 任务输出源最大日期、目标行数、补零行数、缺失映射、重复映射、缺失维度、缺失库存、SPU 等级冲突和日月对账结果。
+- 任务输出源最大日期、目标行数、补零行数、允许的未配对审计、重复映射、缺失维度、缺失库存、汇率门禁、SPU 上月销售额评级复算、SKU 行级 `product_level` 多值审计和日月对账结果。
 - 不在 DAG 中实现猜测式 fallback，不使用 `ROW_NUMBER() = 1` 隐藏多重映射。
 - 本规格不规定通知渠道；任务失败告警沿用 ETL 项目已有运维机制。
 
@@ -472,24 +526,25 @@ S, A, B, C, C1, DD, F1, F2, F3, PS, -, 未评级
 以下任一条件成立时，对应分区不得发布：
 
 1. 主源 `ymd_id + sid + msku` 重复。
-2. 源 SKU 为空且拉链命中数不为 1。
-3. 拉链声明键重复、同一 `sid + msku` 区间重叠，或使用右闭区间导致切换日命中旧 SKU。
-4. 解析后 SKU 缺少或重复 `dim_product`、SPU 为空，或组织归属无法唯一判断；合法的非拉杆箱商品应排除而不是报错。
+2. 源 SKU 为空且拉链命中数多于 1；0 命中不阻断。
+3. 拉链声明键重复、同一 `sid + msku` 区间重叠，或相邻关系不满足 `next_start = end_date + 1 day`。
+4. 已解析 SKU 缺少或重复 `dim_product`、SPU 为空，或组织归属无法唯一判断；合法的非拉杆箱商品应排除而不是报错。0 命中源行不进入该门禁。
 5. SID 缺少唯一渠道或国家，或卖家维度声明键重复。
 6. 候选 `ym + sku` 缺少或重复理论库存记录，或 SKU 等级声明键重复。
 7. `candidate_sku_staging`、`eligibility_staging` 或 `eligible_identity_staging` 的声明键重复、集合缺失或集合多出。
-8. 同一 `ym + spu` 的有效行出现多个展示 `product_level`。
-9. 需要统计的源指标出现 `NULL`。
-10. 完整 SKU 日集合与独立有效身份及日历生成的预期集合不一致。
-11. 源事实与日表非补零行的 SKU、指标或派生维度不一致。
-12. 日表聚合与月表不一致，或任一目标唯一键重复。
-13. `ym`、`month_start_date`、分区范围、`data_through_date` 或 `etl_batch_id` 的批内不变量不成立。
-14. 日常运行的上游昨日分区未给出可信完成信号，或历史运行的源数据未完整覆盖其 `coverage_end_date`。
-15. 拉链最小生效日期晚于需要回填且源 SKU 为空的业务日期。
-16. 两张目标表无法以同一 `etl_batch_id` 完成发布或补偿回滚。
-17. 历史回填推进了全局 `data_through_date`，或日常发布失败后候选水位仍被暴露。
+8. 任一 `previous_month_source_complete_flag = 1` 的所需 lookback 源月缺少 `code = 'USD'` 的汇率、同月 USD 汇率不唯一，或 `my_rate` 非正数、无法解析。
+9. 同一 `ym + spu` 的 `spu_previous_month_sales_amount_cny` 或 `spu_previous_month_sales_level` 不唯一，或不能按独立源复算。
+10. 需要统计的源指标出现 `NULL`。
+11. 完整 SKU 日集合与独立有效身份及日历生成的预期集合不一致。
+12. 源事实与日表非补零行的 SKU、指标或派生维度不一致。
+13. 日表聚合与月表不一致，或任一目标唯一键重复。
+14. `ym`、`month_start_date`、分区范围、`data_through_date` 或 `etl_batch_id` 的批内不变量不成立。
+15. 日常运行的目标月未给出可信完成信号、历史目标月未完整覆盖其 `coverage_end_date`，或标记为 `audited_gap` 的目标/前月实际出现源行。`untrusted` 前月原始行仅诊断并忽略，不据此把评级伪装为完整。
+16. 0 命中源行未完整保留源指标，或其 `sku`、`spu`、商品维度、资格、SPU 评级字段没有统一保持 `NULL`。
+17. 两张目标表无法以同一 `etl_batch_id` 完成发布或补偿回滚。
+18. 历史回填推进了全局 `data_through_date`，或日常发布失败后候选水位仍被暴露。
 
-已验证的生产维度中存在同一 SPU 多个 `product_level` 的情况，例如 `8010S` 同时有 `-` 与 `PS`。这不是目标表可以自行修正的问题；Airflow 实现必须输出冲突明细并阻止分区发布，直至上游维度被修正或业务另行批准新的 SPU 评级规则。
+已验证生产维度中存在同一 SPU 多个 `product_level` 的情况。它是 SKU 行级筛选属性的真实多值，不是 SPU 上月销售额评级冲突；Airflow 记录审计明细但不得据此阻止分区发布，也不得用 `MAX/MIN` 把多个 SKU 属性伪造成一个 SPU 属性。
 
 ## Acceptance Queries
 
@@ -497,11 +552,12 @@ Airflow Agent 应将以下校验实现为可执行 SQL 或等价自动化断言�
 
 所有唯一性、连接放大和源对账检查必须运行在发布前 staging 结果上。Doris UNIQUE KEY 可能在写入后合并重复键，因此只查询已发布表不能证明输入唯一。以下名称表示 DAG 的实际 staging 表或等价 CTE：
 
-- `sku_resolved_source_staging`：限制在本批日期且已唯一解析 SKU、尚未做产品域过滤的源事实。
+- `sku_resolved_source_staging`：覆盖本批 complete 目标月及 `previous_month_source_complete_flag=1` 的 lookback 月，已唯一解析 SKU、尚未做产品域过滤的源事实；audited-gap/untrusted 前月原始行不进入 staging，lookback 行不得进入目标分区。
 - `domain_source_identity_staging`：从前者完成产品唯一性校验和拉杆箱域过滤、但尚未连接卖家维度的源身份。
 - `resolved_source_staging`：从域内身份完成卖家及其他维度派生后、准备进入目标表的源事实。
-- `batch_month_staging(ym, coverage_end_date, source_complete_flag)`：本批月份、应覆盖截止日及可信上游完成状态；已结束月份截止月末，当前月截止本批候选水位。只有完成状态为 1 的月份可把无源事实解释为销量 0。
+- `batch_month_staging(ym, coverage_end_date, source_coverage_status, source_complete_flag, previous_month_ym, previous_month_source_coverage_status, previous_month_source_complete_flag)`：本批月份、应覆盖截止日及目标/前月 coverage status。目标状态只允许 `complete/audited_gap`；前月允许 `complete/audited_gap/untrusted`。只有对应 complete flag 为 1 时，才可分别把目标月无源事实解释为销量 0、把前月无 SPU 行解释为评级 `-`。
 - `candidate_sku_staging`、`eligibility_staging`、`eligible_identity_staging`：Processing Rules 定义的三个独立预期集合。
+- `spu_prev_sales_level_staging(ym, spu, spu_previous_month_sales_amount_cny, spu_previous_month_sales_level)`：独立复算的目标月 SPU 上月销售额及评级，每个当前目标 SPU 恰好一行；物理名使用 `ads.ads_pdm_lx_hot_product_index_spu_prev_sales_level_staging`，保持在 Doris 2.1 的 64-byte 表名限制内。
 - `batch_relation_staging`：按本批候选 SKU、源身份和月份交集裁剪、但尚未去重的原始拉链行。
 - `daily_staging`、`monthly_staging`：准备发布的两张目标表分区。
 
@@ -531,6 +587,11 @@ HAVING COUNT(*) <> 1;
 SELECT ym, sid, msku, sku, identity_start_date, COUNT(*) AS row_count
 FROM eligible_identity_staging
 GROUP BY ym, sid, msku, sku, identity_start_date
+HAVING COUNT(*) <> 1;
+
+SELECT ym, spu, COUNT(*) AS row_count
+FROM spu_prev_sales_level_staging
+GROUP BY ym, spu
 HAVING COUNT(*) <> 1;
 ```
 
@@ -607,11 +668,11 @@ JOIN batch_relation_staging b
  AND b.start_date <= a.end_date;
 ```
 
-必须返回零行；重叠条件按包含 `end_date` 当天的闭区间计算。
+必须返回零行；重叠条件按包含 `end_date` 的左闭右闭区间计算，相邻关系必须满足 `b.start_date = a.end_date + 1 day`。
 
 ### Source Resolution
 
-对源 SKU 为空的事实，连接拉链后必须唯一命中：
+对源 SKU 为空的事实，连接拉链后必须至多唯一命中：
 
 ```sql
 SELECT s.ymd_id, s.sid, s.msku, COUNT(z.sku) AS mapping_count
@@ -621,14 +682,22 @@ LEFT JOIN dim.dim_product_relation_zipper z
  AND s.msku = z.msku
  AND s.ymd_id >= z.start_date
  AND s.ymd_id <= z.end_date
-WHERE s.ymd_id >= :batch_start_date
+WHERE s.ymd_id >= :rating_source_start_date
   AND s.ymd_id <= :batch_end_date
   AND (s.sku IS NULL OR TRIM(s.sku) = '')
+  AND EXISTS (
+    SELECT 1
+    FROM batch_month_staging b
+    WHERE (DATE_FORMAT(s.ymd_id, '%Y-%m') = b.ym
+           AND b.source_complete_flag = 1)
+       OR (DATE_FORMAT(s.ymd_id, '%Y-%m') = b.previous_month_ym
+           AND b.previous_month_source_complete_flag = 1)
+  )
 GROUP BY s.ymd_id, s.sid, s.msku
-HAVING COUNT(z.sku) <> 1;
+HAVING COUNT(z.sku) > 1;
 ```
 
-每个可发布源月份都必须返回零行。同一 staging 批次还必须在产品域过滤前，以唯一键集合和行数双重比较批次源与 `sku_resolved_source_staging`，两者必须相等。之后可明确排除合法的非拉杆箱行；其他被移除的行都必须记录失败原因。
+每个可发布源月份的多重命中必须返回零行。同一 staging 批次还必须在产品域过滤前，以唯一键集合和行数双重比较“complete 目标月 + complete lookback 月”的所需源集合与 `sku_resolved_source_staging`，两者必须相等。0 命中行进入独立有界审计并继续流入下游，源指标与店铺维度保留，其商品身份、资格和评级字段为 `NULL`。audited-gap 月若出现原始行则阻断；untrusted 前月的原始行只做有界非阻塞诊断并被忽略。之后可明确排除合法的非拉杆箱行；其他被移除的行都必须记录失败原因。
 
 ### Eligibility Formula
 
@@ -638,8 +707,10 @@ HAVING COUNT(z.sku) <> 1;
 
 ```sql
 WITH expected_candidate AS (
-  SELECT DISTINCT ym, sku
-  FROM resolved_source_staging
+  SELECT DISTINCT source.ym, source.sku
+  FROM resolved_source_staging source
+  JOIN batch_month_staging batch
+    ON batch.ym = source.ym AND batch.source_complete_flag = 1
   UNION
   SELECT DISTINCT s.ym, s.sku
   FROM dws.dws_stock_analysis_monthly_sku s
@@ -664,9 +735,12 @@ LEFT ANTI JOIN expected_candidate e
 
 ```sql
 WITH source_sales AS (
-  SELECT ym, sku, SUM(sales_qty) AS calculated_sales_qty
-  FROM resolved_source_staging
-  GROUP BY ym, sku
+  SELECT source.ym, source.sku,
+         SUM(source.sales_qty) AS calculated_sales_qty
+  FROM resolved_source_staging source
+  JOIN batch_month_staging batch
+    ON batch.ym = source.ym AND batch.source_complete_flag = 1
+  GROUP BY source.ym, source.sku
 ), expected AS (
   SELECT c.ym,
          c.sku,
@@ -714,7 +788,7 @@ WITH expected AS (
     ON i.ym = b.ym AND b.source_complete_flag = 1
   JOIN calendar_staging c
     ON c.sales_date >= i.identity_start_date
-   AND c.sales_date < i.identity_end_date
+   AND c.sales_date <= i.identity_end_date
    AND DATE_FORMAT(c.sales_date, '%Y-%m') = i.ym
    AND c.sales_date <= b.coverage_end_date
 ), actual AS (
@@ -746,11 +820,17 @@ LEFT ANTI JOIN expected e
 域过滤后的 `resolved_source_staging` 与 `daily_staging` 的非补零行必须按源键双向对账，并比较解析后的 SKU：
 
 ```sql
+WITH target_source AS (
+  SELECT source.*
+  FROM resolved_source_staging source
+  JOIN batch_month_staging batch
+    ON batch.ym = source.ym AND batch.source_complete_flag = 1
+)
 SELECT COALESCE(s.sales_date, d.sales_date) AS sales_date,
        COALESCE(s.sid, d.sid) AS sid,
        COALESCE(s.msku, d.msku) AS msku,
        COALESCE(s.sku, d.sku) AS sku
-FROM resolved_source_staging s
+FROM target_source s
 FULL OUTER JOIN (
   SELECT sales_date, sid, msku, sku,
          sales_qty, sales_amount_usd, gross_profit_usd, return_goods_qty
@@ -769,7 +849,7 @@ WHERE s.sales_date IS NULL
    OR s.return_goods_qty <> d.return_goods_qty;
 ```
 
-必须返回零行。若不支持 `FULL OUTER JOIN`，使用两个 anti-join 加 inner metric comparison。同一发布门禁还必须把日表和月表的 `spu`、`company_sku`、`channel`、`product_line`、`country`、`size`、`color`、`developer`、`model`、`sku_level`、`product_level` 逐行连接回本批维度快照，以 null-safe equality 校验；任何派生维度漂移均失败。
+必须返回零行。源侧必须先限制为 complete 目标月份，不能把评级 lookback 行当作缺失日目标。若不支持 `FULL OUTER JOIN`，使用两个 anti-join 加 inner metric comparison。同一发布门禁还必须把日表和月表的 `spu`、`company_sku`、`channel`、`product_line`、`country`、`size`、`color`、`developer`、`model`、`sku_level`、`product_level` 逐行连接回本批维度快照，以 null-safe equality 校验；任何派生维度漂移均失败。
 
 ### Daily and Monthly Reconciliation
 
@@ -779,7 +859,11 @@ WITH daily AS (
          SUM(sales_qty) AS sales_qty,
          SUM(sales_amount_usd) AS sales_amount_usd,
          SUM(gross_profit_usd) AS gross_profit_usd,
-         SUM(return_goods_qty) AS return_goods_qty
+         SUM(return_goods_qty) AS return_goods_qty,
+         MAX(spu_previous_month_sales_amount_cny)
+           AS spu_previous_month_sales_amount_cny,
+         MAX(spu_previous_month_sales_level)
+           AS spu_previous_month_sales_level
   FROM daily_staging
   GROUP BY ym, sid, msku, sku
 )
@@ -794,6 +878,10 @@ WHERE m.sales_qty <> d.sales_qty
    OR ABS(m.sales_amount_usd - d.sales_amount_usd) > 0.0001
    OR ABS(m.gross_profit_usd - d.gross_profit_usd) > 0.0001
    OR m.return_goods_qty <> d.return_goods_qty
+   OR NOT (m.spu_previous_month_sales_amount_cny
+           <=> d.spu_previous_month_sales_amount_cny)
+   OR NOT (m.spu_previous_month_sales_level
+           <=> d.spu_previous_month_sales_level)
    OR m.ym IS NULL
    OR d.ym IS NULL;
 ```
@@ -833,6 +921,25 @@ HAVING data_date_count <> 1 OR batch_count <> 1;
 
 ### Funnel Reconciliation
 
+先独立从 lookback 源事实、产品维度和汇率表复算 `ym + spu`，与评级 staging 及日/月目标逐项比较。必须覆盖以下边界：
+
+```text
+NULL amount + complete previous month -> level '-'
+NULL amount + incomplete previous month -> level NULL
+-0.0001 -> '-'
+0 -> C
+49999.9999 -> C
+50000 -> B
+99999.9999 -> B
+100000 -> A
+299999.9999 -> A
+300000 -> S
+999999.9999 -> S
+1000000 -> Ps
+```
+
+同一 `ym + spu` 的所有日/月行必须只有一个 null-safe 相等的金额和评级。日表聚合到月表时，这两个字段只能投影，不能求和；任一差异都阻止发布。
+
 对任一已验收筛选样例：
 
 ```text
@@ -846,8 +953,8 @@ SUM(non-null funnel percentages) = 100%, within rounding tolerance 0.01%
 自动化样例必须证明：
 
 ```text
-2026-06-06 + 2613 + 8010A-BL28-FBM -> ZX-8010S-BL28
-2026-06-07 + 2613 + 8010A-BL28-FBM -> 8010S-BL28
+2026-05-29 + 2613 + 8010A-BL28-FBM -> ZX-8010S-BL28
+2026-05-30 + 2613 + 8010A-BL28-FBM -> 8010S-BL28
 ```
 
 ### Historical Backfill Reconciliation
@@ -889,7 +996,7 @@ P0 is complete only when all of the following are true:
 
 - Both target tables exist with the approved keys, fields and partitions.
 - Full-history backfill and daily schedule pass all quality gates.
-- No unresolved eligible-SPU `product_level` conflict remains.
+- `product_level` 保持 SKU 行级来源，`spu_previous_month_sales_level` 可按前月人民币销售额独立复算且同一 `ym + spu` 唯一。
 - 9 KPI and 2 funnels reconcile under representative filters.
 - All 13 filters and reset behavior pass browser acceptance.
 - The explanation document URL is reachable.

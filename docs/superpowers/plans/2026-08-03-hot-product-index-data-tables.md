@@ -4,7 +4,7 @@
 
 **Goal:** 在 `/Users/zewe/code-workspace/etl` 中实现并生产验收爆品指数的两张 Doris 数据表、按月重算链路、质量门禁和 Airflow 编排，在数据验收前不进入 Superset 实施。
 
-**Architecture:** 领星日事实先按严格业务键解析 SKU，再独立生成月候选、资格与有效身份 staging；日表保留全部域内源事实，只为资格为 1 的有效身份生成缺失日期零行，月表只从日 staging 聚合。每月先写不可见候选并完成 17 类门禁，再按“备份旧分区、逐表原子替换、失败补偿回滚”的协议发布；跨表读隔离在 BI 启用前另设强制门禁。
+**Architecture:** 领星日事实先按严格业务键解析 SKU，并为每个目标月额外读取一个完整前月 lookback；前月美元事实按销售发生月的 USD 兑人民币月汇率换算人民币，在 `ym + spu` 粒度生成独立的上月销售额评级。目标月再独立生成 SKU 月候选、资格与有效身份 staging；日表保留全部域内源事实，只为资格为 1 的有效身份生成缺失日期零行并下发同一 SPU 月评级，月表只从日 staging 聚合。每月先写不可见候选并完成门禁，再按“备份旧分区、逐表原子替换、失败补偿回滚”的协议发布；业务已接受双表逐次替换窗口内的短暂读异常，不再要求跨表读原子性。
 
 **Tech Stack:** Apache Doris 2.1.9、Airflow 3 Asset SDK、Python 3、SQL、pytest、`etl.common.sql_file_loader.load_sql`、`etl.common.db_operator`。
 
@@ -14,8 +14,12 @@
 - 权威设计为 `/Volumes/extend/ecode-workspace/superset-source/docs/superpowers/specs/2026-08-03-hot-product-index-overview-design.md`；FineBI 只作视觉参考。
 - 永久业务表只能是 `ads.ads_pdm_lx_hot_product_index_sku_d` 与 `ads.ads_pdm_lx_hot_product_index_sku_m`；运行 staging 不是 BI 数据源。
 - 事实源只能是 `ling_xing.lx_web_product_performance_msku_list`；不得改回 `ling_xing.lx_bp_product_performance_msku`。
-- 源 SKU 为空时，批准契约是 `sid + msku + [start_date,end_date]` 唯一命中 `dim.dim_product_relation_zipper`；不得加 `msku` 单键 fallback、`ROW_NUMBER() = 1` 或任取一行。该闭区间口径由用户于 2026-08-05 明确批准。
+- 源 SKU 为空时，批准契约是 `sid + msku + [start_date,end_date]` 唯一命中 `dim.dim_product_relation_zipper`；右边界包含，相邻关系必须从前一关系结束日的下一天开始。不得加 `msku` 单键 fallback、`ROW_NUMBER() = 1` 或任取一行。该闭区间口径由用户明确批准。
 - `product_level` 只能来自 `dim.dim_product.product_level`；数据库空值或空字符串写“未评级”，其他值原样保留。
+- `product_level` 是 SKU 行级筛选属性；同一 SPU 下多个 SKU 值不同是允许状态，只记录审计，不做 `MAX/MIN`、优先级或任取一行，也不阻止发布。
+- 两个漏斗使用独立字段 `spu_previous_month_sales_level`。它按目标 `ym + spu` 取前一个完整自然月的全渠道 SPU 销售额，逐行换算人民币后汇总并分档；同一 `ym + spu` 的所有日/月行必须取得相同金额和评级。
+- 评级人民币换算固定使用销售发生月的 USD 兑人民币月汇率：`ling_xing.lx_sc_finance_currency.code = 'USD'` 且 `DATE_FORMAT(sales_date,'%Y-%m') = date`，金额基数为源美元字段 `sales_amount_usd`。每个所需源月必须恰有一条正数 `my_rate`；禁止按源行 `currency_code` 连接本币汇率、默认汇率 1、`rate_org` 回退、国家/站点猜币种或卖家币种替代。
+- 评级分档固定为 `C=[0,50000)`、`B=[50000,100000)`、`A=[100000,300000)`、`S=[300000,1000000)`、`Ps=[1000000,+∞)`，其余完整前月结果为 `-`。前月源不完整时评级为 `NULL`，不得伪装成 `-`。
 - `sku_level` 只能来自 `ods.product_grade.global_label`；`ods.product_grade.ym` 从 `YYYYMM INT` 显式转为目标 `ym = YYYY-MM`。
 - 资格公式固定为 `sku_month_sales_qty + theoretical_stock_qty > 10`，不判断商品状态；理论库存只能来自 `dws.dws_stock_analysis_monthly_sku.total_stock_qty`。
 - `theoretical_stock_qty` 会下发到同一 SKU 的多个 SID/MSKU 行，只能用于资格判断，不得在目标表上跨身份求和。
@@ -43,12 +47,14 @@
 
 - Doris is `2.1.9-rc02-3390475e02`; the two targets do not exist.
 - The source has zero duplicate groups at `ymd_id,sid,msku`.
-- Exact `sid+msku+[start_date,end_date]` resolution maps 380,460 of 1,030,852 source keys and leaves 650,392 unresolved in the 2026 window; no exact multi-match was observed.
-- The repaired zipper has zero null SIDs. Its 134 transitions all satisfy `next_start = end_date + 1 day`, confirming closed-interval storage; the 2026-05-29/30 boundary for `8010A-BL28-FBM` resolves to `ZX-8010S-BL28` and `8010S-BL28` respectively.
-- The luggage product dimension has `16` SPUs with conflicting normalized `product_level` values in the 2026 candidate scope.
-- The zipper covers the 2026 historical boundary, but 650,392 source keys have no exact `sid+msku` relation, and no trusted completion Asset exists in this ETL repository for `dws.dws_stock_analysis_monthly_sku`.
+- Exact `sid+msku+[start_date,end_date]` resolution has no exact multi-match in the current snapshot. Zero-match rows are approved normal data: retain source metrics and `org_id=1` seller dimensions, while downstream `sku`, `spu`, product dimensions, eligibility and SPU rating remain `NULL`.
+- The approved boundary fixture is authoritative: `8010A-BL28-FBM` resolves to `ZX-8010S-BL28` on the inclusive old-row end date 2026-05-29 and `8010S-BL28` on the new-row start date 2026-05-30. Production publication requires all adjacent transitions to satisfy `next_start = end_date + 1 day`.
+- The luggage product dimension has `16` SPUs with multiple normalized SKU-row `product_level` values in the 2026 candidate scope; this is a non-blocking audit fact, not an SPU rating conflict.
+- The zipper covers the historical boundary. Unmatched rows are non-blocking audit data. The real owner DAG `dws_stock_analysis_monthly_sku` exists and has successful production runs, but it does not yet publish the independent `ready_yms/completed_at` readiness Metadata. The ODS product-performance Asset likewise has no versioned coverage Metadata or committed ledger resolver.
+- Product-performance monthly backfills for 2025-03/04/05 and 2026-06 failed, and the current source contains no 2025-03/04/05 rows. 2026-07 has no committed completeness proof. These months remain untrusted and must not enter `complete_source_yms`; row presence or `MAX(date)` cannot promote them.
+- FineBI live inspection confirms both `SPU销售额漏斗` and `SPU数漏斗` group by `上月销售额评级`, not `product_level`; the sales funnel uses the same field for color, label and vertical axis. The transform multiplies the USD amount by the monthly USD rate: `69.99 × 7.2 = 503.9280`, displayed as CNY `503.93`. A EUR row separately shows local-currency rate `7.9`, USD rate `7.2`, USD amount `47.24` and CNY display `340.09`; only the USD rate approximately reconciles after display rounding, so the source row's local currency rate is not the rating input. Production read-only checks found 3,248 FX rows and 3,248 distinct `date + code` keys, zero duplicate keys, zero blank `my_rate`, and coverage from 2022-01 through 2026-08; the table remains physically DUPLICATE KEY, so each batch still requires a USD-month uniqueness, validity and coverage gate.
 
-These are implementation gates, not reasons to weaken the approved contract. Re-run Task 0 against live data because counts can change after upstream repair.
+The exact-mapping, stock-readiness and FX items are implementation gates, not reasons to weaken the approved contract; the SKU-row product-level count is audit evidence only. Re-run Task 0 against live data because counts can change after upstream repair.
 
 ## Table Inventory
 
@@ -65,14 +71,15 @@ These are implementation gates, not reasons to weaken the approved contract. Re-
 
 | Physical name                                                     | Declared key                          | Independent responsibility                                |
 | ----------------------------------------------------------------- | ------------------------------------- | --------------------------------------------------------- |
-| `ads.ads_pdm_lx_hot_product_index_batch_month_staging`            | `ym`                                  | `coverage_end_date`、`source_complete_flag`、可信完成时间 |
+| `ads.ads_pdm_lx_hot_product_index_batch_month_staging`            | `ym`                                  | 目标/前月 coverage status、完成标记、截止日与可信完成时间 |
 | `ads.ads_pdm_lx_hot_product_index_sku_resolved_source_staging`    | `sales_date,sid,msku`                 | 只完成源 SKU/拉链 SKU 唯一解析，尚未做商品域过滤          |
 | `ads.ads_pdm_lx_hot_product_index_domain_source_identity_staging` | `sales_date,sid,msku`                 | 完成商品唯一性与拉杆箱域过滤，尚未连接卖家                |
 | `ads.ads_pdm_lx_hot_product_index_resolved_source_staging`        | `sales_date,sid,msku`                 | 完成卖家、商品、等级维度后的权威源事实                    |
-| `ads.ads_pdm_lx_hot_product_index_batch_relation_staging`         | `sid,msku,sku,start_date`             | 本批候选相关的原始左闭右开拉链区间，不去重                |
+| `ads.ads_pdm_lx_hot_product_index_batch_relation_staging`         | `sid,msku,sku,start_date`             | 本批候选相关的原始左闭右闭拉链区间，不去重                |
 | `ads.ads_pdm_lx_hot_product_index_candidate_sku_staging`          | `ym,sku`                              | 域内源 SKU 与完整月份域内库存 SKU 的独立并集              |
 | `ads.ads_pdm_lx_hot_product_index_eligibility_staging`            | `ym,sku`                              | 全渠道月销量、库存、资格值、资格标记                      |
-| `ads.ads_pdm_lx_hot_product_index_eligible_identity_staging`      | `ym,sid,msku,sku,identity_start_date` | 资格为 1 的左闭右开有效身份集合                           |
+| `ads.ads_pdm_lx_hot_product_index_eligible_identity_staging`      | `ym,sid,msku,sku,identity_start_date` | 资格为 1 的左闭右闭有效身份集合                           |
+| `ads.ads_pdm_lx_hot_product_index_spu_prev_sales_level_staging`   | `ym,spu`                              | 前月全渠道销售额人民币汇总、前月完成状态与 SPU 评级       |
 | `ads.ads_pdm_lx_hot_product_index_calendar_staging`               | `sales_date`                          | 本批连续自然日集合                                        |
 | `ads.ads_pdm_lx_hot_product_index_daily_staging`                  | `sales_date,sid,msku`                 | 发布前日目标完整候选                                      |
 | `ads.ads_pdm_lx_hot_product_index_monthly_staging`                | `ym,sid,msku,sku`                     | 仅从日候选聚合的月目标完整候选                            |
@@ -92,7 +99,7 @@ These are implementation gates, not reasons to weaken the approved contract. Re-
 - Create directory `include/sql/validation/hot_product_index/`: 生产前置与最终验收只读 SQL。
 - Create `dags/ADS/pdm/__init__.py` and `dags/ADS/pdm/hot_product_index.py`: Airflow 编排。
 - Modify `assets/ads.py`: 增加两张 ADS Asset，且只增加一次。
-- Create five focused test files named `test/test_hot_product_index_*.py`.
+- Create six focused test files named `test/test_hot_product_index_*.py`.
 - Create `docs/validation/hot_product_index_ddl_bootstrap.md`: DDL 执行与回滚说明。
 - Create `docs/reports/2026-08-03-hot-product-index-data-acceptance.md`: 生产证据模板与最终结果。
 
@@ -103,15 +110,19 @@ These are implementation gates, not reasons to weaken the approved contract. Re-
 **Files:**
 
 - Create: `include/sql/validation/hot_product_index/preflight.sql`
+- Create: `include/sql/validation/hot_product_index/spu_product_level_audit.sql`
+- Create: `scripts/hot_product_index_preflight.py`
 - Create: `test/test_hot_product_index_preflight_contract.py`
 - Create: `docs/reports/2026-08-03-hot-product-index-data-acceptance.md`
 
 **Interfaces:**
 
-- Consumes: the source, closed-interval zipper, product, seller, grade, and stock contracts from the approved design.
+- Consumes: the source, closed-interval zipper, product, seller, grade, stock, and monthly CNY FX contracts from the approved design.
 - Produces: a read-only result set with columns `check_name VARCHAR`, `error_count BIGINT`; a human evidence report that records Git SHA, Doris version, source coverage and blocker counts.
 
-**Decision Gate 0:** The 2026-08-05 zipper repair removed all null SIDs and the approved 2026-05-29/30 closed-interval boundary now resolves exactly once. Publication remains blocked because 650,392 source keys still lack an exact `sid + msku` relation and 16 candidate SPUs retain conflicting normalized `product_level` values. Changing to `msku + interval`, order-derived identity, `ROW_NUMBER() = 1`, or any arbitrary-row rule remains an unapproved fallback.
+**Decision Gate 0:** The approved 2026-05-29/30 closed boundary must resolve exactly once, every adjacent relation must satisfy `next_start = end_date + 1 day`, and exact multi-match count must be zero. Zero-match rows are explicitly allowed and represented downstream with NULL product identity/eligibility/rating fields; they are audited but do not block. The observed 16 SPUs with multiple SKU-row `product_level` values are also non-blocking. Changing to `msku + interval`, order-derived identity, `ROW_NUMBER() = 1`, or any arbitrary-row rule remains an unapproved fallback.
+
+**Decision Gate 0A:** Before any production DDL/DML, rerun the full-history FX preflight and require every source month used by a complete lookback to match exactly one `ling_xing.lx_sc_finance_currency` row with `code = 'USD'` and a parseable positive `my_rate`. Source-row `currency_code` is not part of this rating contract. The 2026-08-05 read-only snapshot is green but does not replace the release-time gate.
 
 - [ ] **Step 1: Write the failing preflight contract test**
 
@@ -119,21 +130,59 @@ These are implementation gates, not reasons to weaken the approved contract. Re-
 from pathlib import Path
 
 SQL = Path("include/sql/validation/hot_product_index/preflight.sql")
+AUDIT_SQL = Path("include/sql/validation/hot_product_index/spu_product_level_audit.sql")
 
 
 def test_preflight_is_read_only_and_names_every_blocker() -> None:
     sql = SQL.read_text(encoding="utf-8")
     assert sql.lstrip().upper().startswith("WITH")
     assert "source_duplicate_key" in sql
-    assert "missing_exact_zipper_mapping" in sql
+    assert "missing_exact_zipper_mapping" not in sql
+    assert "ambiguous_exact_zipper_mapping" in sql
     assert "zipper_sid_missing" in sql
     assert "zipper_closed_interval_invalid" in sql
     assert "zipper_closed_boundary_fixture" in sql
-    assert "zipper_history_not_covered" in sql
-    assert "product_level_conflict" in sql
+    assert "zipper_history_not_covered" not in sql
+    assert "usd_fx_duplicate_key" in sql
+    assert "usd_fx_rate_invalid" in sql
+    assert "usd_fx_month_missing" in sql
+    assert "audited_gap_has_source_rows" in sql
+    assert "{required_processing_months_sql}" in sql
+    assert "{audited_gap_months_sql}" in sql
+    assert "{preflight_end_date_exclusive}" in sql
+    assert "product_level_conflict" not in sql
     assert "stock_duplicate_key" in sql
     assert "ROW_NUMBER" not in sql.upper()
     assert all(token not in sql.upper() for token in ("INSERT ", "UPDATE ", "DELETE ", "ALTER ", "DROP "))
+
+
+def test_spu_product_level_audit_is_read_only_and_non_blocking() -> None:
+    sql = AUDIT_SQL.read_text(encoding="utf-8")
+    assert sql.lstrip().upper().startswith("WITH")
+    assert "HAVING COUNT(DISTINCT" in sql.upper()
+    assert "error_count" not in sql
+```
+
+Create the separate non-blocking audit as a diagnostic row set, not as a `check_name,error_count` input:
+
+```sql
+WITH normalized AS (
+  SELECT spu,
+         sku,
+         IF(product_level IS NULL OR TRIM(product_level) = '',
+            '未评级', TRIM(product_level)) AS product_level
+  FROM dim.dim_product
+  WHERE org_id = 1 AND category = '拉杆箱'
+), multi_value_spu AS (
+  SELECT spu
+  FROM normalized
+  GROUP BY spu
+  HAVING COUNT(DISTINCT product_level) > 1
+)
+SELECT normalized.spu, normalized.sku, normalized.product_level
+FROM normalized
+JOIN multi_value_spu ON multi_value_spu.spu = normalized.spu
+ORDER BY normalized.spu, normalized.sku
 ```
 
 - [ ] **Step 2: Run the test and confirm RED**
@@ -147,17 +196,28 @@ Expected: FAIL because `preflight.sql` does not exist.
 Use CTEs and a final `UNION ALL`; the exact-join section must remain:
 
 ```sql
-WITH batch_source AS (
+WITH required_processing_months AS (
+  {required_processing_months_sql}
+), audited_gap_months AS (
+  {audited_gap_months_sql}
+), batch_source AS (
   SELECT ymd_id AS sales_date, sid, msku, sku
-  FROM ling_xing.lx_web_product_performance_msku_list
-  WHERE ymd_id >= DATE('2026-01-01')
-    AND ymd_id < DATE('2027-01-01')
+  FROM ling_xing.lx_web_product_performance_msku_list source
+  JOIN required_processing_months required
+    ON required.ym = DATE_FORMAT(source.ymd_id, '%Y-%m')
+  WHERE source.ymd_id < DATE('{preflight_end_date_exclusive}')
+), audited_gap_source_rows AS (
+  SELECT source.ymd_id, source.sid, source.msku
+  FROM ling_xing.lx_web_product_performance_msku_list source
+  JOIN audited_gap_months gap
+    ON gap.ym = DATE_FORMAT(source.ymd_id, '%Y-%m')
+  WHERE source.ymd_id < DATE('{preflight_end_date_exclusive}')
 ), source_duplicates AS (
   SELECT sales_date, sid, msku
   FROM batch_source
   GROUP BY sales_date, sid, msku
   HAVING COUNT(*) <> 1
-), missing_mapping AS (
+), ambiguous_mapping AS (
   SELECT s.sales_date, s.sid, s.msku
   FROM batch_source s
   LEFT JOIN dim.dim_product_relation_zipper z
@@ -167,13 +227,7 @@ WITH batch_source AS (
    AND s.sales_date <= z.end_date
   WHERE (s.sku IS NULL OR TRIM(s.sku) = '')
   GROUP BY s.sales_date, s.sid, s.msku
-  HAVING COUNT(z.sku) <> 1
-), level_conflict AS (
-  SELECT spu
-  FROM dim.dim_product
-  WHERE org_id = 1 AND category = '拉杆箱'
-  GROUP BY spu
-  HAVING COUNT(DISTINCT IF(product_level IS NULL OR TRIM(product_level) = '', '未评级', TRIM(product_level))) > 1
+  HAVING COUNT(z.sku) > 1
 ), zipper_transitions AS (
   SELECT sid, msku, start_date, end_date,
          LEAD(start_date) OVER (
@@ -202,10 +256,44 @@ WITH batch_source AS (
   GROUP BY f.sales_date, f.sid, f.msku, f.expected_sku
   HAVING COUNT(z.sku) <> 1
      OR COALESCE(MAX(z.sku), '') <> f.expected_sku
+), required_source_months AS (
+  SELECT ym
+  FROM required_processing_months
+  WHERE requires_fx = 1
+), required_usd_fx AS (
+  SELECT fx.date,
+         fx.my_rate,
+         CAST(fx.my_rate AS DECIMAL(20,10)) AS parsed_rate
+  FROM ling_xing.lx_sc_finance_currency fx
+  JOIN required_source_months required
+    ON required.ym = fx.date
+  WHERE fx.code = 'USD'
+), usd_fx_duplicates AS (
+  SELECT date
+  FROM required_usd_fx
+  GROUP BY date
+  HAVING COUNT(*) <> 1
+), invalid_usd_fx_rates AS (
+  SELECT date
+  FROM required_usd_fx
+  WHERE my_rate IS NULL
+     OR TRIM(my_rate) = ''
+     OR parsed_rate IS NULL
+     OR parsed_rate <= 0
+), missing_usd_fx_months AS (
+  SELECT required.ym
+  FROM required_source_months required
+  LEFT JOIN ling_xing.lx_sc_finance_currency fx
+    ON fx.date = required.ym
+   AND fx.code = 'USD'
+  GROUP BY required.ym
+  HAVING COUNT(fx.date) <> 1
 )
 SELECT 'source_duplicate_key' AS check_name, COUNT(*) AS error_count FROM source_duplicates
 UNION ALL
-SELECT 'missing_exact_zipper_mapping', COUNT(*) FROM missing_mapping
+SELECT 'ambiguous_exact_zipper_mapping', COUNT(*) FROM ambiguous_mapping
+UNION ALL
+SELECT 'audited_gap_has_source_rows', COUNT(*) FROM audited_gap_source_rows
 UNION ALL
 SELECT 'zipper_sid_missing', COUNT(*)
 FROM dim.dim_product_relation_zipper
@@ -215,10 +303,11 @@ SELECT 'zipper_closed_interval_invalid', COUNT(*) FROM invalid_closed_intervals
 UNION ALL
 SELECT 'zipper_closed_boundary_fixture', COUNT(*) FROM invalid_boundary_fixture
 UNION ALL
-SELECT 'zipper_history_not_covered', IF(MIN(start_date) > DATE('2026-01-01'), 1, 0)
-FROM dim.dim_product_relation_zipper
+SELECT 'usd_fx_duplicate_key', COUNT(*) FROM usd_fx_duplicates
 UNION ALL
-SELECT 'product_level_conflict', COUNT(*) FROM level_conflict
+SELECT 'usd_fx_rate_invalid', COUNT(*) FROM invalid_usd_fx_rates
+UNION ALL
+SELECT 'usd_fx_month_missing', COUNT(*) FROM missing_usd_fx_months
 UNION ALL
 SELECT 'stock_duplicate_key', COUNT(*)
 FROM (
@@ -227,27 +316,37 @@ FROM (
 ) bad
 ```
 
-- [ ] **Step 4: Run static tests and the production read-only query**
+- [ ] **Step 4: Add the bounded read-only runner and execute the production query**
+
+Create `scripts/hot_product_index_preflight.py` with required `--start-ym`, `--end-ym`, canonical ISO `--coverage-end-date`, `--coverage-manifest-id`, and `--coverage-events-file` arguments. The events file is a JSON export of successful source Asset Metadata; the resolver folds it over the committed versioned baseline and verifies the deterministic manifest ID. Resolve the exact versioned manifest, validate the requested targets against it, then generate a literal-only `required_processing_months(ym,requires_fx)` CTE: include target months with trusted completion using `requires_fx=0`, and include each target's previous month only when that month is in `complete_source_yms`, using `requires_fx=1`. Generate `audited_gap_months(ym)` for every target or previous month explicitly marked as a gap. Audited-gap months are checked but do not feed source mapping; an untrusted target month fails, while an untrusted previous month is intentionally absent and later yields NULL rating fields. If one month is both a target and a complete lookback, collapse it to one row with `requires_fx=1`.
+
+The runner derives `{preflight_end_date_exclusive}` as the smaller of the requested end-month exclusive boundary and trusted coverage end plus one day, rejects future coverage dates and unresolved template keys, and safely renders `{required_processing_months_sql}` plus `{audited_gap_months_sql}` only after canonical `YYYY-MM` validation. Empty sets render as typed zero-row SELECTs, never invalid `IN ()`. It executes through the existing Doris read-only query helper, prints every `check_name,error_count`, and exits nonzero for any nonzero count. It has no apply mode. For bootstrap, `start_ym` is the source minimum month and `end_ym` is the candidate watermark month, so the gate covers full release history without including incomplete/untrusted lookbacks in FX or mapping checks while still failing if an audited gap contains raw rows.
 
 Run:
 
 ```bash
 cd /Users/zewe/code-workspace/etl
 python3 -m pytest -q test/test_hot_product_index_preflight_contract.py
+python3 scripts/hot_product_index_preflight.py \
+  --start-ym 2026-01 --end-ym 2026-08 \
+  --coverage-end-date 2026-08-05 \
+  --coverage-manifest-id <trusted-manifest-id> \
+  --coverage-events-file <successful-asset-events.json>
 python3 .agents/skills/datawarehouse-schema-explorer/scripts/query_doris.py \
-  --no-filter "$(< include/sql/validation/hot_product_index/preflight.sql)"
+  --no-filter "$(< include/sql/validation/hot_product_index/spu_product_level_audit.sql)"
 ```
 
-Expected static result: PASS. Current production result has zero source duplicates, null SIDs, invalid closed intervals, history-boundary failures, and stock duplicates; exact identity coverage and product-level conflicts remain nonzero. Record actual values rather than changing the query to force green.
+Expected unit-test result: PASS. Zero-match rows do not make preflight nonzero; exact multi-match, interval, boundary, FX, stock and readiness errors remain blocking. The query contains no fixed start-year predicate; its runner makes the scope explicit and manifest-backed. Bootstrap must start at the true source minimum month. Run unmatched-source and SKU-row `product_level` audits separately and never pass their counts to `assert_zero_counts`.
 
 - [ ] **Step 5: Record all hard prerequisites in the evidence report**
 
 The report must include these facts and exit criteria:
 
 ```text
-Mapping: exact sid+msku+[start,end]; exit only when the 2026-05-29/30 fixture returns one row each.
-History: every non-empty source month in the approved 2026 scope has exact zipper coverage.
-Product level: eligible ym+spu conflict count is zero; the observed 16 conflicts are upstream-owned.
+Mapping: exact sid+msku+[start,end]; exit only when the 2026-05-29/30 fixture returns one row each and every adjacent interval satisfies next_start=end_date+1 day.
+History: every complete source month from the source minimum date through the release cutoff is included; zero-match identities remain auditable null-SKU rows.
+Product level: preserve the SKU-row value from dim_product; record multi-value SPUs as non-blocking audit evidence.
+SPU sales level: previous-month CNY sales is independently reproducible; FX checks are all zero and every ym+spu has one null-safe level.
 Readiness: ODS daily source and monthly stock expose trusted completion metadata; MAX(date) is not accepted.
 Git: execution SHA is recorded and the implementation worktree is clean before changes.
 Publication: disposable Doris probe proves new partition, replacement and compensating rollback.
@@ -257,6 +356,8 @@ Publication: disposable Doris probe proves new partition, replacement and compen
 
 ```bash
 git add include/sql/validation/hot_product_index/preflight.sql \
+  include/sql/validation/hot_product_index/spu_product_level_audit.sql \
+  scripts/hot_product_index_preflight.py \
   test/test_hot_product_index_preflight_contract.py \
   docs/reports/2026-08-03-hot-product-index-data-acceptance.md
 git commit -m "test(ads): codify hot product index preflight gates"
@@ -283,7 +384,11 @@ from unittest.mock import Mock
 
 import pytest
 
-from etl.scripts.hot_product_index_doris_capability_probe import publish_pair
+from etl.scripts.hot_product_index_doris_capability_probe import (
+    MONTHLY_DDL,
+    PROBE_NAMES,
+    publish_pair,
+)
 
 
 def test_monthly_failure_restores_daily_and_keeps_backups() -> None:
@@ -301,6 +406,11 @@ def test_monthly_failure_restores_daily_and_keeps_backups() -> None:
 def test_probe_rejects_non_agent_temp_database() -> None:
     with pytest.raises(ValueError, match="agent_temp"):
         publish_pair(Mock(), "ads.daily", "ads.monthly", "ads.restore")
+
+
+def test_probe_exercises_nullable_monthly_unique_key() -> None:
+    assert "sku VARCHAR(255) NULL" in MONTHLY_DDL
+    assert "nullable_monthly_unique_key" in PROBE_NAMES
 ```
 
 - [ ] **Step 2: Run the test and confirm RED**
@@ -329,7 +439,7 @@ CREATE TABLE agent_temp.ads_pdm_lx_hot_product_index_probe_m (
   ym VARCHAR(7) NOT NULL,
   sid VARCHAR(255) NOT NULL,
   msku VARCHAR(255) NOT NULL,
-  sku VARCHAR(255) NOT NULL,
+  sku VARCHAR(255) NULL,
   value BIGINT NOT NULL
 )
 UNIQUE KEY(ym, sid, msku, sku)
@@ -338,7 +448,7 @@ DISTRIBUTED BY HASH(sid, msku) BUCKETS 1
 PROPERTIES("replication_num"="1", "enable_unique_key_merge_on_write"="true");
 ```
 
-For each table the script must load an old May row, copy it into a separate `CREATE TABLE LIKE` rollback table, and prepare staging with a changed May row plus a new June row. On one retained Doris connection execute:
+For each table the script must load an old May row, copy it into a separate `CREATE TABLE LIKE` rollback table, and prepare staging with a changed May row plus a new June row. The monthly May and June fixtures use `sku = NULL` so the probe proves the target's nullable unique-key path through replacement and restore. On one retained Doris connection execute:
 
 ```sql
 SET enable_auto_create_when_overwrite = true;
@@ -416,6 +526,8 @@ def test_daily_storage_contract() -> None:
     assert "AUTO PARTITION BY RANGE (date_trunc(sales_date, 'month')) ()" in sql
     assert "DISTRIBUTED BY HASH(sid, msku) BUCKETS 16" in sql
     assert sql.index("sales_date DATE") < sql.index("ym VARCHAR(7)")
+    assert "spu_previous_month_sales_amount_cny DECIMAL(20,4) NULL" in sql
+    assert "spu_previous_month_sales_level VARCHAR(16) NULL" in sql
 
 
 def test_monthly_storage_contract() -> None:
@@ -424,6 +536,8 @@ def test_monthly_storage_contract() -> None:
     assert "AUTO PARTITION BY LIST (ym) ()" in sql
     assert "DISTRIBUTED BY HASH(sid, msku) BUCKETS 16" in sql
     assert "RANGE" not in sql.upper()
+    assert "spu_previous_month_sales_amount_cny DECIMAL(20,4) NULL" in sql
+    assert "spu_previous_month_sales_level VARCHAR(16) NULL" in sql
 ```
 
 - [ ] **Step 2: Run the test and confirm RED**
@@ -440,8 +554,8 @@ CREATE TABLE IF NOT EXISTS ads.ads_pdm_lx_hot_product_index_sku_d (
   sid VARCHAR(255) NOT NULL,
   msku VARCHAR(255) NOT NULL,
   ym VARCHAR(7) NOT NULL,
-  sku VARCHAR(255) NOT NULL,
-  spu VARCHAR(255) NOT NULL,
+  sku VARCHAR(255) NULL,
+  spu VARCHAR(255) NULL,
   company_sku VARCHAR(255) NULL,
   channel VARCHAR(64) NOT NULL,
   product_line VARCHAR(100) NULL,
@@ -451,15 +565,17 @@ CREATE TABLE IF NOT EXISTS ads.ads_pdm_lx_hot_product_index_sku_d (
   developer VARCHAR(255) NULL,
   model VARCHAR(255) NULL,
   sku_level VARCHAR(255) NULL,
-  product_level VARCHAR(255) NOT NULL,
+  product_level VARCHAR(255) NULL,
+  spu_previous_month_sales_amount_cny DECIMAL(20,4) NULL,
+  spu_previous_month_sales_level VARCHAR(16) NULL,
   sales_qty BIGINT NOT NULL,
   sales_amount_usd DECIMAL(20,4) NOT NULL,
   gross_profit_usd DECIMAL(20,4) NOT NULL,
   return_goods_qty BIGINT NOT NULL,
-  sku_month_sales_qty BIGINT NOT NULL,
-  theoretical_stock_qty DECIMAL(18,2) NOT NULL,
-  eligibility_value DECIMAL(20,2) NOT NULL,
-  is_eligible TINYINT NOT NULL,
+  sku_month_sales_qty BIGINT NULL,
+  theoretical_stock_qty DECIMAL(18,2) NULL,
+  eligibility_value DECIMAL(20,2) NULL,
+  is_eligible TINYINT NULL,
   is_generated_zero TINYINT NOT NULL,
   data_through_date DATE NOT NULL,
   source_updated_at DATETIME NOT NULL,
@@ -483,9 +599,9 @@ CREATE TABLE IF NOT EXISTS ads.ads_pdm_lx_hot_product_index_sku_m (
   ym VARCHAR(7) NOT NULL,
   sid VARCHAR(255) NOT NULL,
   msku VARCHAR(255) NOT NULL,
-  sku VARCHAR(255) NOT NULL,
+  sku VARCHAR(255) NULL,
   month_start_date DATE NOT NULL,
-  spu VARCHAR(255) NOT NULL,
+  spu VARCHAR(255) NULL,
   company_sku VARCHAR(255) NULL,
   channel VARCHAR(64) NOT NULL,
   product_line VARCHAR(100) NULL,
@@ -495,15 +611,17 @@ CREATE TABLE IF NOT EXISTS ads.ads_pdm_lx_hot_product_index_sku_m (
   developer VARCHAR(255) NULL,
   model VARCHAR(255) NULL,
   sku_level VARCHAR(255) NULL,
-  product_level VARCHAR(255) NOT NULL,
+  product_level VARCHAR(255) NULL,
+  spu_previous_month_sales_amount_cny DECIMAL(20,4) NULL,
+  spu_previous_month_sales_level VARCHAR(16) NULL,
   sales_qty BIGINT NOT NULL,
   sales_amount_usd DECIMAL(20,4) NOT NULL,
   gross_profit_usd DECIMAL(20,4) NOT NULL,
   return_goods_qty BIGINT NOT NULL,
-  sku_month_sales_qty BIGINT NOT NULL,
-  theoretical_stock_qty DECIMAL(18,2) NOT NULL,
-  eligibility_value DECIMAL(20,2) NOT NULL,
-  is_eligible TINYINT NOT NULL,
+  sku_month_sales_qty BIGINT NULL,
+  theoretical_stock_qty DECIMAL(18,2) NULL,
+  eligibility_value DECIMAL(20,2) NULL,
+  is_eligible TINYINT NULL,
   data_through_date DATE NOT NULL,
   source_updated_at DATETIME NOT NULL,
   etl_batch_id VARCHAR(64) NOT NULL,
@@ -578,7 +696,7 @@ git commit -m "feat(ads): define hot product index tables"
 - [ ] **Step 1: Write strict context tests first**
 
 ```python
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -600,8 +718,9 @@ def test_backfill_copies_approved_watermark() -> None:
         source_coverage_end_date=date(2026, 7, 31),
         source_completed_at=datetime(2026, 8, 1, 2, 0),
         stock_ready_yms=frozenset({"2026-07"}),
-        complete_source_yms=frozenset({"2026-07"}),
+        complete_source_yms=frozenset({"2026-06", "2026-07"}),
         audited_source_gap_yms=frozenset(),
+        coverage_manifest_id="lx-product-performance-2026-08-01T02:00:00+08:00",
     )
     context = build_run_context(
         mode="backfill",
@@ -614,6 +733,11 @@ def test_backfill_copies_approved_watermark() -> None:
     )
     assert context.data_through_date == date(2026, 8, 1)
     assert context.may_advance_watermark is False
+    assert context.months[0].previous_month_ym == "2026-06"
+    assert context.months[0].source_coverage_status == "complete"
+    assert context.months[0].previous_month_source_coverage_status == "complete"
+    assert context.months[0].previous_month_source_complete_flag is True
+    assert context.coverage_manifest_id == completion.coverage_manifest_id
 
 
 def test_bootstrap_accepts_audited_gaps_and_establishes_watermark() -> None:
@@ -629,6 +753,7 @@ def test_bootstrap_accepts_audited_gaps_and_establishes_watermark() -> None:
                 "2024-04", "2024-05", "2024-06",
             }
         ),
+        coverage_manifest_id="lx-product-performance-bootstrap-2024-08-01",
     )
     context = build_run_context(
         mode="bootstrap",
@@ -642,6 +767,11 @@ def test_bootstrap_accepts_audited_gaps_and_establishes_watermark() -> None:
     assert context.data_through_date == date(2024, 7, 31)
     assert context.may_advance_watermark is True
     assert any(not month.source_complete_flag for month in context.months)
+    assert all(
+        month.source_coverage_status == "audited_gap"
+        for month in context.months
+        if not month.source_complete_flag
+    )
 ```
 
 - [ ] **Step 2: Run tests and confirm RED**
@@ -654,7 +784,7 @@ Expected: FAIL because the runtime module does not exist.
 
 ```python
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Literal
 
 RunMode = Literal["daily", "backfill", "bootstrap"]
@@ -667,7 +797,13 @@ class BatchMonth:
     month_start_date: date
     month_end_date_exclusive: date
     coverage_end_date: date
+    source_coverage_status: Literal["complete", "audited_gap"]
     source_complete_flag: bool
+    previous_month_ym: str
+    previous_month_source_coverage_status: Literal[
+        "complete", "audited_gap", "untrusted"
+    ]
+    previous_month_source_complete_flag: bool
 
 
 @dataclass(frozen=True)
@@ -677,6 +813,7 @@ class UpstreamCompletion:
     stock_ready_yms: frozenset[str]
     complete_source_yms: frozenset[str]
     audited_source_gap_yms: frozenset[str]
+    coverage_manifest_id: str
 
 
 @dataclass(frozen=True)
@@ -689,6 +826,7 @@ class HotProductIndexRunContext:
     data_through_date: date
     may_advance_watermark: bool
     source_completed_at: datetime
+    coverage_manifest_id: str
     etl_batch_id: str
     publication_mode: PublicationMode
 ```
@@ -715,30 +853,39 @@ def build_run_context(
         raise ValueError("etl_batch_id must contain 1..64 characters")
     if publication_mode not in ("validate_only", "publish"):
         raise ValueError(f"unsupported publication mode: {publication_mode}")
+    if not completion.coverage_manifest_id.strip():
+        raise ValueError("coverage_manifest_id must be nonblank")
+    overlapping_manifest = (
+        completion.complete_source_yms & completion.audited_source_gap_yms
+    )
+    if overlapping_manifest:
+        raise ValueError(
+            f"source coverage manifest overlap={sorted(overlapping_manifest)}"
+        )
     months = iter_batch_months(
         start_ym=start_ym,
         end_ym=end_ym,
         candidate_watermark=candidate_watermark,
         complete_source_yms=completion.complete_source_yms,
+        audited_source_gap_yms=completion.audited_source_gap_yms,
     )
     requested_yms = {month.ym for month in months}
     complete_requested = requested_yms & completion.complete_source_yms
     audited_gaps = requested_yms & completion.audited_source_gap_yms
     unknown_coverage = requested_yms - complete_requested - audited_gaps
-    overlapping_coverage = complete_requested & audited_gaps
-    if unknown_coverage or overlapping_coverage:
+    if unknown_coverage:
         raise ValueError(
-            f"invalid source coverage: unknown={sorted(unknown_coverage)}, "
-            f"overlap={sorted(overlapping_coverage)}"
+            f"invalid source coverage: unknown={sorted(unknown_coverage)}"
         )
     missing_stock = complete_requested - completion.stock_ready_yms
     if missing_stock:
         raise ValueError(f"stock completion missing for {sorted(missing_stock)}")
+    if mode in ("daily", "bootstrap"):
+        if candidate_watermark > completion.source_coverage_end_date:
+            raise ValueError("candidate watermark exceeds trusted source coverage")
     if mode == "daily":
         if audited_gaps:
             raise ValueError("daily run cannot target an audited source gap")
-        if candidate_watermark > completion.source_coverage_end_date:
-            raise ValueError("candidate watermark exceeds trusted source coverage")
         data_through_date = candidate_watermark
         may_advance_watermark = True
     elif mode == "backfill":
@@ -765,20 +912,24 @@ def build_run_context(
         data_through_date=data_through_date,
         may_advance_watermark=may_advance_watermark,
         source_completed_at=completion.source_completed_at,
+        coverage_manifest_id=completion.coverage_manifest_id,
         etl_batch_id=etl_batch_id,
         publication_mode=publication_mode,
     )
 ```
 
-`iter_batch_months(start_ym: str, end_ym: str, candidate_watermark: date, complete_source_yms: frozenset[str]) -> tuple[BatchMonth, ...]` assigns ended months their calendar month-end and the candidate's month the candidate watermark. It sets `source_complete_flag` strictly from `complete_source_yms`; audited gaps remain in `batch_month_staging` with flag 0 and never feed candidates. A daily run sets `data_through_date=candidate_watermark` and `may_advance_watermark=True`; a backfill copies the approved value and sets it false; the first full-history bootstrap establishes the initial watermark only when it includes the latest complete month.
+`iter_batch_months(...) -> tuple[BatchMonth, ...]` assigns ended months their calendar month-end and the candidate's month the candidate watermark. For a target month, it emits `source_coverage_status='complete'` or `'audited_gap'`; an unknown target was already rejected. For the previous month, it emits `'complete'`, `'audited_gap'`, or `'untrusted'` from the versioned manifest. The two boolean flags are derived solely as `status == 'complete'`, never from row existence. Audited-gap targets remain in `batch_month_staging` with flag 0 and never feed candidates; a complete target after an audited or untrusted previous month may build non-funnel facts, but its SPU rating fields remain NULL. A daily run sets `data_through_date=candidate_watermark` and `may_advance_watermark=True`; a backfill copies the approved value and sets it false; the first full-history bootstrap establishes the initial watermark only when it includes the latest complete month.
 
 - [ ] **Step 4: Implement the shared validation and SQL rendering functions**
 
 ```python
 def render_sql(relative_path: str, context: HotProductIndexRunContext) -> str:
+    first_target_month = context.months[0].month_start_date
+    rating_source_start_date = (first_target_month - timedelta(days=1)).replace(day=1)
     return load_sql(relative_path).format(
         start_ym=context.start_ym,
         end_ym=context.end_ym,
+        rating_source_start_date=rating_source_start_date.isoformat(),
         batch_start_date=context.months[0].month_start_date.isoformat(),
         batch_end_date=context.months[-1].coverage_end_date.isoformat(),
         data_through_date=context.data_through_date.isoformat(),
@@ -793,7 +944,11 @@ def batch_month_insert_sql(context: HotProductIndexRunContext) -> str:
         f"'{month.ym}', DATE('{month.month_start_date.isoformat()}'), "
         f"DATE('{month.month_end_date_exclusive.isoformat()}'), "
         f"DATE('{month.coverage_end_date.isoformat()}'), "
+        f"'{month.source_coverage_status}', "
         f"{int(month.source_complete_flag)}, "
+        f"'{month.previous_month_ym}', "
+        f"'{month.previous_month_source_coverage_status}', "
+        f"{int(month.previous_month_source_complete_flag)}, "
         f"CAST('{context.source_completed_at.isoformat(sep=' ')}' AS DATETIME)"
         ")"
         for month in context.months
@@ -801,7 +956,9 @@ def batch_month_insert_sql(context: HotProductIndexRunContext) -> str:
     return (
         "INSERT INTO ads.ads_pdm_lx_hot_product_index_batch_month_staging "
         "(ym,month_start_date,month_end_date_exclusive,coverage_end_date,"
-        "source_complete_flag,source_completed_at) VALUES\n"
+        "source_coverage_status,source_complete_flag,previous_month_ym,"
+        "previous_month_source_coverage_status,"
+        "previous_month_source_complete_flag,source_completed_at) VALUES\n"
         f"{rows}"
     )
 
@@ -828,6 +985,48 @@ def test_validation_rejects_nonzero_counts(monkeypatch) -> None:
     monkeypatch.setattr(runtime, "query_str_sql", lambda *_: frame)
     with pytest.raises(ValueError, match="missing_stock"):
         runtime.assert_zero_counts("SELECT 1")
+
+
+def test_bootstrap_rejects_watermark_beyond_trusted_coverage() -> None:
+    completion = UpstreamCompletion(
+        source_coverage_end_date=date(2026, 7, 30),
+        source_completed_at=datetime(2026, 7, 30, 2, 0),
+        stock_ready_yms=frozenset({"2026-07"}),
+        complete_source_yms=frozenset({"2026-07"}),
+        audited_source_gap_yms=frozenset(),
+        coverage_manifest_id="lx-product-performance-invalid-bootstrap",
+    )
+    with pytest.raises(ValueError, match="trusted source coverage"):
+        build_run_context(
+            mode="bootstrap",
+            start_ym="2026-07",
+            end_ym="2026-07",
+            candidate_watermark=date(2026, 7, 31),
+            approved_watermark=None,
+            completion=completion,
+            etl_batch_id="manual__bootstrap_coverage_guard",
+        )
+
+
+def test_manifest_rejects_overlap_in_a_previous_month() -> None:
+    completion = UpstreamCompletion(
+        source_coverage_end_date=date(2026, 7, 31),
+        source_completed_at=datetime(2026, 8, 1, 2, 0),
+        stock_ready_yms=frozenset({"2026-07"}),
+        complete_source_yms=frozenset({"2026-06", "2026-07"}),
+        audited_source_gap_yms=frozenset({"2026-06"}),
+        coverage_manifest_id="lx-product-performance-overlap-fixture",
+    )
+    with pytest.raises(ValueError, match="manifest overlap"):
+        build_run_context(
+            mode="backfill",
+            start_ym="2026-07",
+            end_ym="2026-07",
+            candidate_watermark=date(2026, 7, 31),
+            approved_watermark=date(2026, 8, 1),
+            completion=completion,
+            etl_batch_id="manual__manifest_overlap_guard",
+        )
 ```
 
 - [ ] **Step 6: Run and commit the runtime unit**
@@ -854,10 +1053,10 @@ git commit -m "feat(ads): add hot product index batch runtime"
 **Interfaces:**
 
 - Consumes formatting keys produced by `render_sql` and `BatchMonth` rows inserted by the DAG.
-- Produces the first five runtime staging tables from the inventory: batch month, raw relation, SKU-resolved source, domain source identity, and fully resolved source.
+- Produces the source and schema runtime staging tables from the inventory: batch month, raw relation, SKU-resolved source, domain source identity, fully resolved source, and the empty downstream staging schemas including SPU previous-month sales level.
 - Every staging table uses `DUPLICATE KEY` at its declared logical grain so duplicate input remains observable. Do not use UNIQUE KEY for staging because Merge-on-Write could hide a failed uniqueness contract.
 
-**Prerequisite:** The exact `sid + msku` zipper repair in Decision Gate 0 must be approved before this task is merged. Unit SQL fixtures may be written before production repair, but no live source build may be treated as passing.
+**Prerequisite:** The exact `sid + msku + [start_date,end_date]` closed-interval contract must remain intact. Zero-match rows are approved normal facts with null downstream product identity; only multi-match rows block. No live source build may be treated as passing without trusted source/stock completion Metadata.
 
 - [ ] **Step 1: Write the SQL anti-fallback tests**
 
@@ -874,7 +1073,11 @@ def test_source_resolution_uses_exact_closed_relation() -> None:
     assert "z.msku = s.msku" in normalized
     assert "s.ymd_id >= z.start_date" in normalized
     assert "s.ymd_id <= z.end_date" in normalized
+    assert "ymd_id >= date('{rating_source_start_date}')" in normalized
     assert "s.ymd_id <= date('{batch_end_date}')" in normalized
+    assert "batch.source_complete_flag = 1" in normalized
+    assert "batch.previous_month_source_complete_flag = 1" in normalized
+    assert "currency_code" not in normalized
     assert "return_goods_count" in normalized
     assert "return_count" not in normalized
     assert "row_number" not in normalized
@@ -882,7 +1085,7 @@ def test_source_resolution_uses_exact_closed_relation() -> None:
 
 def test_staging_tables_preserve_duplicates() -> None:
     sql = (ROOT / "00_prepare_staging.sql").read_text(encoding="utf-8").upper()
-    assert sql.count("DUPLICATE KEY") == 11
+    assert sql.count("DUPLICATE KEY") == 12
     assert "UNIQUE KEY" not in sql
 ```
 
@@ -894,7 +1097,7 @@ Expected: FAIL because both SQL files do not exist.
 
 - [ ] **Step 3: Create all staging schemas with source-compatible types**
 
-`00_prepare_staging.sql` must drop the 11 fixed staging names in reverse dependency order, then create all 11 with `replication_num=1`. Use the table inventory logical keys as `DUPLICATE KEY` prefixes. The source-resolved table must at least contain:
+`00_prepare_staging.sql` must drop the 12 fixed staging names in reverse dependency order, then create all 12 with `replication_num=1`. Use the table inventory logical keys as `DUPLICATE KEY` prefixes. The source-resolved table must at least contain:
 
 ```sql
 CREATE TABLE ads.ads_pdm_lx_hot_product_index_batch_month_staging (
@@ -902,7 +1105,11 @@ CREATE TABLE ads.ads_pdm_lx_hot_product_index_batch_month_staging (
   month_start_date DATE NOT NULL,
   month_end_date_exclusive DATE NOT NULL,
   coverage_end_date DATE NOT NULL,
+  source_coverage_status VARCHAR(16) NOT NULL,
   source_complete_flag TINYINT NOT NULL,
+  previous_month_ym VARCHAR(7) NOT NULL,
+  previous_month_source_coverage_status VARCHAR(16) NOT NULL,
+  previous_month_source_complete_flag TINYINT NOT NULL,
   source_completed_at DATETIME NOT NULL
 )
 DUPLICATE KEY(ym)
@@ -933,24 +1140,40 @@ PROPERTIES("replication_num"="1");
 
 `daily_staging` and `monthly_staging` must repeat the approved target columns and types but use their logical keys as `DUPLICATE KEY`. `batch_relation_staging` must preserve every raw zipper row with `sid,msku,sku,start_date,end_date`; it must not use `SELECT DISTINCT`.
 
+Create `ads.ads_pdm_lx_hot_product_index_spu_prev_sales_level_staging` with `DUPLICATE KEY(ym,spu)` and columns `ym VARCHAR(7) NOT NULL`, `spu VARCHAR(255) NOT NULL`, `spu_previous_month_sales_amount_cny DECIMAL(20,4) NULL`, and `spu_previous_month_sales_level VARCHAR(16) NULL`. The shortened physical name stays below Doris 2.1's 64-byte table-name limit; the nullable level distinguishes incomplete previous-month coverage from the business `-` bucket.
+
 - [ ] **Step 4: Implement source SKU resolution without hiding zero/multiple matches**
 
 Build a mapping-count CTE before inserting:
 
 ```sql
 WITH source_rows AS (
-  SELECT ymd_id AS sales_date,
-         sid,
-         msku,
-         NULLIF(TRIM(sku), '') AS source_sku,
-         volume AS sales_qty,
-         CAST(amount AS DECIMAL(20,4)) AS sales_amount_usd,
-         CAST(gross_profit AS DECIMAL(20,4)) AS gross_profit_usd,
-         return_goods_count AS return_goods_qty,
-         create_time AS source_updated_at
-  FROM ling_xing.lx_web_product_performance_msku_list
-  WHERE ymd_id >= DATE('{batch_start_date}')
-    AND ymd_id <= DATE('{batch_end_date}')
+  SELECT s.ymd_id AS sales_date,
+         s.sid,
+         s.msku,
+         NULLIF(TRIM(s.sku), '') AS source_sku,
+         s.volume AS sales_qty,
+         CAST(s.amount AS DECIMAL(20,4)) AS sales_amount_usd,
+         CAST(s.gross_profit AS DECIMAL(20,4)) AS gross_profit_usd,
+         s.return_goods_count AS return_goods_qty,
+         s.create_time AS source_updated_at
+  FROM ling_xing.lx_web_product_performance_msku_list s
+  INNER JOIN dim.dim_mp_sellers seller
+    ON CAST(seller.sid AS VARCHAR(255)) = s.sid
+   AND seller.org_id = 1
+  WHERE s.ymd_id >= DATE('{rating_source_start_date}')
+    AND s.ymd_id <= DATE('{batch_end_date}')
+    AND EXISTS (
+      SELECT 1
+      FROM ads.ads_pdm_lx_hot_product_index_batch_month_staging batch
+      WHERE (
+          DATE_FORMAT(s.ymd_id, '%Y-%m') = batch.ym
+          AND batch.source_complete_flag = 1
+        ) OR (
+          DATE_FORMAT(s.ymd_id, '%Y-%m') = batch.previous_month_ym
+          AND batch.previous_month_source_complete_flag = 1
+        )
+    )
 ), relation_match AS (
   SELECT s.sales_date, s.sid, s.msku, z.sku
   FROM source_rows s
@@ -984,11 +1207,11 @@ LEFT JOIN mapping m
   ON m.sales_date = s.sales_date AND m.sid = s.sid AND m.msku = s.msku
 ```
 
-The later validation rejects `mapping_count <> 1`; `MAX(sku)` here only transports the value after the count is retained and must never be used to pass a multi-match gate.
+The later validation rejects only `mapping_count > 1`; `MAX(sku)` here only transports the value after the count is retained and must never be used to pass a multi-match gate. `mapping_count = 0` is retained with NULL product identity, eligibility and rating fields and appears in a bounded non-blocking audit. Source resolution includes complete target months and only lookbacks whose previous-month flag is 1. Audited or untrusted previous-month rows are deliberately excluded and cannot leak into published partitions; their status produces NULL rating fields, while a separate bounded diagnostic reports any ignored raw rows.
 
 - [ ] **Step 5: Implement product and seller enrichment with explicit type conversion**
 
-Insert only verified luggage-domain rows into `domain_source_identity_staging`; validation still starts from `sku_resolved_source_staging` so a missing product cannot disappear unnoticed. Enrich seller by casting the integer dimension SID to the source string type:
+Insert verified luggage-domain rows plus the explicit zero-match/null-product branch into `domain_source_identity_staging`; validation still starts from `sku_resolved_source_staging` so a missing product or an invalid unmatched representation cannot disappear unnoticed. Enrich seller by casting the integer dimension SID to the source string type:
 
 ```sql
 CAST(seller.sid AS VARCHAR(255)) = source.sid
@@ -1013,7 +1236,7 @@ IF(product.product_level IS NULL OR TRIM(product.product_level) = '',
    '未评级', TRIM(product.product_level)) AS product_level
 ```
 
-Join the grade with `grade.ym = CAST(REPLACE(ym, '-', '') AS INT)` and `grade.SKU = sku`. Missing grade stays NULL. Do not use `dim_product.status`.
+Join the grade with `grade.ym = CAST(REPLACE(ym, '-', '') AS INT)` and `grade.SKU = sku`. Missing grade stays NULL. The rating starts from the source USD amount and therefore does not carry or derive a row currency in `resolved_source_staging`. Do not use `dim_product.status`.
 
 - [ ] **Step 6: Add the mandatory boundary and source-value contract assertions**
 
@@ -1021,8 +1244,8 @@ The SQL contract test must contain these immutable expected rows:
 
 ```python
 EXPECTED_BOUNDARY = {
-    ("2026-06-06", "2613", "8010A-BL28-FBM"): "ZX-8010S-BL28",
-    ("2026-06-07", "2613", "8010A-BL28-FBM"): "8010S-BL28",
+    ("2026-05-29", "2613", "8010A-BL28-FBM"): "ZX-8010S-BL28",
+    ("2026-05-30", "2613", "8010A-BL28-FBM"): "8010S-BL28",
 }
 EXPECTED_SOURCE = {
     "2026-06-01": ("ZX-8010S-BL28", 11, "2276.8900"),
@@ -1056,7 +1279,7 @@ git commit -m "feat(ads): resolve hot product index source identities"
 **Interfaces:**
 
 - Consumes: `batch_month_staging`, `resolved_source_staging`, product dimension, monthly stock, and raw batch relation.
-- Produces: exactly one `candidate_sku_staging` row and one `eligibility_staging` row per `ym,sku`, plus left-closed/right-open `eligible_identity_staging` rows.
+- Produces: exactly one `candidate_sku_staging` row and one `eligibility_staging` row per `ym,sku`, plus left-closed/right-closed `eligible_identity_staging` rows.
 
 - [ ] **Step 1: Write formula and independent-set tests**
 
@@ -1132,10 +1355,10 @@ For each `is_eligible=1` candidate, insert every exact `sid,msku,sku` relation w
 
 ```sql
 GREATEST(relation.start_date, batch.month_start_date) AS identity_start_date,
-LEAST(DATE_ADD(relation.end_date, INTERVAL 1 DAY), DATE_ADD(batch.coverage_end_date, INTERVAL 1 DAY)) AS identity_end_date
+LEAST(relation.end_date, DATE_ADD(batch.coverage_end_date, INTERVAL 1 DAY)) AS identity_end_date
 ```
 
-The join must remain `relation.sid IS NOT NULL`, `relation.sku = eligibility.sku`, `relation.start_date <= batch.coverage_end_date`, and `relation.end_date >= batch.month_start_date`. The raw relation is closed; `identity_end_date` adds one day only to create the internal exclusive bound used by calendar expansion. A source identity for an eligible SKU must match one of these intervals with the same `sid,msku,sku`; otherwise the validation gate fails instead of manufacturing an identity.
+The join must remain `relation.sid IS NOT NULL`, `relation.sku = eligibility.sku`, `relation.start_date <= batch.coverage_end_date`, and `relation.end_date >= batch.month_start_date`. The raw relation is closed, so `identity_end_date` remains inclusive and must not add a day to `relation.end_date`. A source identity for an eligible SKU must match one of these intervals with the same `sid,msku,sku`; otherwise the validation gate fails instead of manufacturing an identity.
 
 - [ ] **Step 6: Run and commit the eligibility unit**
 
@@ -1149,6 +1372,212 @@ git add include/sql/ads/pdm/hot_product_index/20_build_candidate_eligibility.sql
 git commit -m "feat(ads): compute hot product eligibility"
 ```
 
+### Task 5A: Build the SPU Previous-Month Sales Level
+
+**Files:**
+
+- Create: `include/sql/ads/pdm/hot_product_index/15_validate_spu_rating_inputs.sql`
+- Create: `include/sql/ads/pdm/hot_product_index/25_build_spu_previous_month_sales_level.sql`
+- Modify: `test/test_hot_product_index_sql_contract.py`
+
+**Interfaces:**
+
+- Consumes: target and previous-month completion flags, the one-month-lookback `resolved_source_staging`, `eligible_identity_staging`, `dim.dim_product`, and `ling_xing.lx_sc_finance_currency`.
+- Produces first: a read-only `check_name,error_count` input gate that runs before any SPU rating aggregation and checks only lookback months with `previous_month_source_complete_flag = 1`.
+- Produces: exactly one `spu_prev_sales_level_staging` row for every SPU that can appear in a target-month daily row. The amount and level are fixed at `ym,spu`, before any dashboard filter.
+
+- [ ] **Step 1: Write the FX, month-shift, and threshold contract tests**
+
+```python
+def test_spu_previous_month_sales_level_contract() -> None:
+    gate_sql = (ROOT / "15_validate_spu_rating_inputs.sql").read_text(
+        encoding="utf-8"
+    )
+    sql = (ROOT / "25_build_spu_previous_month_sales_level.sql").read_text(
+        encoding="utf-8"
+    )
+    gate = " ".join(gate_sql.split()).lower()
+    normalized = " ".join(sql.split()).lower()
+    assert "previous_month_source_complete_flag = 1" in gate
+    assert "usd_fx_duplicate_key" in gate
+    assert "usd_fx_rate_invalid" in gate
+    assert "usd_fx_month_missing" in gate
+    assert "where code = 'usd'" in normalized
+    assert "fx.date = source.ym" in normalized
+    assert "previous_month_source_complete_flag = 1" in normalized
+    assert "source.currency_code" not in normalized
+    assert "round(source.sales_amount_usd *" in normalized
+    assert "interval 1 month" in normalized
+    assert "source.is_eligible" not in normalized
+    assert "rate_org" not in normalized
+    assert "coalesce(fx" not in normalized
+    for boundary in ("50000", "100000", "300000", "1000000"):
+        assert boundary in normalized
+    for level in ("'C'", "'B'", "'A'", "'S'", "'Ps'", "'-'"):
+        assert level in sql
+
+
+def test_original_finebi_fx_fixture() -> None:
+    assert round(69.99 * 7.2, 4) == 503.928
+    assert abs(340.09 - 47.24 * 7.2) < 0.1
+    assert abs(340.09 - 47.24 * 7.9) > 30
+```
+
+- [ ] **Step 2: Run the focused test and confirm RED**
+
+Run: `cd /Users/zewe/code-workspace/etl && python3 -m pytest -q test/test_hot_product_index_sql_contract.py -k previous_month`
+
+Expected: FAIL because the rating-input gate and rating-build SQL do not exist.
+
+- [ ] **Step 3: Validate required USD-month inputs before aggregation**
+
+`15_validate_spu_rating_inputs.sql` must derive its required months only from complete lookbacks:
+
+```sql
+WITH required_source_months AS (
+  SELECT DISTINCT previous_month_ym AS ym
+  FROM ads.ads_pdm_lx_hot_product_index_batch_month_staging
+  WHERE previous_month_source_complete_flag = 1
+), required_usd_fx AS (
+  SELECT required.ym,
+         fx.date,
+         fx.my_rate,
+         CAST(fx.my_rate AS DECIMAL(20,10)) AS parsed_rate
+  FROM required_source_months required
+  LEFT JOIN ling_xing.lx_sc_finance_currency fx
+    ON fx.date = required.ym
+   AND fx.code = 'USD'
+)
+SELECT 'usd_fx_duplicate_key' AS check_name,
+       COUNT(*) AS error_count
+FROM (
+  SELECT ym FROM required_usd_fx
+  GROUP BY ym HAVING COUNT(date) > 1
+) duplicate_month
+UNION ALL
+SELECT 'usd_fx_rate_invalid', COUNT(*)
+FROM required_usd_fx
+WHERE date IS NOT NULL
+  AND (my_rate IS NULL OR TRIM(my_rate) = ''
+    OR parsed_rate IS NULL OR parsed_rate <= 0)
+UNION ALL
+SELECT 'usd_fx_month_missing', COUNT(*)
+FROM (
+  SELECT ym FROM required_usd_fx
+  GROUP BY ym HAVING COUNT(date) = 0
+) missing_month
+```
+
+The DAG must execute this SQL through `assert_zero_counts` after source resolution and before `25_build_spu_previous_month_sales_level.sql`. Repeating the same gates in pre-publish validation is intentional defense in depth. Incomplete lookbacks are excluded from required FX months because they publish NULL rating fields rather than guessed values.
+
+- [ ] **Step 4: Aggregate all-channel previous-month sales in CNY and shift it to the target month**
+
+Use this lineage; `current_spu` must union target-month source SPUs with inventory-driven eligible identity SPUs so every daily candidate can join exactly one rating row:
+
+```sql
+WITH usd_fx AS (
+  SELECT date,
+         CAST(my_rate AS DECIMAL(20,10)) AS exchange_rate_to_cny
+  FROM ling_xing.lx_sc_finance_currency
+  WHERE code = 'USD'
+), previous_month_sales AS (
+  SELECT DATE_FORMAT(
+           DATE_ADD(STR_TO_DATE(CONCAT(source.ym, '-01'), '%Y-%m-%d'), INTERVAL 1 MONTH),
+           '%Y-%m'
+         ) AS ym,
+         source.spu,
+         CASE
+           WHEN COUNT(*) = COUNT(fx.date)
+            AND COUNT(*) = COUNT(fx.exchange_rate_to_cny)
+            AND MIN(fx.exchange_rate_to_cny) > 0
+           THEN SUM(ROUND(source.sales_amount_usd * fx.exchange_rate_to_cny, 4))
+           ELSE NULL
+         END AS spu_previous_month_sales_amount_cny
+  FROM ads.ads_pdm_lx_hot_product_index_resolved_source_staging source
+  JOIN ads.ads_pdm_lx_hot_product_index_batch_month_staging batch
+    ON batch.previous_month_ym = source.ym
+   AND batch.previous_month_source_complete_flag = 1
+  LEFT JOIN usd_fx fx
+    ON fx.date = source.ym
+  GROUP BY source.ym, source.spu
+), current_spu AS (
+  SELECT source.ym, source.spu
+  FROM ads.ads_pdm_lx_hot_product_index_resolved_source_staging source
+  JOIN ads.ads_pdm_lx_hot_product_index_batch_month_staging batch
+    ON batch.ym = source.ym AND batch.source_complete_flag = 1
+  GROUP BY source.ym, source.spu
+  UNION
+  SELECT identity.ym, product.spu
+  FROM ads.ads_pdm_lx_hot_product_index_eligible_identity_staging identity
+  JOIN dim.dim_product product
+    ON product.sku = identity.sku
+   AND product.org_id = 1
+   AND product.category = '拉杆箱'
+  GROUP BY identity.ym, product.spu
+)
+INSERT INTO ads.ads_pdm_lx_hot_product_index_spu_prev_sales_level_staging
+SELECT cur.ym,
+       cur.spu,
+       IF(batch.previous_month_source_complete_flag = 1,
+          previous.spu_previous_month_sales_amount_cny, NULL),
+       CASE
+         WHEN batch.previous_month_source_complete_flag = 0 THEN NULL
+         WHEN previous.spu IS NULL THEN '-'
+         WHEN previous.spu_previous_month_sales_amount_cny >= 0
+          AND previous.spu_previous_month_sales_amount_cny < 50000 THEN 'C'
+         WHEN previous.spu_previous_month_sales_amount_cny >= 50000
+          AND previous.spu_previous_month_sales_amount_cny < 100000 THEN 'B'
+         WHEN previous.spu_previous_month_sales_amount_cny >= 100000
+          AND previous.spu_previous_month_sales_amount_cny < 300000 THEN 'A'
+         WHEN previous.spu_previous_month_sales_amount_cny >= 300000
+          AND previous.spu_previous_month_sales_amount_cny < 1000000 THEN 'S'
+         WHEN previous.spu_previous_month_sales_amount_cny >= 1000000 THEN 'Ps'
+         ELSE '-'
+       END AS spu_previous_month_sales_level
+FROM current_spu cur
+JOIN ads.ads_pdm_lx_hot_product_index_batch_month_staging batch
+  ON batch.ym = cur.ym
+LEFT JOIN previous_month_sales previous
+  ON previous.ym = cur.ym AND previous.spu = cur.spu
+```
+
+Do not round only after the SPU sum: FineBI creates the CNY row value first, then groups it. The FX preflight must already have proved that every required source month has exactly one positive `code = 'USD'` rate, so this query must not hide duplicates with `MAX/MIN`. `sales_amount_usd` remains the P0 KPI field; the CNY amount is used only for the SPU sales level and its audit field.
+
+- [ ] **Step 5: Add explicit threshold and missing-coverage fixtures**
+
+The test fixture must assert this exact mapping:
+
+```python
+EXPECTED_LEVELS = {
+    None: "-",  # only when previous_month_source_complete_flag == 1
+    -0.0001: "-",
+    0: "C",
+    49_999.9999: "C",
+    50_000: "B",
+    99_999.9999: "B",
+    100_000: "A",
+    299_999.9999: "A",
+    300_000: "S",
+    999_999.9999: "S",
+    1_000_000: "Ps",
+}
+```
+
+Add a separate assertion that `previous_month_source_complete_flag=0` produces `NULL` amount and `NULL` level, never `-`. Add a multi-SKU SPU fixture whose SKU-row `product_level` values differ and prove that all rows still receive the one computed SPU sales level.
+
+- [ ] **Step 6: Run and commit the SPU sales-level unit**
+
+Run: `cd /Users/zewe/code-workspace/etl && python3 -m pytest -q test/test_hot_product_index_sql_contract.py`
+
+Expected: PASS.
+
+```bash
+git add include/sql/ads/pdm/hot_product_index/15_validate_spu_rating_inputs.sql \
+  include/sql/ads/pdm/hot_product_index/25_build_spu_previous_month_sales_level.sql \
+  test/test_hot_product_index_sql_contract.py
+git commit -m "feat(ads): derive previous-month SPU sales levels"
+```
+
 ### Task 6: Build the Complete Daily Candidate and Monthly Aggregate
 
 **Files:**
@@ -1159,8 +1588,8 @@ git commit -m "feat(ads): compute hot product eligibility"
 
 **Interfaces:**
 
-- Consumes: independent eligibility/identity sets, resolved source, calendar, batch context.
-- Produces: daily staging containing every domain source fact for eligibility 0 or 1 and generated zeros only for eligibility 1; monthly staging derived exclusively from daily staging.
+- Consumes: independent eligibility/identity sets, resolved source, SPU previous-month sales level, calendar, batch context.
+- Produces: daily staging containing every domain source fact for eligibility 0 or 1 and generated zeros only for eligibility 1, with a null-safe consistent SPU level on every row; monthly staging derived exclusively from daily staging.
 
 - [ ] **Step 1: Write zero-spine and monthly-lineage tests**
 
@@ -1171,6 +1600,8 @@ def test_daily_keeps_source_and_only_expands_eligible_identities() -> None:
     assert "eligibility.is_eligible = 1" in sql
     assert "source.sales_date is null" in sql
     assert "union all" in sql
+    assert "spu_prev_sales_level_staging" in sql
+    assert "rating.ym =" in sql and "rating.spu =" in sql
 
 
 def test_monthly_reads_only_daily_staging() -> None:
@@ -1195,7 +1626,7 @@ SELECT calendar.sales_date, identity.ym, identity.sid, identity.msku, identity.s
 FROM ads.ads_pdm_lx_hot_product_index_eligible_identity_staging identity
 JOIN ads.ads_pdm_lx_hot_product_index_calendar_staging calendar
   ON calendar.sales_date >= identity.identity_start_date
- AND calendar.sales_date < identity.identity_end_date
+ AND calendar.sales_date <= identity.identity_end_date
 JOIN ads.ads_pdm_lx_hot_product_index_batch_month_staging batch
   ON batch.ym = identity.ym
  AND batch.source_complete_flag = 1
@@ -1204,9 +1635,9 @@ WHERE calendar.sales_date <= batch.coverage_end_date
 
 - [ ] **Step 4: Insert real source facts before generated zeros**
 
-The first branch inserts every `resolved_source_staging` row, joins its `ym,sku` eligibility, preserves all four source metrics, sets `is_generated_zero=0`, and retains both `is_eligible=0` and `is_eligible=1`.
+The first branch inserts every target-month `resolved_source_staging` row, joins its `ym,sku` eligibility and `ym,spu` previous-month sales level, preserves all four source metrics, sets `is_generated_zero=0`, and retains both `is_eligible=0` and `is_eligible=1`. The explicit target-month join is mandatory because `resolved_source_staging` also contains the rating lookback month.
 
-The second branch starts from the expected eligible spine, LEFT JOINs resolved source on the full source key and same SKU, requires `source.sales_date IS NULL`, writes four zero metrics, sets `is_generated_zero=1`, and takes `source_updated_at` from the trusted `source_completed_at`. Both branches write the same batch `data_through_date`, `etl_batch_id`, and `etl_loaded_at`.
+The second branch starts from the expected eligible spine, LEFT JOINs resolved source on the full source key and same SKU, requires `source.sales_date IS NULL`, writes four zero metrics, sets `is_generated_zero=1`, and takes `source_updated_at` from the trusted `source_completed_at`. It derives SPU from the unique product row and joins the same `ym,spu` sales-level staging. Both branches write the same batch `data_through_date`, `etl_batch_id`, and `etl_loaded_at`.
 
 Use `UNION ALL`; the pre-publish duplicate gate, rather than `UNION DISTINCT`, protects the key.
 
@@ -1230,6 +1661,8 @@ SELECT ym,
        MAX(model) AS model,
        MAX(sku_level) AS sku_level,
        MAX(product_level) AS product_level,
+       MAX(spu_previous_month_sales_amount_cny) AS spu_previous_month_sales_amount_cny,
+       MAX(spu_previous_month_sales_level) AS spu_previous_month_sales_level,
        SUM(sales_qty) AS sales_qty,
        SUM(sales_amount_usd) AS sales_amount_usd,
        SUM(gross_profit_usd) AS gross_profit_usd,
@@ -1246,7 +1679,7 @@ FROM ads.ads_pdm_lx_hot_product_index_daily_staging
 GROUP BY ym, sid, msku, sku
 ```
 
-`MAX` is only a projection after Task 7 proves each dimension/eligibility/batch field is unique in the group. A conflicting value fails before publish.
+`MAX` is only a projection after Task 7 proves each SKU-row dimension, eligibility, SPU sales-level and batch field is null-safe unique in the monthly key group. Multiple `product_level` values across different SKUs of one SPU are allowed; a conflicting value within the same `ym,sid,msku,sku` still fails before publish.
 
 - [ ] **Step 6: Run and commit the target-build unit**
 
@@ -1286,6 +1719,7 @@ REQUIRED_CHECKS = {
     "source_metric_null",
     "audited_gap_has_source_rows",
     "source_mapping_count",
+    "unmatched_source_representation",
     "source_resolution_set_diff",
     "product_match_count",
     "seller_match_count",
@@ -1296,7 +1730,12 @@ REQUIRED_CHECKS = {
     "candidate_duplicate_or_set_diff",
     "eligibility_duplicate_or_metric_diff",
     "eligible_identity_duplicate_or_set_diff",
-    "eligible_spu_product_level_conflict",
+    "usd_fx_duplicate_key",
+    "usd_fx_rate_invalid",
+    "usd_fx_month_missing",
+    "spu_previous_month_sales_level_duplicate_or_set_diff",
+    "spu_previous_month_sales_level_formula_diff",
+    "spu_previous_month_sales_level_row_consistency",
     "daily_duplicate_or_spine_set_diff",
     "source_daily_metric_or_dimension_diff",
     "monthly_duplicate_or_daily_rollup_diff",
@@ -1330,10 +1769,14 @@ for source, candidate, eligibility, identity, daily and monthly declared keys;
 `source_metric_null` must count NULL in `volume`, `amount`, `gross_profit`, `return_goods_count`, or `create_time`; none may be coerced to zero or batch time.
 
 ```sql
-batch.source_complete_flag = 0 AND source.ymd_id IS NOT NULL
+(batch.source_coverage_status = 'audited_gap'
+ AND DATE_FORMAT(source.ymd_id, '%Y-%m') = batch.ym)
+OR
+(batch.previous_month_source_coverage_status = 'audited_gap'
+ AND DATE_FORMAT(source.ymd_id, '%Y-%m') = batch.previous_month_ym)
 ```
 
-for any unexpected fact inside an audited source-gap month;
+for any unexpected raw fact inside an explicitly audited source-gap target or lookback month. An `untrusted` previous month is different: its raw rows are excluded from source resolution and rating, logged by a bounded non-blocking diagnostic, and the target rating remains NULL. Do not pass that diagnostic to `assert_zero_counts`.
 
 ```sql
 a.start_date <= b.end_date AND b.start_date <= a.end_date
@@ -1352,9 +1795,9 @@ ABS(expected.sales_amount_usd - actual.sales_amount_usd) > 0.0001
 OR ABS(expected.gross_profit_usd - actual.gross_profit_usd) > 0.0001
 ```
 
-Dimension comparisons use Doris null-safe equality for `company_sku,product_line,size,color,developer,model,sku_level`; non-null required dimensions use ordinary equality. Eligibility is independently recomputed from resolved source and stock, not from either target staging table.
+Dimension comparisons use Doris null-safe equality for `company_sku,product_line,size,color,developer,model,sku_level`; non-null required dimensions use ordinary equality. Candidate, eligibility and source-to-daily expected sets must first join `batch_month_staging` on `batch.ym = source.ym AND batch.source_complete_flag = 1`; otherwise the first target's rating lookback would be misclassified as a missing target row. Eligibility is independently recomputed from target-month resolved source and stock, not from either target staging table. SPU previous-month CNY amount and level are independently recomputed from complete lookback source plus FX, not from daily or monthly staging.
 
-- [ ] **Step 5: Implement time, batch, and product-level gates**
+- [ ] **Step 5: Implement time, batch, FX, and SPU sales-level gates**
 
 The checks must enforce:
 
@@ -1364,8 +1807,17 @@ monthly.month_start_date = STR_TO_DATE(CONCAT(monthly.ym, '-01'), '%Y-%m-%d')
 COUNT(DISTINCT data_through_date) = 1 per ym
 COUNT(DISTINCT etl_batch_id) = 1 per ym
 daily and monthly etl_batch_id/data_through_date agree per ym
-COUNT(DISTINCT normalized product_level) = 1 per ym,spu for is_eligible=1
+COUNT(DISTINCT normalized product_level) = 1 per ym,sid,msku,sku
+one code='USD' declaration exists for every lookback month whose previous_month_source_complete_flag=1
+each required USD my_rate casts to a positive DECIMAL and its month has exactly one row
+source-row currency_code is not used to choose the rating exchange rate
+spu_previous_month_sales_amount_cny and level are null-safe unique per ym,spu
+every target daily/monthly row matches the independent ym,spu rating staging row
 ```
+
+The `16` observed SPUs with multiple SKU-row `product_level` values are emitted by a separate bounded audit query and log entry. They are intentionally absent from `REQUIRED_CHECKS` and must not be passed to `assert_zero_counts`. The blocking invariant is only that a given target SKU row retains its own unique dimension value.
+
+The SPU formula gate must exercise all closed zipper boundaries and distinguish three cases: complete previous month with a sales row, complete previous month without an SPU row (`amount=NULL,level='-'`), and incomplete previous month (`amount=NULL,level=NULL`). It must compare CNY amounts at tolerance `0.0001` and levels with null-safe equality.
 
 `60_validate_published.sql` repeats key, daily/monthly reconciliation, per-partition batch, and global watermark checks against formal target partitions after replacement. It must assert that a backfill's global watermark equals the pre-run approved value and that a daily run's new watermark equals the candidate only after both tables agree.
 
@@ -1382,7 +1834,8 @@ every non-empty source month represented
 daily/monthly reconciliation
 same global data_through_date and same batch per common ym
 zero duplicate target keys
-zero unresolved eligible product-level conflicts
+SKU-row product_level lineage preserved; multi-value SPUs recorded as non-blocking audit
+zero FX and SPU previous-month sales-level formula/consistency errors
 ```
 
 - [ ] **Step 7: Run focused tests and commit the quality unit**
@@ -1539,9 +1992,9 @@ def execute_overwrite(plan: OverwritePlan) -> None:
 
 If monthly overwrite or post-publish validation fails, overwrite every pre-existing daily/monthly month from its rollback table. For months where `existed_before=False`, discover the newly created formal partition and drop it. Keep rollback tables until post-publish validation succeeds; only then run cleanup. A failed compensation raises a distinct fatal error containing the retained rollback table names and remaining new partition names.
 
-- [ ] **Step 6: State the reader-isolation boundary in code and runbook**
+- [x] **Step 6: State and accept the reader-isolation boundary in the runbook**
 
-`max_active_runs=1` serializes writers but does not isolate BI readers between the daily and monthly replace statements. The runtime must log `publication_state=REPLACING|ROLLING_BACK|PUBLISHED`, but that log is not a reader lock. The production acceptance report must mark `BI_READER_ISOLATION=BLOCKED` until a separately approved routing/manifest design makes both datasets switch together. Do not weaken this to “eventual consistency.”
+`max_active_runs=1` serializes writers but does not isolate BI readers between the daily and monthly replace statements. The runtime must continue to log `publication_state=REPLACING|ROLLING_BACK|PUBLISHED`, retain rollback tables until validation succeeds, and compensate both targets on failure. The business owner explicitly accepts the narrow publication window in which one table may be new while the other is old; no routing/manifest reader lock is required. Record this as `BI_READER_ISOLATION=WAIVED`, not as an implemented isolation guarantee.
 
 - [ ] **Step 7: Run tests and commit the publication unit**
 
@@ -1574,7 +2027,15 @@ git commit -m "feat(ads): publish hot product partitions with rollback"
 - Create: `dags/ADS/pdm/hot_product_index.py`
 - Modify: `assets/ads.py`
 - Modify: `assets/dws.py`
+- Modify: `dags/DWS/scm/dws_stock_analysis_monthly_sku.py`
 - Modify: `dags/ODS/ling_xing/statistics/product_performance.py`
+- Modify: `dags/ODS/ling_xing/statistics/product_performance_monthly_backfill.py`
+- Create: `include/config/pdm/hot_product_index_source_coverage_v1.json`
+- Create: `include/processors/hot_product_index_coverage.py`
+- Create: `include/processors/hot_product_index_orchestration.py`
+- Create: `include/sql/ads/pdm/hot_product_index/55_collect_diagnostics.sql`
+- Modify: `scripts/hot_product_index_preflight.py`
+- Create: `test/test_hot_product_index_coverage_contract.py`
 - Create: `test/test_hot_product_index_dag_contract.py`
 
 **Interfaces:**
@@ -1582,7 +2043,7 @@ git commit -m "feat(ads): publish hot product partitions with rollback"
 - Produces DAG ID `ads_pdm_lx_hot_product_index_refresh`.
 - Produces Assets `ADS_PDM_LX_HOT_PRODUCT_INDEX_SKU_D` and `ADS_PDM_LX_HOT_PRODUCT_INDEX_SKU_M` with URIs `data_sign://dw/ads/ads_pdm_lx_hot_product_index_sku_d` and `data_sign://dw/ads/ads_pdm_lx_hot_product_index_sku_m`.
 - Produces declaration `DWS_STOCK_ANALYSIS_MONTHLY_SKU_READY = Asset("data_sign://dw/dws/dws_stock_analysis_monthly_sku_ready")`; the actual stock-owning producer must emit it with `ready_yms` and `completed_at` metadata.
-- Schedules on `[ODS_LX_PRODUCT_PERFORMANCE_SYNC_READY]`, consumes its trusted `coverage_end_date,source_complete,completed_at` event metadata, and reads the latest stock-ready Asset event as a required inlet. The ETL repo has no producer for `dws.dws_stock_analysis_monthly_sku`; the owning Agent must wire that outlet before this DAG can be enabled.
+- Schedules on `[ODS_LX_PRODUCT_PERFORMANCE_SYNC_READY]`. The source owner emits versioned, run-bound success deltas (`coverage_event_id`, `source_run_id`, `coverage_end_date`, `complete_source_yms`, `audited_source_gap_yms`) only after all four DSP tasks succeed. The target folds those immutable events over `hot_product_index_source_coverage_v1.json` into a deterministic `coverage_manifest_id`; it never derives trust from source rows or `MAX(date)`. The historical baseline may mark a month complete only with a successful run ID, or audited-gap only with explicit audit evidence. The DAG also reads the latest stock Ready Asset event as a required inlet. The existing owner DAG `dws_stock_analysis_monthly_sku` emits that independent Ready Asset only after committed full load and completeness validation; the ordinary table Asset declaration is not readiness proof.
 
 - [ ] **Step 1: Write DAG import, graph, and parameter tests**
 
@@ -1605,7 +2066,9 @@ def test_dag_contract() -> None:
         "resolve_context",
         "prepare_staging",
         "build_source_resolution",
+        "validate_spu_rating_inputs",
         "build_candidate_eligibility",
+        "build_spu_previous_month_sales_level",
         "build_daily",
         "build_monthly",
         "validate_pre_publish",
@@ -1616,7 +2079,7 @@ def test_dag_contract() -> None:
     } <= set(dag.task_ids)
 ```
 
-Add cases proving malformed/missing `start_ym,end_ym` fail, historical mode preserves the approved watermark, bootstrap requires empty targets and the latest complete month, daily mode selects the Beijing current month, Beijing day 1 adds the previous full month, and `publication_mode=validate_only` stops after pre-publish validation while retaining staging.
+Add cases proving malformed/missing `start_ym,end_ym` fail, historical mode preserves the approved watermark, manual backfill is not skipped merely because `coverage_end_date <= approved_watermark`, bootstrap requires empty targets and the latest complete month, daily mode selects the month containing the Beijing candidate watermark, Beijing day 1 therefore selects only the just-ended month, and `publication_mode=validate_only` stops after pre-publish validation while retaining staging.
 
 - [ ] **Step 2: Run tests and confirm RED**
 
@@ -1637,7 +2100,7 @@ ADS_PDM_LX_HOT_PRODUCT_INDEX_SKU_M = Asset(
 
 Do not refactor unrelated duplicate legacy declarations in `assets/ads.py`.
 
-Add the stock readiness declaration once in `assets/dws.py`, but do not treat declaration alone as completion. Modify the product-performance summary task to emit coverage only after every API task succeeds:
+Add the stock readiness declaration once in `assets/dws.py`, but do not treat declaration alone as completion. Both daily sync and monthly backfill owners emit immutable success deltas only after every API task succeeds:
 
 ```python
 from airflow.sdk import Metadata, get_current_context
@@ -1652,17 +2115,22 @@ def log_summary(results):
         .subtract(days=1)
         .to_date_string()
     )
+    coverage_event = build_source_coverage_event(
+        event_type="daily_sync",
+        results=results,
+        run_id=get_current_context()["run_id"],
+        completed_at=pendulum.now("Asia/Shanghai"),
+        coverage_end_date=coverage_end_date,
+    )
     yield Metadata(
         ODS_LX_PRODUCT_PERFORMANCE_SYNC_READY,
-        {
-            "coverage_end_date": coverage_end_date,
-            "source_complete": True,
-            "completed_at": pendulum.now("Asia/Shanghai").to_datetime_string(),
-        },
+        coverage_event,
     )
 ```
 
-The stock owner must emit `Metadata(DWS_STOCK_ANALYSIS_MONTHLY_SKU_READY,{"ready_yms":["YYYY-MM"],"completed_at":"YYYY-MM-DD HH:mm:ss"})` after its committed monthly load. Row existence or `MAX(ym)` is not an accepted substitute.
+The committed baseline plus successful Asset events is the source-owned versioned ledger. The resolver verifies event signatures, baseline version, canonical months, run IDs, disjoint complete/gap sets and deterministic manifest ID. A previous month in `complete_source_yms` gets flag 1; an audited gap or a month with no trusted completion entry gets flag 0 and therefore NULL rating fields, with the reason logged distinctly. Failed or unproven 2025-03/04/05, 2026-06 and 2026-07 remain untrusted in the v1 baseline.
+
+The stock owner must emit `Metadata(DWS_STOCK_ANALYSIS_MONTHLY_SKU_READY,{"readiness_contract_version":1,"source_run_id":"...","ready_yms":["YYYY-MM"],"completed_at":"YYYY-MM-DD HH:mm:ss"})` after its committed monthly load and duplicate/NULL-stock checks. Row existence, a declaration, or `MAX(ym)` is not an accepted substitute.
 
 - [ ] **Step 4: Implement the task graph in strict order**
 
@@ -1670,7 +2138,9 @@ The stock owner must emit `Metadata(DWS_STOCK_ANALYSIS_MONTHLY_SKU_READY,{"ready
 resolve_context
   -> prepare_staging
   -> build_source_resolution
+  -> validate_spu_rating_inputs
   -> build_candidate_eligibility
+  -> build_spu_previous_month_sales_level
   -> build_daily
   -> build_monthly
   -> validate_pre_publish
@@ -1682,11 +2152,11 @@ resolve_context
 
 Use `load_sql(relative_sql_path).format(**context)` and `execute_str_sql("doris", rendered_sql)`. The DAG does not run static target DDL. All failures before `publish_pair` leave formal targets unchanged; failures during/after publish invoke Task 8 compensation before raising.
 
-`prepare_staging` first executes `00_prepare_staging.sql`, then executes `batch_month_insert_sql(context)` and immediately asserts one row per requested `ym`. Candidate and identity SQL only joins rows where `source_complete_flag=1`; rows with flag 0 are logged as source gaps and cannot create business facts.
+`prepare_staging` first executes `00_prepare_staging.sql`, then executes `batch_month_insert_sql(context)` and immediately asserts one row per requested `ym`. Source resolution starts at `{rating_source_start_date}` so the first target month has one lookback month. `validate_spu_rating_inputs` runs `15_validate_spu_rating_inputs.sql` through `assert_zero_counts` before any rating aggregation. Candidate and identity SQL only joins target rows where `source_complete_flag=1`; lookback rows and target rows with flag 0 cannot create target business facts. The rating task aggregates only lookbacks with `previous_month_source_complete_flag=1`; flag 0 yields NULL amount and level without requiring FX.
 
 Scheduled daily runs force `publication_mode="publish"`. Manual runs accept only `validate_only` or `publish`; for `validate_only`, `prepare_publish` logs `publication=SKIPPED_VALIDATE_ONLY` and raises `AirflowSkipException` before any backup or target DML, so `publish_pair`, `validate_published`, and `cleanup` are skipped and staging remains available for inspection.
 
-Because the source Asset can update several times per day, `resolve_context` raises `AirflowSkipException` when its trusted `coverage_end_date <= approved_watermark`; only the first new complete coverage event can publish. On Beijing day 1, the selected previous month additionally requires that month's stock-ready metadata.
+Because the source Asset can update several times per day, `resolve_context` raises `AirflowSkipException` for `mode='daily'` when its trusted `coverage_end_date <= approved_watermark`; only the first new complete coverage event can advance the daily watermark. Manual backfill and bootstrap never apply this stale-event skip: they validate their explicit range against the pinned `coverage_manifest_id`, and backfill copies the approved watermark unchanged. On Beijing day 1, the selected previous month additionally requires that month's stock-ready metadata.
 
 - [ ] **Step 5: Enforce daily and backfill behavior**
 
@@ -1694,16 +2164,16 @@ Daily behavior:
 
 ```text
 candidate watermark = Airflow logical date in Asia/Shanghai minus one calendar day
-months = current Beijing month
-on Beijing day 1, months also include the previous completed month
-run only after daily source coverage and each selected month's stock completion are trusted
+months = the single YYYY-MM containing candidate watermark
+on Beijing day 1, candidate watermark is the prior month-end, so only that just-ended month is rebuilt
+run only after daily source coverage and each selected month's stock completion are trusted; previous-month source completion is recorded independently for rating coverage
 ```
 
 Manual behavior requires canonical `start_ym` and `end_ym`, and executes only after source-backfill run IDs and stock completion prove every selected non-gap month complete. The existing `om.airflow.api` trigger command cannot pass `dag_run.conf`; production parameterized backfill must use Airflow UI/native REST or a separately verified CLI extension, not an invented `--conf` flag.
 
 - [ ] **Step 6: Add logging and zero-source audit output**
 
-Every run logs the source max date, selected months, complete/gap state, source rows, candidate rows, eligible rows, generated-zero rows, target rows, every `check_name/error_count`, old/new watermark, replaced partitions, rollback outcome and `etl_batch_id`. For 2023-06 through 2024-06 log `source_complete_flag=0,publication=SKIPPED_ZERO_SOURCE`; never insert those months into candidate business partitions.
+Every run logs the source max date, selected months, target/previous-month coverage status, `coverage_manifest_id`, ignored raw-row counts for untrusted previous months, source rows, candidate rows, eligible rows, SPU rating rows and level distribution, SKU-row product-level multi-value audit, generated-zero rows, target rows, every blocking `check_name/error_count`, old/new watermark, replaced partitions, rollback outcome and `etl_batch_id`. For 2023-06 through 2024-06 log `source_coverage_status=audited_gap,publication=SKIPPED_ZERO_SOURCE`; never insert those months into candidate business partitions. A complete target month after an audited-gap or untrusted previous month may publish non-funnel facts with NULL rating fields, and the acceptance report must name that limitation explicitly.
 
 - [ ] **Step 7: Run tests, compile and lint**
 
@@ -1743,7 +2213,7 @@ If GitNexus reports HIGH or CRITICAL impact, stop before commit with affected sy
 
 **Interfaces:**
 
-- Consumes: all green code/tests, a clean release SHA, repaired zipper SID/history, zero eligible SPU rating conflicts, and trusted source/stock completion signals.
+- Consumes: all green code/tests, a clean release SHA, repaired zipper SID/history, green FX/SPU-sales-level gates, and trusted source/stock completion signals.
 - Produces: live target schemas, accepted historical partitions, one accepted daily run, immutable run IDs and reconciliation evidence. It does not produce BI metadata.
 
 - [ ] **Step 1: Re-run the full preflight and stop on any hard blocker**
@@ -1754,11 +2224,14 @@ Run:
 cd /Users/zewe/code-workspace/etl
 git status --short --branch
 git rev-parse HEAD
-python3 .agents/skills/datawarehouse-schema-explorer/scripts/query_doris.py \
-  --no-filter "$(< include/sql/validation/hot_product_index/preflight.sql)"
+python3 scripts/hot_product_index_preflight.py \
+  --start-ym <release-start-ym> --end-ym <release-end-ym> \
+  --coverage-end-date <trusted-coverage-end-date> \
+  --coverage-manifest-id <trusted-manifest-id> \
+  --coverage-events-file <successful-asset-events.json>
 ```
 
-Expected: clean release checkout; exact zipper mapping, zipper history, product-level, source duplicate and stock duplicate blockers all zero. If any is nonzero, record it and stop before production DDL/DML.
+Expected: clean release checkout; exact zipper multi-match, interval/boundary, source duplicate, unmatched-row representation, stock duplicate, required USD-month FX uniqueness/validity/coverage and SPU sales-level formula blockers all zero. Unmatched-row and SKU-row `product_level` audit counts are recorded separately and may be nonzero. If any hard blocker is nonzero, record it and stop before production DDL/DML.
 
 - [ ] **Step 2: Verify Airflow and Doris capability at release time**
 
@@ -1787,24 +2260,27 @@ python3 .agents/skills/datawarehouse-schema-explorer/scripts/query_doris.py \
 
 Expected: target keys, column order/types, AUTO partitions, 16 buckets and Merge-on-Write exactly match Task 2.
 
-- [ ] **Step 4: Run a staging-only canary for 2026-06**
+- [ ] **Step 4: Select a trusted month and run a staging-only canary**
 
-Trigger `start_ym=2026-06,end_ym=2026-06,publication_mode=validate_only` through Airflow UI/native REST. Execute Tasks 4-7, retain staging, and run the boundary/source fixtures.
+Do not use 2025-03/04/05, 2026-06 or 2026-07 until a successful owner run and committed evidence explicitly promote the month to complete. After selecting a trusted month, trigger `start_ym=<trusted>,end_ym=<trusted>,publication_mode=validate_only` through Airflow UI/native REST. Execute Tasks 4-7, retain staging, and run the applicable boundary/source fixtures.
 
 Expected:
 
 ```text
-2026-06-06 + 2613 + 8010A-BL28-FBM -> ZX-8010S-BL28
-2026-06-07 + 2613 + 8010A-BL28-FBM -> 8010S-BL28
+2026-05-29 + 2613 + 8010A-BL28-FBM -> ZX-8010S-BL28
+2026-05-30 + 2613 + 8010A-BL28-FBM -> 8010S-BL28
 2026-06-01 sales_qty=11 sales_amount_usd=2276.8900
 2026-06-02 sales_qty=3  sales_amount_usd=749.9700
 2026-06-03 sales_qty=5  sales_amount_usd=1249.9500
+FineBI FX fixture: 69.99 * 7.2 = 503.9280 CNY before display formatting
+FineBI EUR-row evidence: USD rate 7.2 approximately reconciles 47.24 USD to displayed 340.09 CNY; local EUR rate 7.9 does not
+SPU sales-level threshold fixtures and ym+spu row consistency = PASS
 all pre-publish error_count values = 0
 ```
 
 - [ ] **Step 5: Bootstrap all non-empty source months and audit gaps in one release batch**
 
-With both targets empty, run `mode=bootstrap` from the minimum source month through the latest complete current month and include the latest candidate watermark. Mark 2023-06 through 2024-06 as audited gaps with `source_complete_flag=0`; include 2023-02 through 2023-05 only after repaired zipper coverage passes; publish 2024-07 onward normally. Both tables must validate all complete months before the first overwrite begins, and only this whole-history bootstrap may establish the initial watermark.
+With both targets empty, run `mode=bootstrap` from the minimum source month through the latest complete current month and include the latest candidate watermark. Mark 2023-06 through 2024-06 as audited gaps with `source_complete_flag=0`; include complete source months from 2023-02 onward, preserving zero-match source rows with null product identity; publish 2024-07 onward by the same rule. Both tables must validate all complete months before the first overwrite begins, and only this whole-history bootstrap may establish the initial watermark.
 
 Expected: every non-empty source month has both target partitions; every known source-gap month has an Airflow audit record and no target partition.
 
@@ -1829,7 +2305,7 @@ python3 .agents/skills/datawarehouse-schema-explorer/scripts/query_doris.py \
   --no-filter "$(< include/sql/validation/hot_product_index/production_acceptance.sql)"
 ```
 
-Expected: all acceptance counts zero and all evidence rows match the approved contract. Paste the query output, Airflow DAG/run/task IDs, release SHA, table DDLs, coverage matrix, generated-zero counts, watermark and failure-injection result into the report.
+Expected: all acceptance counts zero and all evidence rows match the approved contract. Paste the query output, Airflow DAG/run/task IDs, release SHA, source `coverage_manifest_id`, table DDLs, coverage matrix, generated-zero counts, watermark and failure-injection result into the report.
 
 - [ ] **Step 9: Mark the BI return gate honestly**
 
@@ -1839,10 +2315,10 @@ The final data report must end with exactly four status lines:
 CODE_COMPLETE=PASS
 TABLE_SCHEMA_COMPLETE=PASS
 DATA_ACCEPTANCE=PASS
-BI_READER_ISOLATION=BLOCKED
+BI_READER_ISOLATION=WAIVED
 ```
 
-Change the last status to PASS only after a separate approved and tested cross-table reader-isolation design exists. Until then, keep the Superset baseline at commit `e80f3a5cad` and do not create dashboard metadata.
+`WAIVED` means the business owner accepts the short-lived cross-table mismatch during sequential replacement; it does not claim atomic reader isolation. Superset work remains a separate phase from this ETL data acceptance.
 
 - [ ] **Step 10: Commit the completed evidence report**
 
@@ -1856,8 +2332,9 @@ git commit -m "docs(ads): record hot product index data acceptance"
 | Requirement                                                   | Owning task    | Required proof                                  |
 | ------------------------------------------------------------- | -------------- | ----------------------------------------------- |
 | Exact table names, fields, keys and partitions                | Task 2         | Static test + production `SHOW CREATE TABLE`    |
-| Exact closed-interval SKU mapping                             | Tasks 0, 4, 10 | 05-29/05-30 fixture and zero match-count errors |
-| Correct product rating source                                 | Tasks 4, 7     | SQL contract + zero `ym,spu` conflict           |
+| Exact closed-interval SKU mapping                             | Tasks 0, 4, 10 | 05-29/05-30 fixture, adjacent-boundary gate, zero multi-match errors and NULL representation for zero-match rows |
+| SKU-row product-level source                                  | Tasks 4, 7     | Dimension lineage + non-blocking multi-value audit |
+| SPU previous-month sales level                                | Tasks 0, 5A, 7, 10 | FX fixture + threshold boundaries + null-safe `ym,spu` reconciliation |
 | `sales + stock > 10` with no status                           | Task 5         | Independent eligibility reconciliation          |
 | Preserve all source facts; zero-fill only eligible identities | Tasks 6, 7     | Two-way source and day-spine set comparisons    |
 | Monthly derives only from daily                               | Tasks 6, 7     | SQL lineage contract + metric reconciliation    |
@@ -1880,4 +2357,4 @@ git commit -m "docs(ads): record hot product index data acceptance"
 
 ## Handoff
 
-交给数据表/Airflow Agent 时，从 Task 0 开始逐项执行并在每个 commit 后复核。当前允许先完成只读前置、Doris disposable probe、DDL 和纯代码测试；生产源解析、回填和发布必须等待 Decision Gate 0、历史拉链、评级冲突与库存完成信号全部解除。数据报告达到 `DATA_ACCEPTANCE=PASS` 后，再回到 Superset BI 基线；不得把“代码已写完”当成“数据已交付”。
+交给数据表/Airflow Agent 时，从 Task 0 开始逐项执行并在每个 commit 后复核。开发前先检查目标文件、测试和 Git diff，已有实现则按本计划做差异审计，禁止重复创建或覆盖他人改动。当前允许完成只读前置、Doris disposable probe、DDL、Task 9 代码和纯代码测试；生产源解析、回填和发布必须等待版本化 source coverage、stock Ready Metadata、FX 及其他发布门禁全部解除。零命中拉链和 SKU 行级 `product_level` 多值都不是阻塞条件。数据报告达到 `DATA_ACCEPTANCE=PASS` 后，再回到 Superset BI 基线；不得把“代码已写完”当成“数据已交付”。
