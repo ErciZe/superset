@@ -60,6 +60,7 @@ export type TableColumnConfig = {
   visible?: boolean;
   customColumnName?: string;
   displayTypeIcon?: boolean;
+  pinned?: 'left' | 'right' | null;
 };
 
 export interface DataColumnMeta {
@@ -84,6 +85,27 @@ export interface TableChartData {
   columns: string[];
 }
 
+export const HIERARCHY_META_KEY = '__hierarchyMeta' as const;
+
+export type HierarchyCellMeta = {
+  depth: number;
+  path: string;
+  firstInGroup: boolean;
+  hasDescendants: boolean;
+  expanded: boolean;
+};
+
+export type HierarchyRowMeta = Record<string, HierarchyCellMeta>;
+
+export type HierarchyRecord = DataRecord & {
+  [HIERARCHY_META_KEY]?: HierarchyRowMeta;
+};
+
+export type HierarchyView = {
+  records: HierarchyRecord[];
+  metadataKey: typeof HIERARCHY_META_KEY;
+};
+
 export type TableChartFormData = QueryFormData & {
   align_pn?: boolean;
   color_pn?: boolean;
@@ -102,6 +124,7 @@ export type TableChartFormData = QueryFormData & {
   time_grain_sqla?: TimeGranularity;
   column_config?: Record<string, TableColumnConfig>;
   allow_rearrange_columns?: boolean;
+  row_hierarchy_fields?: string[];
 };
 
 export interface TableChartProps extends ChartProps {
@@ -157,6 +180,7 @@ export interface ServerPaginationData {
   searchText?: string;
   searchColumn?: string;
   advancedFilter?: AdvancedFilterState;
+  collapsedHierarchyPaths?: string[];
 }
 
 export type AdditionalCellStyle = (
