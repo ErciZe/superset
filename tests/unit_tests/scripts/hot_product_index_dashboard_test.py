@@ -393,6 +393,64 @@ def test_guide_link_is_a_header_layout_component(tmp_path: Path) -> None:
     assert "position: fixed" in main["css"]
 
 
+def test_status_banner_renders_without_sanitized_css_or_row_limit_warning(
+    tmp_path: Path,
+) -> None:
+    """The compact banner must survive HTML sanitization and fit its grid row."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    main = assets_by_key(assets, "dashboards", "dashboard_title")[
+        "拉杆箱在售产品爆品指数看板"
+    ]
+
+    params = charts["爆品指数数据状态"]["params"]
+    assert params["row_limit"] == 2
+    assert params["styleTemplate"] == ""
+    assert (
+        '{{dateFormat global_data_through_date format="YYYY-MM-DD"}}'
+        in (params["handlebarsTemplate"])
+    )
+    assert (
+        '{{dateFormat effective_end_date format="YYYY-MM-DD"}}'
+        in (params["handlebarsTemplate"])
+    )
+    assert "\n" not in params["handlebarsTemplate"]
+
+    assert main["position"]["CHART-STATUS"]["meta"]["height"] == 8
+    css = main["css"]
+    assert "#CHART-STATUS + .chart-slice [data-test='slice-header']" in css
+    assert "[id^='CHART-KPI-'] + .chart-slice [data-test='slice-header']" in css
+    assert ".dashboard-component-chart-holder:has(> #CHART-STATUS)" in css
+    assert "right: 250px" in css
+
+
+def test_guide_chart_keeps_styles_outside_sanitized_handlebars(
+    tmp_path: Path,
+) -> None:
+    """Guide HTML must not expose its CSS or epoch-millisecond dates."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    guide = assets_by_key(assets, "dashboards", "dashboard_title")["爆品指数说明文档"]
+
+    params = charts["爆品指数说明"]["params"]
+    assert params["row_limit"] == 2
+    assert params["styleTemplate"] == ""
+    assert (
+        '{{dateFormat global_data_through_date format="YYYY-MM-DD"}}'
+        in (params["handlebarsTemplate"])
+    )
+    assert (
+        '{{dateFormat selected_start_date format="YYYY-MM-DD"}}'
+        in (params["handlebarsTemplate"])
+    )
+    assert (
+        '{{dateFormat selected_end_date format="YYYY-MM-DD"}}'
+        in (params["handlebarsTemplate"])
+    )
+    assert "#CHART-GUIDE + .chart-slice [data-test='slice-header']" in guide["css"]
+    assert "#CHART-GUIDE + .chart-slice .handlebars article" in guide["css"]
+
+
 def test_write_bundle_rejects_an_invalid_database_uuid(tmp_path: Path) -> None:
     """A typo in the production database identity must stop before ZIP creation."""
     output = tmp_path / "assets.zip"

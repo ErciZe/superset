@@ -787,45 +787,19 @@ def _funnel_params(
 
 def _status_chart_params() -> Asset:
     """Return the compact main-canvas status banner configuration."""
-    template = """<section>
-  <strong>爆品指数总览</strong>
-  {{#each data}}
-    {{#if coverage_complete}}
-      <span>
-        数据更新至 {{global_data_through_date}} · 实际计算至 {{effective_end_date}}
-        {{#if is_stale}} · 数据延迟{{/if}}
-        {{#if rating_complete}}{{else}} · 评级源不完整，漏斗停算{{/if}}
-      </span>
-    {{else}}
-      <span>
-        所选范围存在数据缺口 · 日表 {{daily_month_count}}/{{expected_month_count}} 月
-        · 月表 {{monthly_month_count}}/{{expected_month_count}} 月
-      </span>
-    {{/if}}
-  {{/each}}
-</section>"""
-    style = """section {
-  align-items: center;
-  background: #d8edc8;
-  color: #13213a;
-  display: flex;
-  font-size: 13px;
-  gap: 20px;
-  height: 100%;
-  justify-content: space-between;
-  padding: 0 16px;
-}
-section strong { font-size: 18px; }
-section span { flex: 1; text-align: center; }
-@media (max-width: 900px) {
-  section {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
-    padding: 8px 12px;
-  }
-  section span { text-align: left; }
-}"""
+    template = (
+        "<section><strong>爆品指数总览</strong>{{#each data}}"
+        "{{#if coverage_complete}}<span>数据更新至 "
+        '{{dateFormat global_data_through_date format="YYYY-MM-DD"}}'
+        " · 实际计算至 "
+        '{{dateFormat effective_end_date format="YYYY-MM-DD"}}'
+        "{{#if is_stale}} · 数据延迟{{/if}}"
+        "{{#if rating_complete}}{{else}} · 评级源不完整，漏斗停算{{/if}}"
+        "</span>{{else}}<span>所选范围存在数据缺口 · 日表 "
+        "{{daily_month_count}}/{{expected_month_count}} 月 · 月表 "
+        "{{monthly_month_count}}/{{expected_month_count}} 月</span>"
+        "{{/if}}{{/each}}</section>"
+    )
     return {
         "adhoc_filters": [],
         "all_columns": [
@@ -846,8 +820,8 @@ section span { flex: 1; text-align: center; }
         "include_time": False,
         "order_by_cols": [],
         "query_mode": "raw",
-        "row_limit": 1,
-        "styleTemplate": style,
+        "row_limit": 2,
+        "styleTemplate": "",
         "time_range": "Current month",
         "viz_type": "handlebars",
     }
@@ -860,8 +834,9 @@ def _guide_chart_params() -> Asset:
   {{#each data}}
     <p>
       <strong>数据状态：</strong>{{status_message}}；{{rating_status_message}}。
-      数据更新至 {{global_data_through_date}}，所选范围 {{selected_start_date}}
-      至 {{selected_end_date}}。
+      数据更新至 {{dateFormat global_data_through_date format="YYYY-MM-DD"}}，
+      所选范围 {{dateFormat selected_start_date format="YYYY-MM-DD"}}
+      至 {{dateFormat selected_end_date format="YYYY-MM-DD"}}。
     </p>
   {{/each}}
   <h2>在售范围</h2>
@@ -895,18 +870,6 @@ def _guide_chart_params() -> Asset:
     <code>ads.ads_pdm_lx_hot_product_index_sku_m</code>。
   </p>
 </article>"""
-    style = """article {
-  color: #172033;
-  font-size: 14px;
-  line-height: 1.7;
-  margin: 0 auto;
-  max-width: 960px;
-  padding: 16px 24px 40px;
-}
-article h1 { border-bottom: 2px solid #91b276; font-size: 26px; padding-bottom: 10px; }
-article h2 { font-size: 18px; margin-top: 24px; }
-article code { background: #f3f4f6; color: #9f1239; padding: 2px 5px; }
-article li { margin: 4px 0; }"""
     return {
         "adhoc_filters": [],
         "all_columns": [
@@ -922,8 +885,8 @@ article li { margin: 4px 0; }"""
         "include_time": False,
         "order_by_cols": [],
         "query_mode": "raw",
-        "row_limit": 1,
-        "styleTemplate": style,
+        "row_limit": 2,
+        "styleTemplate": "",
         "time_range": "Current month",
         "viz_type": "handlebars",
     }
@@ -1079,7 +1042,7 @@ def _main_position() -> Asset:
             slice_name="爆品指数数据状态",
             row_id="ROW-STATUS",
             width=12,
-            height=6,
+            height=8,
         ),
         "CHART-FUNNEL-SALES-AMOUNT": _chart_node(
             component_id="CHART-FUNNEL-SALES-AMOUNT",
@@ -1343,7 +1306,7 @@ def _dashboards() -> AssetBundle:
   height: 34px !important;
   min-height: 34px !important;
   position: fixed;
-  right: 24px;
+  right: 250px;
   top: 12px;
   width: 114px !important;
   z-index: 100;
@@ -1369,24 +1332,53 @@ body:has(#main-menu) #MARKDOWN-DOC-LINK { top: 65px; }
   text-align: center;
   text-decoration: none;
 }
-#CHART-STATUS .chart-header,
-[id^='CHART-KPI-'] .chart-header { display: none; }
-#CHART-STATUS { border: 0; }
-[id^='CHART-KPI-'] {
+#CHART-STATUS + .chart-slice [data-test='slice-header'],
+[id^='CHART-KPI-'] + .chart-slice [data-test='slice-header'] { display: none; }
+.dashboard-component-chart-holder:has(> #CHART-STATUS) { border: 0; }
+#CHART-STATUS + .chart-slice .handlebars > div {
+  overflow: hidden;
+  padding: 0;
+}
+#CHART-STATUS + .chart-slice .handlebars section {
+  align-items: center;
+  background: #d8edc8;
+  color: #13213a;
+  display: flex;
+  font-size: 13px;
+  gap: 20px;
+  height: 100%;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+#CHART-STATUS + .chart-slice .handlebars section strong { font-size: 18px; }
+#CHART-STATUS + .chart-slice .handlebars section span {
+  flex: 1;
+  text-align: center;
+}
+.dashboard-component-chart-holder:has(> [id^='CHART-KPI-']) {
   background: #ffffff;
   border: 1px solid #d8dee8;
   border-radius: 6px;
 }
-[id^='CHART-KPI-'] .superset-legacy-chart-big-number,
-[id^='CHART-KPI-'] .text-container {
+[id^='CHART-KPI-'] + .chart-slice .superset-legacy-chart-big-number,
+[id^='CHART-KPI-'] + .chart-slice .text-container {
   align-items: center;
   justify-content: center;
   text-align: center;
 }
-#CHART-FUNNEL-SALES-AMOUNT,
-#CHART-FUNNEL-SPU-COUNT {
+.dashboard-component-chart-holder:has(> #CHART-FUNNEL-SALES-AMOUNT),
+.dashboard-component-chart-holder:has(> #CHART-FUNNEL-SPU-COUNT) {
   background: #ffffff;
   border-top: 1px solid #e5e7eb;
+}
+@media (max-width: 900px) {
+  #CHART-STATUS + .chart-slice .handlebars section {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 12px;
+  }
+  #CHART-STATUS + .chart-slice .handlebars section span { text-align: left; }
 }"""
     guide_metadata = {
         "chart_configuration": {},
@@ -1420,7 +1412,36 @@ body:has(#main-menu) #MARKDOWN-DOC-LINK { top: 65px; }
             slug="hot-product-index-guide",
             uuid=UUIDS["dashboard_guide"],
             description="爆品指数看板的数据、时间、指标和等级口径。",
-            css="#CHART-GUIDE .chart-header { display: none; }",
+            css="""#CHART-GUIDE + .chart-slice [data-test='slice-header'] {
+  display: none;
+}
+#CHART-GUIDE + .chart-slice .handlebars > div {
+  overflow: auto;
+  padding: 0;
+}
+#CHART-GUIDE + .chart-slice .handlebars article {
+  color: #172033;
+  font-size: 14px;
+  line-height: 1.7;
+  margin: 0 auto;
+  max-width: 960px;
+  padding: 16px 24px 40px;
+}
+#CHART-GUIDE + .chart-slice .handlebars article h1 {
+  border-bottom: 2px solid #91b276;
+  font-size: 26px;
+  padding-bottom: 10px;
+}
+#CHART-GUIDE + .chart-slice .handlebars article h2 {
+  font-size: 18px;
+  margin-top: 24px;
+}
+#CHART-GUIDE + .chart-slice .handlebars article code {
+  background: #f3f4f6;
+  color: #9f1239;
+  padding: 2px 5px;
+}
+#CHART-GUIDE + .chart-slice .handlebars article li { margin: 4px 0; }""",
             position=_guide_position(),
             metadata=guide_metadata,
         ),
