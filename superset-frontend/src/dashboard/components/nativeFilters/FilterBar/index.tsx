@@ -62,6 +62,10 @@ import { logEvent } from 'src/logger/actions';
 import { LOG_ACTIONS_CHANGE_DASHBOARD_FILTER } from 'src/logger/LogUtils';
 import { FilterBarOrientation, RootState } from 'src/dashboard/types';
 import { UserWithPermissionsAndRoles } from 'src/types/bootstrapTypes';
+import {
+  isRelativeMonthRange,
+  normalizeMonthRange,
+} from 'src/filters/components/MonthRange/utils';
 import { isChartCustomization } from '../FiltersConfigModal/utils';
 import { checkIsApplyDisabled, getFiltersToApply } from './utils';
 import { extractLabel } from '../selectors';
@@ -210,6 +214,43 @@ const FilterBar: FC<FiltersBarProps> = ({
     UserWithPermissionsAndRoles
   >(state => state.user);
 
+  useEffect(() => {
+    nativeFilterValues.forEach(filter => {
+      if (filter.filterType !== 'filter_month_range') {
+        return;
+      }
+      const appliedDataMask = dataMaskApplied[filter.id];
+      const value = appliedDataMask?.filterState?.value;
+      if (!appliedDataMask || !isRelativeMonthRange(value)) {
+        return;
+      }
+      const normalizedValue = normalizeMonthRange(
+        value,
+        filter.controlValues?.monthTimeZone,
+        filter.controlValues?.monthSelectionMode === 'single'
+          ? 'single'
+          : 'range',
+      );
+      if (!normalizedValue) {
+        return;
+      }
+      dispatch(
+        updateDataMask(filter.id, {
+          ...appliedDataMask,
+          extraFormData: {
+            ...appliedDataMask.extraFormData,
+            time_range: normalizedValue,
+          },
+          filterState: {
+            ...appliedDataMask.filterState,
+            value: normalizedValue,
+            validateStatus: undefined,
+          },
+        }),
+      );
+    });
+  }, [dataMaskApplied, dispatch, nativeFilterValues]);
+
   const [filtersInScope] = useSelectFiltersInScope(nativeFilterValues);
   const inScopeFilterIds = useMemo(
     () => new Set(filtersInScope.map(f => f.id)),
@@ -260,12 +301,18 @@ const FilterBar: FC<FiltersBarProps> = ({
             Object.keys(appliedDataMask.extraFormData || {}).length === 0) &&
           dataMask.extraFormData &&
           Object.keys(dataMask.extraFormData).length > 0;
+        const needsMonthRangeNormalization =
+          filter.filterType === 'filter_month_range' &&
+          isRelativeMonthRange(appliedDataMask?.filterState?.value) &&
+          typeof dataMask.filterState?.value === 'string' &&
+          dataMask.filterState.value !== appliedDataMask.filterState.value;
 
         // Force instant updating for requiredFirst filters or auto-apply when needed
         const shouldDispatch =
           dataMask.filterState?.value !== undefined &&
           ((isFirstTimeInitialization && filter.requiredFirst) ||
-            needsAutoApply);
+            needsAutoApply ||
+            needsMonthRangeNormalization);
 
         if (shouldDispatch) {
           // Strip validateStatus before dispatching to Redux

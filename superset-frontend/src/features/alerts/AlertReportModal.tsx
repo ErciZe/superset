@@ -67,8 +67,11 @@ import {
   Tooltip,
   TreeSelect,
   Button,
+  DatePicker,
+  RangePicker,
   type CheckboxChangeEvent,
 } from '@superset-ui/core/components';
+import { extendedDayjs } from '@superset-ui/core/utils/dates';
 
 import { navigateTo } from 'src/utils/navigationUtils';
 
@@ -98,10 +101,15 @@ import {
   DashboardTabsResponse,
 } from 'src/features/alerts/types';
 import { StatusMessage } from 'src/filters/components/common';
+import { isTimeRangeFilterType } from 'src/filters/utils';
 import { useSelector } from 'react-redux';
 import { UserWithPermissionsAndRoles } from 'src/types/bootstrapTypes';
 import { getChartDataRequest } from 'src/components/Chart/chartAction';
 import DateFilterControl from 'src/explore/components/controls/DateFilterControl';
+import {
+  decodeMonthRange,
+  encodeMonthRange,
+} from 'src/filters/components/MonthRange/utils';
 import { Icons } from '@superset-ui/core/components/Icons';
 import { StandardModal, ModalFormField } from 'src/components/Modal';
 import NumberInput from './components/NumberInput';
@@ -719,8 +727,8 @@ const AlertReportModal: FunctionComponent<AlertReportModalProps> = ({
     vizType = 'filter_select',
     adhocFilters: any[] = [],
   ) => {
-    if (vizType === 'filter_time') {
-      return;
+    if (isTimeRangeFilterType(vizType)) {
+      return [];
     }
 
     const filterValues = {
@@ -781,15 +789,42 @@ const AlertReportModal: FunctionComponent<AlertReportModalProps> = ({
         f => f.id === nativeFilter.nativeFilterId,
       )[0];
 
-      const { datasetId } = filter.targets[0];
       const filterName = filter.name;
-      const columnName = filter.targets[0].column?.name || filterName;
       const dashboardId = currentAlert?.dashboard?.value;
       const { filterType } = filter;
+      const monthRangeMetadata =
+        filterType === 'filter_month_range'
+          ? {
+              monthSelectionMode:
+                filter.controlValues?.monthSelectionMode ??
+                nativeFilter.monthSelectionMode ??
+                ('range' as const),
+              monthTimeZone:
+                filter.controlValues?.monthTimeZone ??
+                nativeFilter.monthTimeZone ??
+                extendedDayjs.tz.guess(),
+            }
+          : {};
 
-      if (filterType === 'filter_time') {
+      if (isTimeRangeFilterType(filterType)) {
+        setNativeFilterData(prev =>
+          prev.map(filter =>
+            filter.nativeFilterId === nativeFilter.nativeFilterId
+              ? {
+                  ...filter,
+                  filterType,
+                  filterName,
+                  optionFilterValues: [],
+                  ...monthRangeMetadata,
+                }
+              : filter,
+          ),
+        );
         return;
       }
+
+      const { datasetId } = filter.targets[0];
+      const columnName = filter.targets[0].column?.name || filterName;
 
       // eslint-disable-next-line consistent-return
       return fetchDashboardFilterValues(
@@ -931,6 +966,8 @@ const AlertReportModal: FunctionComponent<AlertReportModalProps> = ({
           filterValues,
           filterType,
           filterName,
+          monthSelectionMode,
+          monthTimeZone,
         }) => ({
           filterName,
           filterType,
@@ -938,6 +975,14 @@ const AlertReportModal: FunctionComponent<AlertReportModalProps> = ({
           columnLabel,
           nativeFilterId,
           filterValues,
+          monthSelectionMode:
+            filterType === 'filter_month_range'
+              ? (monthSelectionMode ?? 'range')
+              : undefined,
+          monthTimeZone:
+            filterType === 'filter_month_range'
+              ? (monthTimeZone ?? extendedDayjs.tz.guess())
+              : undefined,
         }),
       );
     }
@@ -1501,6 +1546,15 @@ const AlertReportModal: FunctionComponent<AlertReportModalProps> = ({
     const filter = filters.filter(f => f.id === nativeFilterId)[0];
 
     const { filterType, adhoc_filters: adhocFilters } = filter;
+    const monthRangeMetadata =
+      filterType === 'filter_month_range'
+        ? {
+            monthSelectionMode:
+              filter.controlValues?.monthSelectionMode ?? ('range' as const),
+            monthTimeZone:
+              filter.controlValues?.monthTimeZone ?? extendedDayjs.tz.guess(),
+          }
+        : {};
     const filterAlreadyExist = nativeFilterData.some(
       filter => filter.nativeFilterId === nativeFilterId,
     );
@@ -1514,7 +1568,7 @@ const AlertReportModal: FunctionComponent<AlertReportModalProps> = ({
 
     let columnName: string;
     if (
-      filterType === 'filter_time' ||
+      isTimeRangeFilterType(filterType) ||
       filterType === 'filter_timecolumn' ||
       filterType === 'filter_timegrain'
     ) {
@@ -1523,7 +1577,7 @@ const AlertReportModal: FunctionComponent<AlertReportModalProps> = ({
       columnName = filter.targets[0].column.name;
     }
 
-    const datasetId = filter.targets[0].datasetId || null;
+    const datasetId = filter.targets[0]?.datasetId || null;
 
     const columnLabel = nativeFilterOptions.filter(
       filter => filter.value === nativeFilterId,
@@ -1549,7 +1603,7 @@ const AlertReportModal: FunctionComponent<AlertReportModalProps> = ({
 
     // todo(hugh): put this into another function
     if (
-      filterType === 'filter_time' ||
+      isTimeRangeFilterType(filterType) ||
       filterType === 'filter_timecolumn' ||
       filterType === 'filter_timegrain'
     ) {
@@ -1572,6 +1626,7 @@ const AlertReportModal: FunctionComponent<AlertReportModalProps> = ({
                   columnName,
                   optionFilterValues,
                   filterValues: [], // reset filter values on filter change
+                  ...monthRangeMetadata,
                 }
               : filter,
           ),
@@ -1590,6 +1645,7 @@ const AlertReportModal: FunctionComponent<AlertReportModalProps> = ({
                 columnName,
                 optionFilterValues: [],
                 filterValues: [], // reset filter values on filter change
+                ...monthRangeMetadata,
               }
             : filter,
         ),
@@ -1687,7 +1743,58 @@ const AlertReportModal: FunctionComponent<AlertReportModalProps> = ({
     if (!filter) return null;
     const { filterType, filterValues } = filter;
     let mode = 'multiple';
-    if (filterType === 'filter_time') {
+    if (filterType === 'filter_month_range') {
+      const selectedMonths = decodeMonthRange(
+        filterValues?.[0],
+        filter.monthTimeZone,
+      );
+      const updateMonthFilterValues = (values: string[]) => {
+        setNativeFilterData(prev =>
+          prev.map((nativeFilter, index) =>
+            index === idx
+              ? { ...nativeFilter, filterValues: values }
+              : nativeFilter,
+          ),
+        );
+      };
+
+      return (
+        <div data-test="alert-month-range-picker">
+          {filter.monthSelectionMode === 'single' ? (
+            <DatePicker
+              allowClear
+              aria-label={t('Month')}
+              format="YYYY-MM"
+              onChange={month =>
+                updateMonthFilterValues(
+                  month ? [encodeMonthRange(month, month)] : [],
+                )
+              }
+              picker="month"
+              placeholder={t('Month')}
+              value={selectedMonths?.[0] ?? null}
+            />
+          ) : (
+            <RangePicker
+              allowClear
+              aria-label={t('Range')}
+              format="YYYY-MM"
+              onChange={months =>
+                updateMonthFilterValues(
+                  months?.[0] && months[1]
+                    ? [encodeMonthRange(months[0], months[1])]
+                    : [],
+                )
+              }
+              picker="month"
+              placeholder={[t('Month'), t('Month')]}
+              value={selectedMonths ?? null}
+            />
+          )}
+        </div>
+      );
+    }
+    if (isTimeRangeFilterType(filterType)) {
       return (
         <DateFilterComponent
           name="time_range"
@@ -1703,7 +1810,7 @@ const AlertReportModal: FunctionComponent<AlertReportModalProps> = ({
               ),
             );
           }}
-          value={filterValues?.[0]} // only showing first value in the array for filter_time
+          value={filterValues?.[0]}
         />
       );
     }

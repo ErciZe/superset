@@ -31,6 +31,7 @@ import {
   within,
 } from 'spec/helpers/testing-library';
 import {
+  MonthRangeFilterPlugin,
   RangeFilterPlugin,
   SelectFilterPlugin,
   TimeColumnFilterPlugin,
@@ -49,6 +50,7 @@ class MainPreset extends Preset {
         new SelectFilterPlugin().configure({ key: 'filter_select' }),
         new RangeFilterPlugin().configure({ key: 'filter_range' }),
         new TimeFilterPlugin().configure({ key: 'filter_time' }),
+        new MonthRangeFilterPlugin().configure({ key: 'filter_month_range' }),
         new TimeColumnFilterPlugin().configure({ key: 'filter_timecolumn' }),
         new TimeGrainFilterPlugin().configure({ key: 'filter_timegrain' }),
       ],
@@ -164,6 +166,8 @@ const COLUMN_REGEX = /^column$/i;
 const VALUE_REGEX = /^value$/i;
 const NUMERICAL_RANGE_REGEX = /^numerical range$/i;
 const TIME_RANGE_REGEX = /^time range$/i;
+const MONTH_RANGE_REGEX = /^month range$/i;
+const MONTH_SELECTION_MODE_REGEX = /^month selection mode$/i;
 const TIME_COLUMN_REGEX = /^time column$/i;
 const TIME_GRAIN_REGEX = /^time grain$/i;
 const FILTER_SETTINGS_REGEX = /^filter settings$/i;
@@ -286,10 +290,156 @@ test('renders a time range filter type', async () => {
   expect(screen.getByText(FILTER_NAME_REGEX)).toBeInTheDocument();
   expect(screen.queryByText(DATASET_REGEX)).not.toBeInTheDocument();
   expect(screen.queryByText(COLUMN_REGEX)).not.toBeInTheDocument();
+  expect(
+    screen.getByText(/dashboard time range filters apply to temporal columns/i),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/^filter configuration$/i)).not.toBeInTheDocument();
 
   expect(getCheckbox(DEFAULT_VALUE_REGEX)).not.toBeChecked();
   expect(getCheckbox(EASY_DATE_RANGE_REGEX)).not.toBeChecked();
 });
+
+test('renders a month range filter with a configurable range mode', async () => {
+  defaultRender();
+
+  await userEvent.click(screen.getByText(VALUE_REGEX));
+  await userEvent.click(await screen.findByText(MONTH_RANGE_REGEX));
+
+  expect(screen.queryByText(DATASET_REGEX)).not.toBeInTheDocument();
+  expect(screen.queryByText(COLUMN_REGEX)).not.toBeInTheDocument();
+  expect(
+    screen.getByText(/dashboard time range filters apply to temporal columns/i),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/^filter configuration$/i)).not.toBeInTheDocument();
+  const modeSelect = screen.getByRole('combobox', {
+    name: MONTH_SELECTION_MODE_REGEX,
+  });
+  expect(modeSelect.closest('.ant-select')).toHaveTextContent('Range');
+});
+
+test.each([
+  { initialMode: 'range', selectedMode: 'single', selectedLabel: 'Single' },
+  { initialMode: 'single', selectedMode: 'range', selectedLabel: 'Range' },
+])(
+  'saves $selectedMode month selection mode',
+  async ({ initialMode, selectedMode, selectedLabel }) => {
+    const nativeFilterConfig = [
+      {
+        ...buildNativeFilter('NATIVE_FILTER-MONTH', 'Month range', []),
+        filterType: 'filter_month_range',
+        targets: [],
+        controlValues: {
+          monthSelectionMode: initialMode,
+          monthTimeZone: 'Asia/Shanghai',
+        },
+      },
+    ];
+    const state = {
+      ...defaultState(),
+      dashboardInfo: {
+        metadata: {
+          native_filter_configuration: nativeFilterConfig,
+        },
+      },
+      dashboardLayout,
+    };
+    const onSave = jest.fn();
+
+    defaultRender(state, {
+      ...props,
+      createNewOnOpen: false,
+      onSave,
+    });
+
+    const modeSelect = await screen.findByRole('combobox', {
+      name: MONTH_SELECTION_MODE_REGEX,
+    });
+    await userEvent.click(modeSelect);
+    await userEvent.click(
+      await screen.findByRole('option', { name: selectedLabel }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: SAVE_REGEX }));
+
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filterChanges: expect.objectContaining({
+            modified: expect.arrayContaining([
+              expect.objectContaining({
+                id: 'NATIVE_FILTER-MONTH',
+                controlValues: expect.objectContaining({
+                  monthSelectionMode: selectedMode,
+                  monthTimeZone: 'Asia/Shanghai',
+                }),
+              }),
+            ]),
+          }),
+        }),
+      ),
+    );
+  },
+  30000,
+);
+
+test('preserves a rolling month default and its hidden time zone on save', async () => {
+  const nativeFilterConfig = [
+    {
+      ...buildNativeFilter('NATIVE_FILTER-MONTH', 'Month range', []),
+      filterType: 'filter_month_range',
+      targets: [],
+      controlValues: {
+        monthSelectionMode: 'range',
+        monthTimeZone: 'Asia/Shanghai',
+      },
+      defaultDataMask: {
+        extraFormData: { time_range: 'Current month' },
+        filterState: { value: 'Current month' },
+        ownState: {},
+      },
+    },
+  ];
+  const state = {
+    ...defaultState(),
+    dashboardInfo: {
+      metadata: {
+        native_filter_configuration: nativeFilterConfig,
+      },
+    },
+    dashboardLayout,
+  };
+  const onSave = jest.fn();
+
+  defaultRender(state, {
+    ...props,
+    createNewOnOpen: false,
+    onSave,
+  });
+
+  await userEvent.click(
+    await screen.findByRole('checkbox', { name: FILTER_REQUIRED_REGEX }),
+  );
+  await userEvent.click(screen.getByRole('button', { name: SAVE_REGEX }));
+
+  await waitFor(() => expect(onSave).toHaveBeenCalled());
+  expect(onSave).toHaveBeenCalledWith(
+    expect.objectContaining({
+      filterChanges: expect.objectContaining({
+        modified: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'NATIVE_FILTER-MONTH',
+            controlValues: expect.objectContaining({
+              monthTimeZone: 'Asia/Shanghai',
+            }),
+            defaultDataMask: expect.objectContaining({
+              extraFormData: { time_range: 'Current month' },
+              filterState: expect.objectContaining({ value: 'Current month' }),
+            }),
+          }),
+        ]),
+      }),
+    }),
+  );
+}, 30000);
 
 test('does not render easy date range picker setting for non-time filters', async () => {
   defaultRender();

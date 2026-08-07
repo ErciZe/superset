@@ -234,6 +234,18 @@ test('doesColumnMatchFilterType returns false when column type does not match fi
   expect(doesColumnMatchFilterType('filter_time', stringColumn)).toBe(false);
 });
 
+test('doesColumnMatchFilterType requires temporal columns for filter_month_range', () => {
+  const temporalColumn = createColumn('created_at', GenericDataType.Temporal);
+  const stringColumn = createColumn('name', GenericDataType.String);
+
+  expect(doesColumnMatchFilterType('filter_month_range', temporalColumn)).toBe(
+    true,
+  );
+  expect(doesColumnMatchFilterType('filter_month_range', stringColumn)).toBe(
+    false,
+  );
+});
+
 // Test isValidFilterValue - validates default value field when "has default value" is enabled
 // This is the validation logic used by FiltersConfigForm to show "Please choose a valid value" error
 

@@ -31,6 +31,12 @@ import {
 } from '../explore/components/controls/FilterControl/types';
 import { SelectFilterOperatorType } from './components/Select/types';
 
+export function isTimeRangeFilterType(
+  filterType: unknown,
+): filterType is 'filter_time' | 'filter_month_range' {
+  return filterType === 'filter_time' || filterType === 'filter_month_range';
+}
+
 function applyWildcard(
   value: string,
   operatorType: SelectFilterOperatorType,
