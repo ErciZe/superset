@@ -398,6 +398,14 @@ def test_guide_link_is_a_header_layout_component(tmp_path: Path) -> None:
     }
     assert "#MARKDOWN-DOC-LINK" in main["css"]
     assert "position: fixed" in main["css"]
+    assert """#MARKDOWN-DOC-LINK > .resizable-container {
+  height: 100% !important;
+  max-height: 100% !important;
+  max-width: 100% !important;
+  min-height: 100% !important;
+  min-width: 100% !important;
+  width: 100% !important;
+}""" in main["css"]
 
 
 def test_status_banner_renders_without_sanitized_css_or_row_limit_warning(

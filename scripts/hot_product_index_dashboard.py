@@ -1328,6 +1328,14 @@ def _dashboards() -> AssetBundle:
   z-index: 100;
 }
 body:has(#main-menu) #MARKDOWN-DOC-LINK { top: 65px; }
+#MARKDOWN-DOC-LINK > .resizable-container {
+  height: 100% !important;
+  max-height: 100% !important;
+  max-width: 100% !important;
+  min-height: 100% !important;
+  min-width: 100% !important;
+  width: 100% !important;
+}
 #MARKDOWN-DOC-LINK .dashboard-component-chart-holder {
   align-items: center;
   background: transparent;
