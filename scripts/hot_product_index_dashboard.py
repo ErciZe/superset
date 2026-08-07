@@ -675,7 +675,6 @@ def _query_context(params: Asset) -> str:
         "columns": columns,
         "custom_form_data": {},
         "custom_params": {},
-        "datasource": datasource,
         "extras": {"having": "", "where": ""},
         "filters": [],
         "group_others_when_limit_reached": False,

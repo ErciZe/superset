@@ -103,10 +103,7 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
         assert query_context["datasource"] == {"id": 0, "type": "table"}
         assert query_context["form_data"]["datasource"] == "0__table"
         assert query_context["queries"]
-        assert query_context["queries"][0]["datasource"] == {
-            "id": 0,
-            "type": "table",
-        }
+        assert "datasource" not in query_context["queries"][0]
         if chart["viz_type"] in {"big_number_total", "funnel"}:
             assert query_context["queries"][0]["metrics"] == [chart["params"]["metric"]]
         else:
