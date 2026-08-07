@@ -146,6 +146,63 @@ STATUS_DISPLAY_COLUMNS: Final[tuple[tuple[str, str], ...]] = (
     ("global_data_through_ymd", "STRING"),
 )
 
+COLUMN_VERBOSE_NAMES: Final = {
+    "sales_date": "销售日期",
+    "month_start_date": "月份开始日期",
+    "sid": "店铺标识",
+    "msku": "平台MSKU",
+    "ym": "年月",
+    "sku": "SKU",
+    "spu": "SPU",
+    "company_sku": "公司SKU",
+    "channel": "渠道",
+    "product_line": "品线",
+    "country": "国家",
+    "size": "尺寸",
+    "color": "颜色",
+    "developer": "开发经理",
+    "model": "型号",
+    "sku_level": "SKU等级",
+    "product_level": "产品等级",
+    "spu_previous_month_sales_amount_cny": "SPU上月销售额（人民币）",
+    "spu_previous_month_sales_level": "SPU上月销售等级",
+    "sales_qty": "销量",
+    "sales_amount_usd": "销售额（美元）",
+    "gross_profit_usd": "毛利润（美元）",
+    "return_goods_qty": "退货数量",
+    "sku_month_sales_qty": "SKU月销量",
+    "theoretical_stock_qty": "理论库存",
+    "eligibility_value": "销量与库存之和",
+    "is_eligible": "是否在售",
+    "is_generated_zero": "是否补零记录",
+    "data_through_date": "数据水位日期",
+    "source_updated_at": "源数据更新时间",
+    "etl_batch_id": "ETL批次标识",
+    "etl_loaded_at": "ETL加载时间",
+    "selected_start_date": "筛选开始日期",
+    "selected_end_date": "筛选结束日期",
+    "selected_end_exclusive_date": "筛选结束日期（不含）",
+    "effective_end_date": "实际计算结束日期",
+    "effective_end_exclusive_date": "实际计算结束日期（不含）",
+    "global_data_through_date": "全局数据水位日期",
+    "selected_calendar_days": "实际计算自然日数",
+    "expected_month_count": "应覆盖月份数",
+    "daily_month_count": "日表已覆盖月份数",
+    "monthly_month_count": "月表已覆盖月份数",
+    "daily_missing_rating_count": "日表缺失评级记录数",
+    "monthly_missing_rating_count": "月表缺失评级记录数",
+    "coverage_complete": "数据覆盖是否完整",
+    "rating_complete": "评级是否完整",
+    "is_stale": "数据是否延迟",
+    "selected_start_ymd": "筛选开始日期",
+    "selected_end_ymd": "筛选结束日期",
+    "effective_end_ymd": "实际计算结束日期",
+    "global_data_through_ymd": "全局数据水位日期",
+    "spu_previous_month_sales_level_sort": "SPU上月销售等级排序值",
+    "status_message": "数据状态",
+    "rating_status_message": "评级状态",
+}
+
 FILTERS: Final[tuple[tuple[str, str], ...]] = (
     ("渠道", "channel"),
     ("品线", "product_line"),
@@ -163,14 +220,14 @@ FILTERS: Final[tuple[tuple[str, str], ...]] = (
 
 KPI_DEFINITIONS: Final[tuple[tuple[str, str, str, str], ...]] = (
     ("销量", "dataset_daily", "sales_qty_total", ",.0f"),
-    ("日均销量", "dataset_daily", "avg_daily_sales_qty", ",.2f"),
+    ("日均销量", "dataset_daily", "avg_daily_sales_qty", ",.1~f"),
     ("销售额", "dataset_daily", "sales_amount_usd_total", "$,.0f"),
     ("在售SPU数", "dataset_monthly", "in_sale_spu_count", ",.0f"),
-    ("爆品指数", "dataset_daily", "hot_product_index", ",.2f"),
+    ("爆品指数", "dataset_daily", "hot_product_index", ",.1~f"),
     ("在售SKU数", "dataset_monthly", "in_sale_sku_count", ",.0f"),
-    ("毛利润", "dataset_daily", "gross_profit_usd_total", "$,.2f"),
-    ("毛利率", "dataset_daily", "gross_margin", ".2%"),
-    ("退货率", "dataset_daily", "return_rate", ".2%"),
+    ("毛利润", "dataset_daily", "gross_profit_usd_total", "$,.1~f"),
+    ("毛利率", "dataset_daily", "gross_margin", ".1~%"),
+    ("退货率", "dataset_daily", "return_rate", ".1~%"),
 )
 
 KPI_UUID_KEYS: Final[tuple[str, ...]] = (
@@ -207,6 +264,10 @@ def _column(
     description: str | None = None,
 ) -> Asset:
     """Build one importable dataset column definition."""
+    try:
+        verbose_name = COLUMN_VERBOSE_NAMES[name]
+    except KeyError as ex:
+        raise ValueError(f"missing Chinese column label: {name}") from ex
     return {
         "advanced_data_type": None,
         "column_name": name,
@@ -220,7 +281,7 @@ def _column(
         "is_dttm": is_dttm,
         "python_date_format": None,
         "type": type_,
-        "verbose_name": None,
+        "verbose_name": verbose_name,
     }
 
 
@@ -531,7 +592,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
             "avg_daily_sales_qty",
             "日均销量",
             "SUM(sales_qty) / NULLIF(MAX(selected_calendar_days), 0)",
-            ",.2f",
+            ",.1~f",
             "销量除以实际计算覆盖的自然日数。",
         ),
         _metric(
@@ -555,28 +616,28 @@ def _datasets(database_uuid: str) -> AssetBundle:
             "hot_product_index",
             "爆品指数",
             "SUM(sales_qty) / NULLIF(COUNT(DISTINCT sales_date, sku), 0)",
-            ",.2f",
+            ",.1~f",
             "销量除以有记录的日期-SKU组合数。",
         ),
         _metric(
             "gross_profit_usd_total",
             "毛利润",
             "SUM(gross_profit_usd)",
-            "$,.2f",
+            "$,.1~f",
             "所选期间毛利润，币种为美元。",
         ),
         _metric(
             "gross_margin",
             "毛利率",
             "SUM(gross_profit_usd) / NULLIF(SUM(sales_amount_usd), 0)",
-            ".2%",
+            ".1~%",
             "毛利润除以销售额。",
         ),
         _metric(
             "return_rate",
             "退货率",
             "SUM(return_goods_qty) / NULLIF(SUM(sales_qty), 0)",
-            ".2%",
+            ".1~%",
             "退货数量除以销量。",
         ),
         _metric(
@@ -782,6 +843,7 @@ def _funnel_params(
         "legendOrientation": "top",
         "metric": metric,
         "number_format": number_format,
+        "percent_format": ",.1~%",
         "order_by_cols": ['["spu_previous_month_sales_level_sort_metric", true]'],
         "orient": "vertical",
         "percent_calculation_type": "total",
@@ -874,7 +936,7 @@ def _guide_chart_params() -> Asset:
   </ul>
   <h2>产品等级</h2>
   <p>
-    筛选字段使用 SKU 行级 <code>product_level</code>。两个漏斗使用目标月 SPU
+    筛选字段使用 SKU 行级产品等级。两个漏斗使用目标月 SPU
     的上一个自然月销售等级，固定顺序为 Ps、S、A、B、C、-。
   </p>
   <h2>数据来源</h2>
@@ -937,7 +999,7 @@ def _charts() -> AssetBundle:
         dataset_uuid=UUIDS["dataset_daily"],
         params=_funnel_params(
             "sales_amount_usd_funnel",
-            "$,.1f",
+            "$,.1~f",
             label_value_divisor=10000,
             label_value_suffix="万",
         ),

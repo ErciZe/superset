@@ -95,6 +95,19 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
         dataset["database_uuid"] == DEFAULT_DATABASE_UUID
         for dataset in datasets.values()
     )
+    for dataset in datasets.values():
+        assert all(column["verbose_name"] for column in dataset["columns"])
+        assert all(
+            column["verbose_name"] != column["column_name"]
+            for column in dataset["columns"]
+        )
+    daily_column_labels = {
+        column["column_name"]: column["verbose_name"]
+        for column in datasets["爆品指数-日明细"]["columns"]
+    }
+    assert daily_column_labels["channel"] == "渠道"
+    assert daily_column_labels["product_level"] == "产品等级"
+    assert daily_column_labels["spu_previous_month_sales_level"] == ("SPU上月销售等级")
     assert {chart["dataset_uuid"] for chart in charts.values()} <= {
         dataset["uuid"] for dataset in datasets.values()
     }
@@ -341,6 +354,7 @@ def test_funnels_keep_the_business_grade_order(tmp_path: Path) -> None:
         assert params["label_type"] == 5
         assert params["tooltip_label_type"] == 5
         assert params["percent_calculation_type"] == "total"
+        assert params["percent_format"] == ",.1~%"
         assert params["label_template"] == "{name}\\n{value} | {percent}"
         query_context = json.loads(funnel["query_context"])
         assert query_context["queries"][0]["orderby"] == [
@@ -362,10 +376,52 @@ def test_funnels_keep_the_business_grade_order(tmp_path: Path) -> None:
     sales_funnel = charts["SPU销售额漏斗"]["params"]
     assert sales_funnel["label_value_divisor"] == 10000
     assert sales_funnel["label_value_suffix"] == "万"
-    assert sales_funnel["number_format"] == "$,.1f"
+    assert sales_funnel["number_format"] == "$,.1~f"
     spu_funnel = charts["SPU数漏斗"]["params"]
     assert spu_funnel["label_value_divisor"] == 1
     assert spu_funnel["label_value_suffix"] == ""
+
+
+def test_visible_numbers_use_at_most_one_decimal_place(tmp_path: Path) -> None:
+    """KPI, metric, funnel value, and funnel percent formats share the constraint."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    charts = assets_by_key(assets, "charts", "slice_name")
+
+    assert {
+        name: charts[name]["params"]["y_axis_format"]
+        for name in (
+            "销量",
+            "日均销量",
+            "销售额",
+            "在售SPU数",
+            "爆品指数",
+            "在售SKU数",
+            "毛利润",
+            "毛利率",
+            "退货率",
+        )
+    } == {
+        "销量": ",.0f",
+        "日均销量": ",.1~f",
+        "销售额": "$,.0f",
+        "在售SPU数": ",.0f",
+        "爆品指数": ",.1~f",
+        "在售SKU数": ",.0f",
+        "毛利润": "$,.1~f",
+        "毛利率": ".1~%",
+        "退货率": ".1~%",
+    }
+
+    daily_metric_formats = {
+        metric["metric_name"]: metric["d3format"]
+        for metric in datasets["爆品指数-日明细"]["metrics"]
+    }
+    assert daily_metric_formats["avg_daily_sales_qty"] == ",.1~f"
+    assert daily_metric_formats["hot_product_index"] == ",.1~f"
+    assert daily_metric_formats["gross_profit_usd_total"] == "$,.1~f"
+    assert daily_metric_formats["gross_margin"] == ".1~%"
+    assert daily_metric_formats["return_rate"] == ".1~%"
 
 
 def test_guide_link_is_a_header_layout_component(tmp_path: Path) -> None:
@@ -449,6 +505,8 @@ def test_guide_chart_keeps_styles_outside_sanitized_handlebars(
     assert "{{selected_start_ymd}}" in params["handlebarsTemplate"]
     assert "{{selected_end_ymd}}" in params["handlebarsTemplate"]
     assert "dateFormat" not in params["handlebarsTemplate"]
+    assert "product_level" not in params["handlebarsTemplate"]
+    assert "SKU 行级产品等级" in params["handlebarsTemplate"]
     assert "#CHART-GUIDE + .chart-slice [data-test='slice-header']" in guide["css"]
     assert "#CHART-GUIDE + .chart-slice .handlebars article" in guide["css"]
 

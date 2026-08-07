@@ -34,8 +34,13 @@ import {
 } from './types';
 import { legendSection } from '../controls';
 
-const { labelType, numberFormat, showLabels, defaultTooltipLabel } =
-  DEFAULT_FORM_DATA;
+const {
+  labelType,
+  numberFormat,
+  percentFormat,
+  showLabels,
+  defaultTooltipLabel,
+} = DEFAULT_FORM_DATA;
 
 const funnelLegendSection = [...legendSection];
 funnelLegendSection.splice(2, 1);
@@ -208,6 +213,20 @@ const config: ControlPanelConfig = {
               label: t('Number format'),
               renderTrigger: true,
               default: numberFormat,
+              choices: D3_FORMAT_OPTIONS,
+              description: `${D3_FORMAT_DOCS} ${D3_NUMBER_FORMAT_DESCRIPTION_VALUES_TEXT}`,
+            },
+          },
+        ],
+        [
+          {
+            name: 'percent_format',
+            config: {
+              type: 'SelectControl',
+              freeForm: true,
+              label: t('Percentage format'),
+              renderTrigger: true,
+              default: percentFormat,
               choices: D3_FORMAT_OPTIONS,
               description: `${D3_FORMAT_DOCS} ${D3_NUMBER_FORMAT_DESCRIPTION_VALUES_TEXT}`,
             },

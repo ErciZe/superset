@@ -123,7 +123,18 @@ describe('Funnel transformProps', () => {
         label_value_divisor: 10,
         label_value_suffix: '万',
         number_format: '$,.1f',
+        percent_format: ',.1~%',
         percent_calculation_type: PercentCalcType.Total,
+        tooltip_label_type: 5,
+      },
+      datasource: {
+        metrics: [
+          {
+            uuid: '90eadf6a-f870-4305-a33a-77f5ca39b968',
+            metric_name: 'sum__num',
+            verbose_name: '销售额',
+          },
+        ],
       },
       queriesData: [
         {
@@ -143,7 +154,7 @@ describe('Funnel transformProps', () => {
         prevStepPercent: 1,
       },
       value: 615,
-      percent: 61,
+      percent: 61.25,
     });
 
     expect(series.data).toEqual(
@@ -151,7 +162,17 @@ describe('Funnel transformProps', () => {
         expect.objectContaining({ name: 'S', value: 615 }),
       ]),
     );
-    expect(formatter(params)).toBe('S\n$61.5万 | 61.00%');
+    expect(formatter(params)).toBe('S\n$61.5万 | 61.3%');
+
+    const tooltipFormatter = (
+      result.echartOptions.tooltip as unknown as {
+        formatter: (params: CallbackDataParams) => string;
+      }
+    ).formatter;
+    const tooltip = tooltipFormatter(params);
+    expect(tooltip).toContain('销售额');
+    expect(tooltip).not.toContain('sum__num');
+    expect(tooltip).toContain('61.3%');
   });
 
   test('keeps the existing label behavior when no template is configured', () => {
