@@ -387,6 +387,20 @@ def test_detail_sql_has_exact_grains_filters_and_null_safe_metrics(
         assert "0 AS score" not in sql
         assert "0 AS order_qty" not in sql
         assert "0 AS actual_stock_qty" not in sql
+        lookback_sql = sql[
+            sql.index("lookback_quality AS (") : sql.index("daily_quality AS (")
+        ]
+        assert "MAX(DATEDIFF(" in lookback_sql
+        assert ")) AS expected_lookback_day_count" in lookback_sql
+        quality_sql = sql[sql.index("quality AS (") : sql.index("filtered_daily AS (")]
+        assert "b.*," in quality_sql
+        assert "    b.expected_month_count,\n" not in quality_sql
+        assert sql.count("AS expected_month_count") == 1
+        rolling_sql = sql[sql.index("rolling AS (") : sql.index("stock_by_sku AS (")]
+        assert rolling_sql.count("MAX(DATEDIFF(") == 3
+        assert ")) AS days_7d" in rolling_sql
+        assert ")) AS days_30d" in rolling_sql
+        assert ")) AS days_90d" in rolling_sql
 
 
 def test_detail_charts_preserve_approved_fields_pagination_and_sorting(

@@ -641,10 +641,10 @@ WITH selected_bounds AS (
 lookback_quality AS (
   SELECT
     COUNT(DISTINCT d.sales_date) AS lookback_calendar_day_count,
-    DATEDIFF(
+    MAX(DATEDIFF(
       b.effective_end_exclusive_date,
       DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
-    ) AS expected_lookback_day_count
+    )) AS expected_lookback_day_count
   FROM ads.ads_pdm_lx_hot_product_index_sku_d d
   CROSS JOIN selected_bounds b
   WHERE d.sales_date >= DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
@@ -689,7 +689,6 @@ quality AS (
     b.*,
     DATE_SUB(b.selected_end_exclusive_date, INTERVAL 1 DAY) AS selected_end_date,
     DATE_SUB(b.effective_end_exclusive_date, INTERVAL 1 DAY) AS effective_end_date,
-    b.expected_month_count,
     d.daily_month_count,
     m.monthly_month_count,
     d.daily_missing_rating_count,
@@ -778,18 +777,18 @@ rolling AS (
       SUM(CASE
         WHEN d.sales_date >= DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
         THEN d.sales_qty ELSE 0 END) AS sales_qty_90d,
-      DATEDIFF(
+      MAX(DATEDIFF(
         b.effective_end_exclusive_date,
         DATE_SUB(b.effective_end_exclusive_date, INTERVAL 7 DAY)
-      ) AS days_7d,
-      DATEDIFF(
+      )) AS days_7d,
+      MAX(DATEDIFF(
         b.effective_end_exclusive_date,
         DATE_SUB(b.effective_end_exclusive_date, INTERVAL 30 DAY)
-      ) AS days_30d,
-      DATEDIFF(
+      )) AS days_30d,
+      MAX(DATEDIFF(
         b.effective_end_exclusive_date,
         DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
-      ) AS days_90d
+      )) AS days_90d
   FROM filtered_daily d
   CROSS JOIN quality b
   GROUP BY {dimension_list}, b.effective_end_exclusive_date
