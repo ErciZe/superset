@@ -26,6 +26,7 @@ import pytest
 
 from scripts.hot_product_index_dashboard import (
     DEFAULT_DATABASE_UUID,
+    validate_assets,
     write_bundle,
 )
 
@@ -154,7 +155,25 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
     spu_labels = {
         column["column_name"]: column["verbose_name"]
         for column in detail_datasets["爆品指数-SPU月度经营明细"]["columns"]
-        if column["column_name"] != "month_start_date"
+        if column["column_name"] in {
+            "spu",
+            "ym",
+            "spu_previous_month_sales_level",
+            "sku_level",
+            "hot_product_index",
+            "score",
+            "sales_amount_usd",
+            "sales_qty",
+            "avg_daily_sales_qty",
+            "gross_profit_usd",
+            "gross_margin",
+            "return_goods_qty",
+            "return_rate",
+            "order_qty",
+            "avg_sales_qty_7d",
+            "avg_sales_qty_30d",
+            "avg_sales_qty_90d",
+        }
     }
     assert spu_labels == {
         "spu": "SPU",
@@ -178,7 +197,29 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
     sku_labels = {
         column["column_name"]: column["verbose_name"]
         for column in detail_datasets["爆品指数-SKU月度经营明细"]["columns"]
-        if column["column_name"] != "month_start_date"
+        if column["column_name"] in {
+            "company_sku",
+            "sku",
+            "ym",
+            "product_level",
+            "size",
+            "color",
+            "hot_product_index",
+            "score",
+            "sales_amount_usd",
+            "sales_qty",
+            "avg_daily_sales_qty",
+            "gross_profit_usd",
+            "gross_margin",
+            "return_goods_qty",
+            "return_rate",
+            "order_qty",
+            "avg_sales_qty_7d",
+            "avg_sales_qty_30d",
+            "avg_sales_qty_90d",
+            "theoretical_stock_qty",
+            "actual_stock_qty",
+        }
     }
     assert sku_labels == {
         "company_sku": "公司SKU",
@@ -233,6 +274,49 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
             "avg_sales_qty_30d",
             "avg_sales_qty_90d",
         } <= metric_names
+
+        filter_columns = {
+            "channel",
+            "product_line",
+            "spu",
+            "country",
+            "company_sku",
+            "sku",
+            "size",
+            "color",
+            "developer",
+            "model",
+            "sku_level",
+            "product_level",
+        }
+        metadata_by_name = {
+            column["column_name"]: column for column in dataset["columns"]
+        }
+        assert filter_columns <= metadata_by_name.keys()
+        assert all(
+            metadata_by_name[column]["verbose_name"]
+            and metadata_by_name[column]["verbose_name"] != column
+            for column in filter_columns
+        )
+        visible_filter_columns = {
+            "spu",
+            "ym",
+            "spu_previous_month_sales_level",
+            "sku_level",
+        }
+        if dataset["table_name"] == "爆品指数-SKU月度经营明细":
+            visible_filter_columns = {
+                "company_sku",
+                "sku",
+                "ym",
+                "product_level",
+                "size",
+                "color",
+            }
+        assert all(
+            metadata_by_name[column]["groupby"] is (column in visible_filter_columns)
+            for column in filter_columns
+        )
 
 
 def test_detail_sql_has_exact_grains_filters_and_null_safe_metrics(
@@ -677,7 +761,7 @@ def test_funnels_stop_when_any_selected_eligible_rating_is_missing(
 
 
 def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> None:
-    """The main canvas stays limited to status, nine KPIs, and two funnels."""
+    """The main canvas contains overview content followed by detail tabs."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     charts = assets_by_key(assets, "charts", "slice_name")
     dashboards = assets_by_key(assets, "dashboards", "dashboard_title")
@@ -692,15 +776,52 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
     main_charts = [
         chart for chart in charts.values() if chart["uuid"] in main_chart_uuids
     ]
-    assert len(main_charts) == 12
+    assert len(main_charts) == 14
     assert sum(chart["viz_type"] == "big_number_total" for chart in main_charts) == 9
     assert sum(chart["viz_type"] == "funnel" for chart in main_charts) == 2
     assert sum(chart["viz_type"] == "handlebars" for chart in main_charts) == 1
+    assert sum(chart["viz_type"] == "ag-grid-table-scheme" for chart in main_charts) == 2
     assert all(
         chart["params"].get("show_metric_name") is True
         for chart in main_charts
         if chart["viz_type"] == "big_number_total"
     )
+
+    position = main["position"]
+    assert position["GRID_ID"]["children"][-2:] == [
+        "ROW-DETAIL-TITLE",
+        "TABS-DETAIL",
+    ]
+    assert position["ROW-DETAIL-TITLE"]["children"] == [
+        "MARKDOWN-DETAIL-TITLE"
+    ]
+    assert "爆品指数&经营指标报表" in position["MARKDOWN-DETAIL-TITLE"]["meta"][
+        "code"
+    ]
+    assert position["TABS-DETAIL"]["children"] == [
+        "TAB-SPU-DETAIL",
+        "TAB-SKU-DETAIL",
+    ]
+    assert position["TAB-SPU-DETAIL"]["meta"]["text"] == "SPU维度"
+    assert position["TAB-SKU-DETAIL"]["meta"]["text"] == "SKU维度"
+    assert position["TAB-SPU-DETAIL"]["children"] == ["ROW-SPU-DETAIL"]
+    assert position["TAB-SKU-DETAIL"]["children"] == ["ROW-SKU-DETAIL"]
+    assert position["ROW-SPU-DETAIL"]["children"] == ["CHART-SPU-DETAIL"]
+    assert position["ROW-SKU-DETAIL"]["children"] == ["CHART-SKU-DETAIL"]
+    assert position["CHART-SPU-DETAIL"]["meta"]["uuid"] == (
+        "4454d29b-3161-5d51-9e7b-7c1a9e96db06"
+    )
+    assert position["CHART-SKU-DETAIL"]["meta"]["uuid"] == (
+        "76d38770-7b51-5f9e-b9df-d1b48113b8a3"
+    )
+    assert position["CHART-SPU-DETAIL"]["parents"][-2:] == [
+        "TAB-SPU-DETAIL",
+        "ROW-SPU-DETAIL",
+    ]
+    assert position["CHART-SKU-DETAIL"]["parents"][-2:] == [
+        "TAB-SKU-DETAIL",
+        "ROW-SKU-DETAIL",
+    ]
 
     filters = main["metadata"]["native_filter_configuration"]
     assert [item["name"] for item in filters] == [
@@ -731,21 +852,68 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
         "time_range": "Current month"
     }
     assert month_filter["defaultDataMask"]["filterState"] == {"value": "Current month"}
-    assert {
+    assert [
         (target["datasetUuid"], target["column"]["name"])
         for target in month_filter["targets"]
-    } == {
+    ] == [
         ("ea2025d6-91ac-502f-9238-9f21ca62b761", "sales_date"),
         ("669d6bf7-779b-545b-9b9d-5b45a5d3842c", "month_start_date"),
         ("bd0d4806-9f13-59a0-be0b-4d7458f88e7f", "selected_start_date"),
-    }
+        ("de2f3527-4fb7-51df-a1ef-067567348ee6", "month_start_date"),
+        ("baea3900-76bf-5de9-8f10-aad2cc5e4b60", "month_start_date"),
+    ]
 
     status_uuid = charts["爆品指数数据状态"]["uuid"]
     for item in filters:
         if item["filterType"] == "filter_select":
             assert status_uuid not in item["chartsInScope"]
             assert item["scope"]["excluded"] == [1000]
+            assert item["chartsInScope"][-2:] == [
+                "4454d29b-3161-5d51-9e7b-7c1a9e96db06",
+                "76d38770-7b51-5f9e-b9df-d1b48113b8a3",
+            ]
+            assert [target["datasetUuid"] for target in item["targets"]] == [
+                "ea2025d6-91ac-502f-9238-9f21ca62b761",
+                "669d6bf7-779b-545b-9b9d-5b45a5d3842c",
+                "de2f3527-4fb7-51df-a1ef-067567348ee6",
+                "baea3900-76bf-5de9-8f10-aad2cc5e4b60",
+            ]
+            assert len({target["column"]["name"] for target in item["targets"]}) == 1
     assert status_uuid in month_filter["chartsInScope"]
+
+
+def test_detail_css_is_scoped_to_table_components_and_tabs(tmp_path: Path) -> None:
+    """FineBI table styling does not leak to unrelated dashboard components."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    main = assets_by_key(assets, "dashboards", "dashboard_title")[
+        "拉杆箱在售产品爆品指数看板"
+    ]
+    css = main["css"]
+    assert "#CHART-SPU-DETAIL .ag-header" in css
+    assert "#CHART-SKU-DETAIL .ag-header" in css
+    assert "#8AA964" in css
+    assert "rgba(138,169,100,.05)" in css
+    assert "rgba(138,169,100,.10)" in css
+    assert ".ag-row-even:not(.ag-row-pinned)" in css
+    assert ".ag-row-odd:not(.ag-row-pinned)" in css
+    assert ".ag-row-pinned" in css
+    assert "font-weight: 700" in css
+    assert "#TABS-DETAIL .ant-tabs-card > .ant-tabs-nav .ant-tabs-ink-bar" in css
+    assert "#2978B5" in css
+    assert ".ant-tabs-tab-active .ant-tabs-tab-btn" in css
+    assert "#CHART-SPU-DETAIL .ag-header" in css
+    assert "#CHART-SKU-DETAIL .ag-header" in css
+
+
+def test_main_dashboard_rejects_missing_detail_chart_uuid(tmp_path: Path) -> None:
+    """The 14-chart invariant fails when a detail node points to no chart asset."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    assets["dashboards/Hot_Product_Index.yaml"]["position"]["CHART-SPU-DETAIL"][
+        "meta"
+    ]["uuid"] = "00000000-0000-0000-0000-000000000000"
+
+    with pytest.raises(ValueError, match="unknown chart UUID"):
+        validate_assets(assets, DEFAULT_DATABASE_UUID)
 
 
 def test_funnels_keep_the_business_grade_order(tmp_path: Path) -> None:

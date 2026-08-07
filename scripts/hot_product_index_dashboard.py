@@ -305,6 +305,8 @@ def _column(
     expression: str | None = None,
     description: str | None = None,
     display_name: str | None = None,
+    filterable: bool = True,
+    groupby: bool = True,
 ) -> Asset:
     """Build one importable dataset column definition."""
     try:
@@ -318,8 +320,8 @@ def _column(
         "description": description,
         "expression": expression,
         "extra": None,
-        "filterable": True,
-        "groupby": True,
+        "filterable": filterable,
+        "groupby": groupby,
         "is_active": True,
         "is_dttm": is_dttm,
         "python_date_format": None,
@@ -1027,6 +1029,19 @@ def _detail_columns(grain: str) -> list[Asset]:
             description="由年月字段推导的月份起始日期，仅用于月份筛选。",
         )
     )
+    visible_names = {*names, "month_start_date"}
+    source_types = dict(DAILY_SOURCE_COLUMNS)
+    for _, filter_column in FILTERS:
+        if filter_column in visible_names:
+            continue
+        columns.append(
+            _column(
+                filter_column,
+                source_types[filter_column],
+                description="仅作为原生筛选目标，不参与明细表展示或聚合。",
+                groupby=False,
+            )
+        )
     return columns
 
 
@@ -1824,8 +1839,11 @@ def _chart_node(
     row_id: str,
     width: float,
     height: int,
+    parent_ids: Sequence[str] | None = None,
 ) -> Asset:
     """Build one dashboard position chart node."""
+    parents = list(parent_ids or ("ROOT_ID", "GRID_ID"))
+    parents.append(row_id)
     return {
         "children": [],
         "id": component_id,
@@ -1836,24 +1854,45 @@ def _chart_node(
             "uuid": chart_uuid,
             "width": width,
         },
-        "parents": ["ROOT_ID", "GRID_ID", row_id],
+        "parents": parents,
         "type": "CHART",
     }
 
 
-def _row(row_id: str, children: Sequence[str]) -> Asset:
+def _row(
+    row_id: str,
+    children: Sequence[str],
+    *,
+    parent_ids: Sequence[str] | None = None,
+) -> Asset:
     """Build one transparent dashboard row."""
+    parents = list(parent_ids or ("ROOT_ID", "GRID_ID"))
     return {
         "children": list(children),
         "id": row_id,
         "meta": {"background": "BACKGROUND_TRANSPARENT"},
-        "parents": ["ROOT_ID", "GRID_ID"],
+        "parents": parents,
         "type": "ROW",
     }
 
 
+def _tab(tab_id: str, text: str, children: Sequence[str]) -> Asset:
+    """Build a dashboard tab with the same editable-title metadata as Superset."""
+    return {
+        "children": list(children),
+        "id": tab_id,
+        "meta": {
+            "defaultText": "Tab title",
+            "placeholder": "Tab title",
+            "text": text,
+        },
+        "parents": ["ROOT_ID", "GRID_ID", "TABS-DETAIL"],
+        "type": "TAB",
+    }
+
+
 def _main_position() -> Asset:
-    """Build the approved main layout: status, nine KPIs, and two funnels."""
+    """Build the overview layout followed by the SPU/SKU detail tabs."""
     position: Asset = {
         "DASHBOARD_VERSION_KEY": "v2",
         "GRID_ID": {
@@ -1862,6 +1901,8 @@ def _main_position() -> Asset:
                 "ROW-STATUS",
                 "ROW-KPIS",
                 "ROW-FUNNELS",
+                "ROW-DETAIL-TITLE",
+                "TABS-DETAIL",
             ],
             "id": "GRID_ID",
             "parents": ["ROOT_ID"],
@@ -1895,6 +1936,64 @@ def _main_position() -> Asset:
         "ROW-FUNNELS": _row(
             "ROW-FUNNELS",
             ["CHART-FUNNEL-SALES-AMOUNT", "CHART-FUNNEL-SPU-COUNT"],
+        ),
+        "ROW-DETAIL-TITLE": _row(
+            "ROW-DETAIL-TITLE", ["MARKDOWN-DETAIL-TITLE"]
+        ),
+        "MARKDOWN-DETAIL-TITLE": {
+            "children": [],
+            "id": "MARKDOWN-DETAIL-TITLE",
+            "meta": {
+                "code": "爆品指数&经营指标报表",
+                "height": 8,
+                "openLinksInNewTab": False,
+                "width": 12,
+            },
+            "parents": ["ROOT_ID", "GRID_ID", "ROW-DETAIL-TITLE"],
+            "type": "MARKDOWN",
+        },
+        "TABS-DETAIL": {
+            "children": ["TAB-SPU-DETAIL", "TAB-SKU-DETAIL"],
+            "id": "TABS-DETAIL",
+            "meta": {},
+            "parents": ["ROOT_ID", "GRID_ID"],
+            "type": "TABS",
+        },
+        "TAB-SPU-DETAIL": _tab(
+            "TAB-SPU-DETAIL", "SPU维度", ["ROW-SPU-DETAIL"]
+        ),
+        "TAB-SKU-DETAIL": _tab(
+            "TAB-SKU-DETAIL", "SKU维度", ["ROW-SKU-DETAIL"]
+        ),
+        "ROW-SPU-DETAIL": _row(
+            "ROW-SPU-DETAIL",
+            ["CHART-SPU-DETAIL"],
+            parent_ids=["ROOT_ID", "GRID_ID", "TABS-DETAIL", "TAB-SPU-DETAIL"],
+        ),
+        "ROW-SKU-DETAIL": _row(
+            "ROW-SKU-DETAIL",
+            ["CHART-SKU-DETAIL"],
+            parent_ids=["ROOT_ID", "GRID_ID", "TABS-DETAIL", "TAB-SKU-DETAIL"],
+        ),
+        "CHART-SPU-DETAIL": _chart_node(
+            component_id="CHART-SPU-DETAIL",
+            chart_id=1012,
+            chart_uuid=UUIDS["chart_spu_detail"],
+            slice_name="SPU维度",
+            row_id="ROW-SPU-DETAIL",
+            width=12,
+            height=72,
+            parent_ids=["ROOT_ID", "GRID_ID", "TABS-DETAIL", "TAB-SPU-DETAIL"],
+        ),
+        "CHART-SKU-DETAIL": _chart_node(
+            component_id="CHART-SKU-DETAIL",
+            chart_id=1013,
+            chart_uuid=UUIDS["chart_sku_detail"],
+            slice_name="SKU维度",
+            row_id="ROW-SKU-DETAIL",
+            width=12,
+            height=72,
+            parent_ids=["ROOT_ID", "GRID_ID", "TABS-DETAIL", "TAB-SKU-DETAIL"],
         ),
         "CHART-STATUS": _chart_node(
             component_id="CHART-STATUS",
@@ -1980,7 +2079,7 @@ def _select_filter(
     column: str,
     business_chart_uuids: Sequence[str],
 ) -> Asset:
-    """Build a multi-target select filter shared by daily and monthly charts."""
+    """Build a multi-target select filter shared by overview and detail charts."""
     return {
         "cascadeParentIds": [],
         "chartsInScope": list(business_chart_uuids),
@@ -2009,6 +2108,14 @@ def _select_filter(
             {
                 "column": {"name": column},
                 "datasetUuid": UUIDS["dataset_monthly"],
+            },
+            {
+                "column": {"name": column},
+                "datasetUuid": UUIDS["dataset_spu_detail"],
+            },
+            {
+                "column": {"name": column},
+                "datasetUuid": UUIDS["dataset_sku_detail"],
             },
         ],
         "type": "NATIVE_FILTER",
@@ -2051,6 +2158,14 @@ def _month_filter(main_chart_uuids: Sequence[str]) -> Asset:
                 "column": {"name": "selected_start_date"},
                 "datasetUuid": UUIDS["dataset_status"],
             },
+            {
+                "column": {"name": "month_start_date"},
+                "datasetUuid": UUIDS["dataset_spu_detail"],
+            },
+            {
+                "column": {"name": "month_start_date"},
+                "datasetUuid": UUIDS["dataset_sku_detail"],
+            },
         ],
         "type": "NATIVE_FILTER",
     }
@@ -2062,6 +2177,8 @@ def _main_metadata() -> Asset:
         *(UUIDS[key] for key in KPI_UUID_KEYS),
         UUIDS["chart_funnel_sales_amount"],
         UUIDS["chart_funnel_spu_count"],
+        UUIDS["chart_spu_detail"],
+        UUIDS["chart_sku_detail"],
     ]
     main_chart_uuids = [UUIDS["chart_status"], *business_chart_uuids]
     select_filters = {
@@ -2240,6 +2357,59 @@ body:has(#main-menu) #MARKDOWN-DOC-LINK { top: 65px; }
   background: #ffffff;
   border-top: 1px solid #e5e7eb;
 }
+#MARKDOWN-DETAIL-TITLE .dashboard-component-chart-holder {
+  align-items: center;
+  background: #d8edc8;
+  border: 0;
+  display: flex;
+  justify-content: center;
+  min-height: 52px;
+  overflow: hidden;
+}
+#MARKDOWN-DETAIL-TITLE .markdown-content,
+#MARKDOWN-DETAIL-TITLE p {
+  color: #13213a;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  text-align: center;
+}
+#TABS-DETAIL .dashboard-component-tabs-content {
+  min-height: 640px;
+  overflow: visible;
+}
+#CHART-SPU-DETAIL,
+#CHART-SKU-DETAIL {
+  min-height: 640px;
+}
+#CHART-SPU-DETAIL .ag-header,
+#CHART-SKU-DETAIL .ag-header {
+  background: #8AA964;
+  color: #fff;
+}
+#CHART-SPU-DETAIL .ag-row-even:not(.ag-row-pinned),
+#CHART-SKU-DETAIL .ag-row-even:not(.ag-row-pinned) {
+  background: rgba(138,169,100,.05);
+}
+#CHART-SPU-DETAIL .ag-row-odd:not(.ag-row-pinned),
+#CHART-SKU-DETAIL .ag-row-odd:not(.ag-row-pinned) {
+  background: rgba(138,169,100,.10);
+}
+#CHART-SPU-DETAIL .ag-row-pinned,
+#CHART-SKU-DETAIL .ag-row-pinned {
+  background: #8AA964;
+  font-weight: 700;
+}
+#CHART-SPU-DETAIL .ag-pinned-left-cols-container,
+#CHART-SKU-DETAIL .ag-pinned-left-cols-container {
+  border-right: 1px solid rgba(41,120,181,.25);
+}
+#TABS-DETAIL .ant-tabs-card > .ant-tabs-nav .ant-tabs-ink-bar {
+  background: #2978B5;
+}
+#TABS-DETAIL .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #2978B5;
+}
 @media (max-width: 900px) {
   #CHART-STATUS + .chart-slice .handlebars section {
     align-items: flex-start;
@@ -2398,8 +2568,10 @@ def validate_assets(  # noqa: C901
         isinstance(node, dict) and node.get("type") == "CHART"
         for node in main["position"].values()
     )
-    if main_chart_count != 12:
-        raise ValueError("main dashboard scope is status, nine KPIs, and two funnels")
+    if main_chart_count != 14:
+        raise ValueError(
+            "main dashboard scope is status, nine KPIs, two funnels, and two detail tables"
+        )
     filters = main["metadata"]["native_filter_configuration"]
     if len(filters) != 13:
         raise ValueError("main dashboard must contain exactly 13 native filters")
