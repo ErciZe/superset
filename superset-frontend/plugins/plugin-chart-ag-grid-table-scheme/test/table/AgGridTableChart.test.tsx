@@ -19,6 +19,7 @@
 import { render } from '@superset-ui/core/spec';
 import { GenericDataType } from '@apache-superset/core/common';
 import TableChart from '../../src/table/AgGridTableChart';
+import { validateRowHierarchyFields } from '../../src/table/controlPanel';
 import type { AgGridTableProps } from '../../src/table/AgGridTable';
 import type { AdvancedFilterState } from '../../src/table/types';
 
@@ -150,6 +151,49 @@ test('toggles a hierarchy path in table own state', () => {
       collapsedHierarchyPaths: ['["8010S"]'],
     }),
   });
+});
+
+test('passes ordered row hierarchy fields to the hierarchy view', () => {
+  renderTable({
+    data: [{ spu: '8010S', ym: '2026-03' }],
+    columns: [
+      {
+        key: 'spu',
+        label: 'SPU',
+        dataType: GenericDataType.String,
+      },
+      {
+        key: 'ym',
+        label: '月份',
+        dataType: GenericDataType.String,
+      },
+    ],
+    formData: {
+      ...baseProps.formData,
+      row_hierarchy_fields: ['spu', 'ym'],
+    },
+  });
+
+  expect(mockColDefsProps.rowHierarchyFields).toEqual(['spu', 'ym']);
+});
+
+test('rejects hierarchy fields that are absent from group-by', () => {
+  expect(validateRowHierarchyFields(['spu', 'missing'], ['spu', 'ym'])).toEqual(
+    expect.any(String),
+  );
+});
+
+test('rejects invalid hierarchy sequences before runtime', () => {
+  expect(validateRowHierarchyFields(['ym'], ['spu', 'ym'])).toEqual(
+    expect.any(String),
+  );
+  expect(validateRowHierarchyFields(['spu', 'spu'], ['spu', 'ym'])).toEqual(
+    expect.any(String),
+  );
+  expect(validateRowHierarchyFields(['spu'], undefined)).toEqual(
+    expect.any(String),
+  );
+  expect(validateRowHierarchyFields([], ['spu', 'ym'])).toBe(false);
 });
 
 test('clears collapsed hierarchy state when the server result changes', () => {

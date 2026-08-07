@@ -23,6 +23,7 @@ import {
   TimeFormatter,
   TimeGranularity,
   QueryFormMetric,
+  QueryFormColumn,
   ChartProps,
   DataRecord,
   DataRecordValue,
@@ -116,7 +117,7 @@ export type TableChartFormData = QueryFormData & {
   metrics?: QueryFormMetric[] | null;
   percent_metrics?: QueryFormMetric[] | null;
   timeseries_limit_metric?: QueryFormMetric[] | QueryFormMetric | null;
-  groupby?: QueryFormMetric[] | null;
+  groupby?: QueryFormColumn[] | null;
   all_columns?: QueryFormMetric[] | null;
   order_desc?: boolean;
   show_cell_bars?: boolean;
