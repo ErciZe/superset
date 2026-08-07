@@ -214,6 +214,10 @@ export default function transformProps(chartProps: TableChartProps) {
     columns: matrixResult.columns,
     metrics: matrixResult.generatedColumnIds,
     percentMetrics: [],
+    formData: {
+      ...scopedProps.formData,
+      row_hierarchy_fields: [],
+    },
     columnColorFormatters: [],
     additionalCellStyle: createMatrixCellStyle(matrixCellColorFormatters),
     additionalCellFormatter: createMatrixCellFormatter(

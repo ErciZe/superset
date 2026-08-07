@@ -434,6 +434,7 @@ const controlsHiddenInMatrixMode = new Set([
   'server_pagination',
   'server_page_length',
   'show_totals',
+  'row_hierarchy_fields',
 ]);
 
 type VisibilityConfig = {

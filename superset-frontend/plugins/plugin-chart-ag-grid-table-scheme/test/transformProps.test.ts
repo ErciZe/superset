@@ -61,6 +61,9 @@ describe('ag grid table scheme transformProps', () => {
       ],
       serverPagination: false,
       columnColorFormatters: [{ column: 'value' }],
+      formData: {
+        row_hierarchy_fields: ['spu'],
+      },
     });
   });
 
@@ -76,6 +79,7 @@ describe('ag grid table scheme transformProps', () => {
 
     expect(result.columnColorFormatters).toEqual([{ column: 'value' }]);
     expect(result.additionalCellStyle).toBeUndefined();
+    expect(result.formData.row_hierarchy_fields).toEqual(['spu']);
   });
 
   test('keeps official props while matrix mode configuration is incomplete', () => {
@@ -105,6 +109,38 @@ describe('ag grid table scheme transformProps', () => {
     expect(result.columnColorFormatters).toEqual([{ column: 'value' }]);
     expect(result.additionalCellStyle).toBeUndefined();
     expect((result as any).metrics).toBeUndefined();
+    expect(result.formData.row_hierarchy_fields).toEqual(['spu']);
+  });
+
+  test('clears stale hierarchy fields for a complete matrix transform', () => {
+    const result = transformProps({
+      rawFormData: {
+        query_mode: 'aggregate',
+        matrix_mode_enabled: true,
+        matrix_rows: ['metric_name'],
+        matrix_columns: ['biz_date'],
+        matrix_value: 'value',
+        matrix_show_total: false,
+        row_hierarchy_fields: ['spu'],
+      },
+      queriesData: [
+        {
+          data: [
+            {
+              metric_name: 'Sales',
+              biz_date: '2026-05-01',
+              value: 15,
+            },
+          ],
+        },
+      ],
+      hooks: {},
+      filterState: { filters: {} },
+      theme: {},
+    } as any);
+
+    expect(result.formData.row_hierarchy_fields).toEqual([]);
+    expect(result.data[0]).not.toHaveProperty('spu');
   });
 
   test('builds matrix cell coloring from chart-level threshold rules', () => {

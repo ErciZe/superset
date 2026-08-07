@@ -179,6 +179,7 @@ describe('AG Grid table scheme control panel', () => {
       'show_totals',
       'server_pagination',
       'server_page_length',
+      'row_hierarchy_fields',
     ].forEach(controlName => {
       expect(
         getControlVisibility(
@@ -222,6 +223,7 @@ describe('AG Grid table scheme control panel', () => {
       'show_totals',
       'server_pagination',
       'server_page_length',
+      'row_hierarchy_fields',
     ].forEach(controlName => {
       expect(
         getControlVisibility(
