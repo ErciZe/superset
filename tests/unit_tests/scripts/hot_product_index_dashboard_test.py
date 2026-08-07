@@ -136,6 +136,10 @@ def test_virtual_datasets_fail_closed_on_incomplete_month_publication(
         assert column_types["rating_complete"] == "TINYINT"
     status_columns = {column["column_name"] for column in status["columns"]}
     assert {
+        "selected_start_ymd",
+        "selected_end_ymd",
+        "effective_end_ymd",
+        "global_data_through_ymd",
         "daily_missing_rating_count",
         "monthly_missing_rating_count",
         "coverage_complete",
@@ -169,6 +173,9 @@ def test_virtual_datasets_fail_closed_on_incomplete_month_publication(
     assert "DATE_TRUNC(v.selected_end_date, 'month')" in monthly["sql"]
     assert "is_stale" in status["sql"]
     assert "DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)" in status["sql"]
+    assert (
+        "DATE_FORMAT(global_data_through_date, '%Y-%m-%d') AS global_data_through_ymd"
+    ) in status["sql"]
 
     daily_metrics = {
         metric["metric_name"]: metric["expression"] for metric in daily["metrics"]
@@ -406,14 +413,9 @@ def test_status_banner_renders_without_sanitized_css_or_row_limit_warning(
     params = charts["爆品指数数据状态"]["params"]
     assert params["row_limit"] == 2
     assert params["styleTemplate"] == ""
-    assert (
-        '{{dateFormat global_data_through_date format="YYYY-MM-DD"}}'
-        in (params["handlebarsTemplate"])
-    )
-    assert (
-        '{{dateFormat effective_end_date format="YYYY-MM-DD"}}'
-        in (params["handlebarsTemplate"])
-    )
+    assert "{{global_data_through_ymd}}" in params["handlebarsTemplate"]
+    assert "{{effective_end_ymd}}" in params["handlebarsTemplate"]
+    assert "dateFormat" not in params["handlebarsTemplate"]
     assert "\n" not in params["handlebarsTemplate"]
 
     assert main["position"]["CHART-STATUS"]["meta"]["height"] == 8
@@ -435,18 +437,10 @@ def test_guide_chart_keeps_styles_outside_sanitized_handlebars(
     params = charts["爆品指数说明"]["params"]
     assert params["row_limit"] == 2
     assert params["styleTemplate"] == ""
-    assert (
-        '{{dateFormat global_data_through_date format="YYYY-MM-DD"}}'
-        in (params["handlebarsTemplate"])
-    )
-    assert (
-        '{{dateFormat selected_start_date format="YYYY-MM-DD"}}'
-        in (params["handlebarsTemplate"])
-    )
-    assert (
-        '{{dateFormat selected_end_date format="YYYY-MM-DD"}}'
-        in (params["handlebarsTemplate"])
-    )
+    assert "{{global_data_through_ymd}}" in params["handlebarsTemplate"]
+    assert "{{selected_start_ymd}}" in params["handlebarsTemplate"]
+    assert "{{selected_end_ymd}}" in params["handlebarsTemplate"]
+    assert "dateFormat" not in params["handlebarsTemplate"]
     assert "#CHART-GUIDE + .chart-slice [data-test='slice-header']" in guide["css"]
     assert "#CHART-GUIDE + .chart-slice .handlebars article" in guide["css"]
 

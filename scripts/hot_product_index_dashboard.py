@@ -139,6 +139,13 @@ COVERAGE_COLUMNS: Final[tuple[tuple[str, str], ...]] = (
     ("is_stale", "TINYINT"),
 )
 
+STATUS_DISPLAY_COLUMNS: Final[tuple[tuple[str, str], ...]] = (
+    ("selected_start_ymd", "STRING"),
+    ("selected_end_ymd", "STRING"),
+    ("effective_end_ymd", "STRING"),
+    ("global_data_through_ymd", "STRING"),
+)
+
 FILTERS: Final[tuple[tuple[str, str], ...]] = (
     ("渠道", "channel"),
     ("品线", "product_line"),
@@ -405,6 +412,10 @@ def _status_sql() -> str:
   effective_end_date,
   effective_end_exclusive_date,
   global_data_through_date,
+  DATE_FORMAT(selected_start_date, '%Y-%m-%d') AS selected_start_ymd,
+  DATE_FORMAT(selected_end_date, '%Y-%m-%d') AS selected_end_ymd,
+  DATE_FORMAT(effective_end_date, '%Y-%m-%d') AS effective_end_ymd,
+  DATE_FORMAT(global_data_through_date, '%Y-%m-%d') AS global_data_through_ymd,
   selected_calendar_days,
   expected_month_count,
   daily_month_count,
@@ -503,6 +514,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
     )
     status_columns = [
         *common_business_columns,
+        *(_column(name, type_) for name, type_ in STATUS_DISPLAY_COLUMNS),
         _column("status_message", "STRING"),
         _column("rating_status_message", "STRING"),
     ]
@@ -790,9 +802,9 @@ def _status_chart_params() -> Asset:
     template = (
         "<section><strong>爆品指数总览</strong>{{#each data}}"
         "{{#if coverage_complete}}<span>数据更新至 "
-        '{{dateFormat global_data_through_date format="YYYY-MM-DD"}}'
+        "{{global_data_through_ymd}}"
         " · 实际计算至 "
-        '{{dateFormat effective_end_date format="YYYY-MM-DD"}}'
+        "{{effective_end_ymd}}"
         "{{#if is_stale}} · 数据延迟{{/if}}"
         "{{#if rating_complete}}{{else}} · 评级源不完整，漏斗停算{{/if}}"
         "</span>{{else}}<span>所选范围存在数据缺口 · 日表 "
@@ -807,6 +819,8 @@ def _status_chart_params() -> Asset:
             "selected_end_date",
             "effective_end_date",
             "global_data_through_date",
+            "effective_end_ymd",
+            "global_data_through_ymd",
             "expected_month_count",
             "daily_month_count",
             "monthly_month_count",
@@ -834,9 +848,8 @@ def _guide_chart_params() -> Asset:
   {{#each data}}
     <p>
       <strong>数据状态：</strong>{{status_message}}；{{rating_status_message}}。
-      数据更新至 {{dateFormat global_data_through_date format="YYYY-MM-DD"}}，
-      所选范围 {{dateFormat selected_start_date format="YYYY-MM-DD"}}
-      至 {{dateFormat selected_end_date format="YYYY-MM-DD"}}。
+      数据更新至 {{global_data_through_ymd}}，
+      所选范围 {{selected_start_ymd}} 至 {{selected_end_ymd}}。
     </p>
   {{/each}}
   <h2>在售范围</h2>
@@ -876,6 +889,9 @@ def _guide_chart_params() -> Asset:
             "selected_start_date",
             "selected_end_date",
             "global_data_through_date",
+            "selected_start_ymd",
+            "selected_end_ymd",
+            "global_data_through_ymd",
             "coverage_complete",
             "rating_complete",
             "status_message",
