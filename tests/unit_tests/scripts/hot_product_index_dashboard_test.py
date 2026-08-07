@@ -65,7 +65,7 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
     assets = read_bundle(first)
     assert assets["metadata.yaml"] == {"type": "assets", "version": "1.0.0"}
     assert not any(path.startswith("databases/") for path in assets)
-    assert sum(path.startswith("datasets/") for path in assets) == 3
+    assert sum(path.startswith("datasets/") for path in assets) == 5
     assert sum(path.startswith("charts/") for path in assets) == 13
     assert sum(path.startswith("dashboards/") for path in assets) == 2
 
@@ -76,6 +76,8 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
         "爆品指数-日明细",
         "爆品指数-月末在售",
         "爆品指数-数据状态",
+        "爆品指数-SPU月度经营明细",
+        "爆品指数-SKU月度经营明细",
     }
     assert set(dashboards) == {
         "拉杆箱在售产品爆品指数看板",
@@ -86,7 +88,7 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
         asset["uuid"]
         for asset in [*datasets.values(), *charts.values(), *dashboards.values()]
     ]
-    assert len(uuids) == len(set(uuids)) == 18
+    assert len(uuids) == len(set(uuids)) == 20
     assert all(str(UUID(value)) == value for value in uuids)
     assert datasets["爆品指数-日明细"]["uuid"] == (
         "ea2025d6-91ac-502f-9238-9f21ca62b761"
@@ -125,6 +127,186 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
             )
         assert query_context["result_format"] == "json"
         assert query_context["result_type"] == "full"
+
+
+def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
+    tmp_path: Path,
+) -> None:
+    """Detail datasets expose only the approved Chinese leaf-table fields."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+
+    detail_datasets = {
+        name: datasets[name]
+        for name in (
+            "爆品指数-SPU月度经营明细",
+            "爆品指数-SKU月度经营明细",
+        )
+    }
+    assert set(detail_datasets) == {
+        "爆品指数-SPU月度经营明细",
+        "爆品指数-SKU月度经营明细",
+    }
+    spu_labels = {
+        column["column_name"]: column["verbose_name"]
+        for column in detail_datasets["爆品指数-SPU月度经营明细"]["columns"]
+    }
+    assert spu_labels == {
+        "spu": "SPU",
+        "ym": "年月",
+        "spu_previous_month_sales_level": "SPU评级",
+        "sku_level": "最终评级",
+        "hot_product_index": "爆品指数",
+        "score": "评分",
+        "sales_amount_usd": "销售额",
+        "sales_qty": "销量",
+        "avg_daily_sales_qty": "日均销量",
+        "gross_profit_usd": "毛利润",
+        "gross_margin": "毛利率",
+        "return_goods_qty": "退货量",
+        "return_rate": "退货率",
+        "order_qty": "订单量",
+        "avg_sales_qty_7d": "近7天日均销量",
+        "avg_sales_qty_30d": "近30天日均销量",
+        "avg_sales_qty_90d": "近90天日均销量",
+    }
+    sku_labels = {
+        column["column_name"]: column["verbose_name"]
+        for column in detail_datasets["爆品指数-SKU月度经营明细"]["columns"]
+    }
+    assert sku_labels == {
+        "company_sku": "公司SKU",
+        "sku": "SKU",
+        "ym": "年月",
+        "product_level": "产品等级",
+        "size": "尺寸",
+        "color": "颜色",
+        "hot_product_index": "爆品指数",
+        "score": "评分",
+        "sales_amount_usd": "销售额",
+        "sales_qty": "销量",
+        "avg_daily_sales_qty": "日均销量",
+        "gross_profit_usd": "毛利润",
+        "gross_margin": "毛利率",
+        "return_goods_qty": "退货量",
+        "return_rate": "退货率",
+        "order_qty": "订单量",
+        "avg_sales_qty_7d": "近7天日均销量",
+        "avg_sales_qty_30d": "近30天日均销量",
+        "avg_sales_qty_90d": "近90天日均销量",
+        "theoretical_stock_qty": "理论库存数",
+        "actual_stock_qty": "实际库存数",
+    }
+    for dataset in detail_datasets.values():
+        assert all(
+            column["verbose_name"] != column["column_name"]
+            for column in dataset["columns"]
+        )
+        assert dataset["main_dttm_col"] == "ym"
+        metric_names = {metric["metric_name"] for metric in dataset["metrics"]}
+        assert {
+            "hot_product_index",
+            "score",
+            "sales_amount_usd",
+            "sales_qty",
+            "avg_daily_sales_qty",
+            "gross_profit_usd",
+            "gross_margin",
+            "return_goods_qty",
+            "return_rate",
+            "order_qty",
+            "avg_sales_qty_7d",
+            "avg_sales_qty_30d",
+            "avg_sales_qty_90d",
+        } <= metric_names
+
+
+def test_detail_sql_has_exact_grains_filters_and_null_safe_metrics(
+    tmp_path: Path,
+) -> None:
+    """Leaf SQL consumes every page filter before aggregation and never divides by zero.
+    """
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    expected_filters = (
+        "channel",
+        "product_line",
+        "spu",
+        "country",
+        "company_sku",
+        "sku",
+        "size",
+        "color",
+        "developer",
+        "model",
+        "sku_level",
+        "product_level",
+    )
+    expected_fragments = (
+        "get_time_filter(",
+        "DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)",
+        "d.sales_date >= DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)",
+        "d.sales_date < b.effective_end_exclusive_date",
+        "p.sales_date >= b.selected_start_date",
+        "p.sales_date < b.effective_end_exclusive_date",
+        "WHERE b.coverage_complete = 1",
+        "AND d.is_eligible = 1",
+        "COUNT(DISTINCT sales_date, sku)",
+        "SUM(sales_qty) / NULLIF(COUNT(DISTINCT sales_date, sku), 0)",
+        "SUM(gross_profit_usd) / NULLIF(SUM(sales_amount_usd), 0)",
+        "SUM(return_goods_qty) / NULLIF(SUM(sales_qty), 0)",
+        "MAX(theoretical_stock_qty)",
+        "MAX(actual_stock_qty)",
+        "AVG(score)",
+        "SUM(order_qty)",
+        "actual_stock_qty",
+    )
+    detail_specs = {
+        "爆品指数-SPU月度经营明细": (
+            "GROUP BY ym, spu, spu_previous_month_sales_level, sku_level",
+        ),
+        "爆品指数-SKU月度经营明细": (
+            "GROUP BY ym, company_sku, sku, product_level, size, color",
+        ),
+    }
+    for name, (grain_sql,) in detail_specs.items():
+        sql = datasets[name]["sql"]
+        assert 'default="Current month"' in sql
+        assert "target_type=\"DATE\"" in sql
+        assert "remove_filter=True" in sql
+        assert all(fragment in sql for fragment in expected_fragments)
+        assert all(
+            f"get_filters('{column}', remove_filter=True)" in sql
+            for column in expected_filters
+        )
+        assert grain_sql in sql
+        assert "WHERE coverage_complete = 1" in sql
+        assert "0 AS score" not in sql
+        assert "0 AS order_qty" not in sql
+        assert "0 AS actual_stock_qty" not in sql
+
+
+def test_detail_source_contract_fails_fast_when_required_ads_column_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A missing accepted ADS field stops generation instead of synthesizing a value."""
+    from scripts import hot_product_index_dashboard as dashboard
+
+    monkeypatch.setattr(
+        dashboard,
+        "DAILY_SOURCE_COLUMNS",
+        tuple(
+            column
+            for column in dashboard.DAILY_SOURCE_COLUMNS
+            if column[0] != "score"
+        ),
+    )
+    with pytest.raises(
+        ValueError,
+        match="hot-product detail datasets require ADS columns: score",
+    ):
+        write_bundle(tmp_path / "assets.zip")
 
 
 def test_virtual_datasets_fail_closed_on_incomplete_month_publication(

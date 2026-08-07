@@ -37,6 +37,8 @@ UUIDS: Final = {
     "dataset_daily": "ea2025d6-91ac-502f-9238-9f21ca62b761",
     "dataset_monthly": "669d6bf7-779b-545b-9b9d-5b45a5d3842c",
     "dataset_status": "bd0d4806-9f13-59a0-be0b-4d7458f88e7f",
+    "dataset_spu_detail": "de2f3527-4fb7-51df-a1ef-067567348ee6",
+    "dataset_sku_detail": "baea3900-76bf-5de9-8f10-aad2cc5e4b60",
     "chart_kpi_sales_qty": "c5749623-be9e-5116-8c2f-de2b3e77e3a8",
     "chart_kpi_avg_daily_sales_qty": "aa2a07b5-35d7-581c-b8c2-c58918efd11f",
     "chart_kpi_sales_amount_usd": "b76f494e-2743-5215-b310-0d068ba44c8c",
@@ -50,6 +52,8 @@ UUIDS: Final = {
     "chart_funnel_spu_count": "026df338-3eff-5f2f-8bc9-e9f8067832f0",
     "chart_status": "b6610031-d5ad-5e35-8219-faa765783c0f",
     "chart_guide": "5787bc53-1ed2-5143-8804-9431ade48135",
+    "chart_spu_detail": "4454d29b-3161-5d51-9e7b-7c1a9e96db06",
+    "chart_sku_detail": "76d38770-7b51-5f9e-b9df-d1b48113b8a3",
     "dashboard_main": "c0ee60ac-1686-568f-ac64-a6d7fe19dab0",
     "dashboard_guide": "a0877778-6fd7-5811-b071-24cdadb0cbb3",
 }
@@ -77,8 +81,11 @@ DAILY_SOURCE_COLUMNS: Final[tuple[tuple[str, str], ...]] = (
     ("sales_amount_usd", "DECIMAL"),
     ("gross_profit_usd", "DECIMAL"),
     ("return_goods_qty", "BIGINT"),
+    ("score", "DECIMAL"),
+    ("order_qty", "BIGINT"),
     ("sku_month_sales_qty", "BIGINT"),
     ("theoretical_stock_qty", "DECIMAL"),
+    ("actual_stock_qty", "DECIMAL"),
     ("eligibility_value", "DECIMAL"),
     ("is_eligible", "TINYINT"),
     ("is_generated_zero", "TINYINT"),
@@ -111,8 +118,11 @@ MONTHLY_SOURCE_COLUMNS: Final[tuple[tuple[str, str], ...]] = (
     ("sales_amount_usd", "DECIMAL"),
     ("gross_profit_usd", "DECIMAL"),
     ("return_goods_qty", "BIGINT"),
+    ("score", "DECIMAL"),
+    ("order_qty", "BIGINT"),
     ("sku_month_sales_qty", "BIGINT"),
     ("theoretical_stock_qty", "DECIMAL"),
+    ("actual_stock_qty", "DECIMAL"),
     ("eligibility_value", "DECIMAL"),
     ("is_eligible", "TINYINT"),
     ("data_through_date", "DATE"),
@@ -170,8 +180,11 @@ COLUMN_VERBOSE_NAMES: Final = {
     "sales_amount_usd": "销售额（美元）",
     "gross_profit_usd": "毛利润（美元）",
     "return_goods_qty": "退货数量",
+    "score": "评分",
+    "order_qty": "订单量",
     "sku_month_sales_qty": "SKU月销量",
     "theoretical_stock_qty": "理论库存",
+    "actual_stock_qty": "实际库存",
     "eligibility_value": "销量与库存之和",
     "is_eligible": "是否在售",
     "is_generated_zero": "是否补零记录",
@@ -201,6 +214,35 @@ COLUMN_VERBOSE_NAMES: Final = {
     "spu_previous_month_sales_level_sort": "SPU上月销售等级排序值",
     "status_message": "数据状态",
     "rating_status_message": "评级状态",
+    "hot_product_index": "爆品指数",
+    "avg_daily_sales_qty": "日均销量",
+    "gross_margin": "毛利率",
+    "return_rate": "退货率",
+    "avg_sales_qty_7d": "近7天日均销量",
+    "avg_sales_qty_30d": "近30天日均销量",
+    "avg_sales_qty_90d": "近90天日均销量",
+}
+
+DETAIL_REQUIRED_COLUMNS: Final[frozenset[str]] = frozenset(
+    {"score", "order_qty", "actual_stock_qty"}
+)
+
+DETAIL_METRICS: Final[dict[str, str]] = {
+    "hot_product_index": "AVG(hot_product_index)",
+    "score": "AVG(score)",
+    "sales_amount_usd": "SUM(sales_amount_usd)",
+    "sales_qty": "SUM(sales_qty)",
+    "avg_daily_sales_qty": "SUM(sales_qty) / NULLIF(SUM(effective_sku_days), 0)",
+    "gross_profit_usd": "SUM(gross_profit_usd)",
+    "gross_margin": "SUM(gross_profit_usd) / NULLIF(SUM(sales_amount_usd), 0)",
+    "return_goods_qty": "SUM(return_goods_qty)",
+    "return_rate": "SUM(return_goods_qty) / NULLIF(SUM(sales_qty), 0)",
+    "order_qty": "SUM(order_qty)",
+    "avg_sales_qty_7d": "SUM(sales_qty_7d) / NULLIF(MAX(days_7d), 0)",
+    "avg_sales_qty_30d": "SUM(sales_qty_30d) / NULLIF(MAX(days_30d), 0)",
+    "avg_sales_qty_90d": "SUM(sales_qty_90d) / NULLIF(MAX(days_90d), 0)",
+    "theoretical_stock_qty": "SUM(theoretical_stock_qty)",
+    "actual_stock_qty": "SUM(actual_stock_qty)",
 }
 
 FILTERS: Final[tuple[tuple[str, str], ...]] = (
@@ -262,6 +304,7 @@ def _column(
     is_dttm: bool = False,
     expression: str | None = None,
     description: str | None = None,
+    display_name: str | None = None,
 ) -> Asset:
     """Build one importable dataset column definition."""
     try:
@@ -281,7 +324,7 @@ def _column(
         "is_dttm": is_dttm,
         "python_date_format": None,
         "type": type_,
-        "verbose_name": verbose_name,
+        "verbose_name": display_name or verbose_name,
     }
 
 
@@ -500,6 +543,304 @@ FROM valid
     )
 
 
+def _validate_detail_source_columns() -> None:
+    """Fail before asset generation when either accepted ADS table is incomplete."""
+    daily_columns = {name for name, _ in DAILY_SOURCE_COLUMNS}
+    monthly_columns = {name for name, _ in MONTHLY_SOURCE_COLUMNS}
+    missing_columns = (DETAIL_REQUIRED_COLUMNS - daily_columns) | (
+        DETAIL_REQUIRED_COLUMNS - monthly_columns
+    )
+    if missing_columns:
+        raise ValueError(
+            "hot-product detail datasets require ADS columns: "
+            + ", ".join(sorted(missing_columns))
+        )
+
+
+def _detail_filter_fragment(alias: str) -> str:
+    """Render the equality-only native-filter contract for detail SQL."""
+    fragments: list[str] = []
+    for column in (name for _, name in FILTERS):
+        fragments.append(
+            "\n".join(
+                (
+                    "{% for filter in get_filters("
+                    f"'{column}', remove_filter=True) %}}",
+                    f"  {{% if filter.get('op') == 'IN' %}}",
+                    f"    AND {alias}.{column} IN "
+                    "{{ filter.get('val') | where_in }}",
+                    "  {% elif filter.get('op') == 'NOT IN' %}",
+                    f"    AND {alias}.{column} NOT IN "
+                    "{{ filter.get('val') | where_in }}",
+                    "  {% else %}",
+                    "    {{ raise('Unsupported "
+                    + column
+                    + " filter operator: ' ~ filter.get('op')) }}",
+                    "  {% endif %}",
+                    "{% endfor %}",
+                )
+            )
+        )
+    return "\n".join(fragments)
+
+
+def _detail_sql(*, grain: str) -> str:
+    """Build one month-range leaf query for the SPU or SKU detail table."""
+    if grain == "spu":
+        dimensions = (
+            "ym",
+            "spu",
+            "spu_previous_month_sales_level",
+            "sku_level",
+        )
+    elif grain == "sku":
+        dimensions = ("ym", "company_sku", "sku", "product_level", "size", "color")
+    else:
+        raise ValueError(f"unsupported hot-product detail grain: {grain}")
+
+    dimension_list = ", ".join(dimensions)
+    dimension_select = ",\n      ".join(dimensions)
+    stock_dimension_join = " AND ".join(
+        f"a.{column} <=> stock_leaf.{column}" for column in dimensions
+    )
+    rolling_dimension_join = " AND ".join(
+        f"a.{column} <=> r.{column}" for column in dimensions
+    )
+    stock_dimensions = dimensions if "sku" in dimensions else (*dimensions, "sku")
+    stock_leaf_dimensions = ", ".join(
+        f"p.{column} AS {column}" for column in stock_dimensions
+    )
+    stock_leaf_group_dimensions = ", ".join(
+        f"p.{column}" for column in stock_dimensions
+    )
+    stock_group_dimensions = ", ".join(stock_dimensions)
+    filter_sql = _detail_filter_fragment("d")
+    return f'''{{% set time_filter = get_time_filter(
+  "sales_date", default="Current month", target_type="DATE",
+  remove_filter=True
+) %}}
+WITH selected_bounds AS (
+  SELECT
+    CAST({{{{ time_filter.from_expr }}}} AS DATE) AS selected_start_date,
+    CAST({{{{ time_filter.to_expr }}}} AS DATE) AS selected_end_exclusive_date,
+    w.global_data_through_date,
+    LEAST(
+      CAST({{{{ time_filter.to_expr }}}} AS DATE),
+      DATE_ADD(w.global_data_through_date, INTERVAL 1 DAY)
+    ) AS effective_end_exclusive_date,
+    TIMESTAMPDIFF(MONTH, {{{{ time_filter.from_expr }}}},
+      {{{{ time_filter.to_expr }}}}) AS expected_month_count
+  FROM (
+    SELECT MAX(data_through_date) AS global_data_through_date
+    FROM ads.ads_pdm_lx_hot_product_index_sku_d
+  ) w
+),
+daily_quality AS (
+  SELECT
+    COUNT(DISTINCT d.ym) AS daily_month_count,
+    COALESCE(SUM(
+      CASE
+        WHEN d.is_eligible = 1
+          AND d.sales_date >= b.selected_start_date
+          AND d.sales_date < b.selected_end_exclusive_date
+          AND d.spu_previous_month_sales_level IS NULL
+        THEN 1
+        ELSE 0
+      END
+    ), 0) AS daily_missing_rating_count
+  FROM ads.ads_pdm_lx_hot_product_index_sku_d d
+  CROSS JOIN selected_bounds b
+  WHERE d.ym >= DATE_FORMAT(b.selected_start_date, '%Y-%m')
+    AND d.ym < DATE_FORMAT(b.selected_end_exclusive_date, '%Y-%m')
+),
+monthly_quality AS (
+  SELECT
+    COUNT(DISTINCT m.ym) AS monthly_month_count,
+    COALESCE(SUM(
+      CASE
+        WHEN m.is_eligible = 1
+          AND m.spu_previous_month_sales_level IS NULL
+        THEN 1
+        ELSE 0
+      END
+    ), 0) AS monthly_missing_rating_count
+  FROM ads.ads_pdm_lx_hot_product_index_sku_m m
+  CROSS JOIN selected_bounds b
+  WHERE m.ym >= DATE_FORMAT(b.selected_start_date, '%Y-%m')
+    AND m.ym < DATE_FORMAT(b.selected_end_exclusive_date, '%Y-%m')
+),
+quality AS (
+  SELECT
+    b.*,
+    DATE_SUB(b.selected_end_exclusive_date, INTERVAL 1 DAY) AS selected_end_date,
+    DATE_SUB(b.effective_end_exclusive_date, INTERVAL 1 DAY) AS effective_end_date,
+    b.expected_month_count,
+    d.daily_month_count,
+    m.monthly_month_count,
+    d.daily_missing_rating_count,
+    m.monthly_missing_rating_count,
+    CASE
+      WHEN b.expected_month_count > 0
+        AND DAY(b.selected_start_date) = 1
+        AND DAY(b.selected_end_exclusive_date) = 1
+        AND d.daily_month_count = expected_month_count
+        AND m.monthly_month_count = expected_month_count
+        AND b.effective_end_exclusive_date > b.selected_start_date
+      THEN 1
+      ELSE 0
+    END AS coverage_complete,
+    CASE
+      WHEN d.daily_missing_rating_count = 0
+        AND m.monthly_missing_rating_count = 0
+      THEN 1
+      ELSE 0
+    END AS rating_complete,
+    CASE
+      WHEN b.global_data_through_date IS NULL
+        OR b.global_data_through_date < DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)
+      THEN 1
+      ELSE 0
+    END AS is_stale
+  FROM selected_bounds b
+  CROSS JOIN daily_quality d
+  CROSS JOIN monthly_quality m
+),
+filtered_daily AS (
+  SELECT d.*
+  FROM ads.ads_pdm_lx_hot_product_index_sku_d d
+  CROSS JOIN quality b
+  WHERE b.coverage_complete = 1
+    AND d.is_eligible = 1
+    AND d.sales_date >= DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
+    AND d.sales_date < b.effective_end_exclusive_date
+{filter_sql}
+),
+selected_period AS (
+  SELECT p.*
+  FROM filtered_daily p
+  CROSS JOIN quality b
+  WHERE p.sales_date >= b.selected_start_date
+    AND p.sales_date < b.effective_end_exclusive_date
+),
+leaf_additive AS (
+  SELECT
+      {dimension_select},
+      AVG(score) AS score,
+      SUM(sales_amount_usd) AS sales_amount_usd,
+      SUM(sales_qty) AS sales_qty,
+      COUNT(DISTINCT sales_date, sku) AS effective_sku_days,
+      SUM(sales_qty) / NULLIF(COUNT(DISTINCT sales_date, sku), 0)
+        AS hot_product_index,
+      SUM(sales_qty) / NULLIF(COUNT(DISTINCT sales_date, sku), 0)
+        AS avg_daily_sales_qty,
+      SUM(gross_profit_usd) AS gross_profit_usd,
+      SUM(gross_profit_usd) / NULLIF(SUM(sales_amount_usd), 0)
+        AS gross_margin,
+      SUM(return_goods_qty) AS return_goods_qty,
+      SUM(return_goods_qty) / NULLIF(SUM(sales_qty), 0) AS return_rate,
+      SUM(order_qty) AS order_qty
+  FROM selected_period
+  GROUP BY {dimension_list}
+),
+rolling AS (
+  SELECT
+      {dimension_select},
+      SUM(CASE
+        WHEN d.sales_date >= DATE_SUB(b.effective_end_exclusive_date, INTERVAL 7 DAY)
+        THEN d.sales_qty ELSE 0 END) AS sales_qty_7d,
+      SUM(CASE
+        WHEN d.sales_date >= DATE_SUB(b.effective_end_exclusive_date, INTERVAL 30 DAY)
+        THEN d.sales_qty ELSE 0 END) AS sales_qty_30d,
+      SUM(CASE
+        WHEN d.sales_date >= DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
+        THEN d.sales_qty ELSE 0 END) AS sales_qty_90d,
+      DATEDIFF(
+        b.effective_end_exclusive_date,
+        DATE_SUB(b.effective_end_exclusive_date, INTERVAL 7 DAY)
+      ) AS days_7d,
+      DATEDIFF(
+        b.effective_end_exclusive_date,
+        DATE_SUB(b.effective_end_exclusive_date, INTERVAL 30 DAY)
+      ) AS days_30d,
+      DATEDIFF(
+        b.effective_end_exclusive_date,
+        DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
+      ) AS days_90d
+  FROM filtered_daily d
+  CROSS JOIN quality b
+  GROUP BY {dimension_list}, b.effective_end_exclusive_date
+),
+stock_by_sku AS (
+  SELECT
+    ym,
+    sku,
+    MAX(theoretical_stock_qty) AS theoretical_stock_qty,
+    MAX(actual_stock_qty) AS actual_stock_qty
+  FROM selected_period
+  GROUP BY ym, sku
+),
+leaf_rows AS (
+  SELECT
+      a.*,
+      r.sales_qty_7d,
+      r.sales_qty_30d,
+      r.sales_qty_90d,
+      r.days_7d,
+      r.days_30d,
+      r.days_90d,
+      stock_leaf.theoretical_stock_qty,
+      stock_leaf.actual_stock_qty,
+      b.coverage_complete
+  FROM leaf_additive a
+  LEFT JOIN rolling r
+    ON {rolling_dimension_join}
+  LEFT JOIN (
+    SELECT
+      {stock_leaf_dimensions},
+      SUM(stock_by_sku.theoretical_stock_qty) AS theoretical_stock_qty,
+      SUM(stock_by_sku.actual_stock_qty) AS actual_stock_qty
+    FROM (
+      SELECT DISTINCT {stock_group_dimensions}
+      FROM selected_period
+    ) p
+    LEFT JOIN stock_by_sku
+      ON p.ym <=> stock_by_sku.ym
+      AND p.sku <=> stock_by_sku.sku
+    GROUP BY {stock_leaf_group_dimensions}
+  ) stock_leaf
+    ON {stock_dimension_join}
+  CROSS JOIN quality b
+)
+SELECT
+    {dimension_select},
+    hot_product_index,
+    score,
+    sales_amount_usd,
+    sales_qty,
+    avg_daily_sales_qty,
+    gross_profit_usd,
+    gross_margin,
+    return_goods_qty,
+    return_rate,
+    order_qty,
+    sales_qty_7d,
+    sales_qty_7d / NULLIF(days_7d, 0) AS avg_sales_qty_7d,
+    sales_qty_30d,
+    sales_qty_30d / NULLIF(days_30d, 0) AS avg_sales_qty_30d,
+    sales_qty_90d,
+    sales_qty_90d / NULLIF(days_90d, 0) AS avg_sales_qty_90d,
+    effective_sku_days,
+    days_7d,
+    days_30d,
+    days_90d,
+    theoretical_stock_qty,
+    actual_stock_qty,
+    coverage_complete
+FROM leaf_rows
+WHERE coverage_complete = 1
+'''
+
+
 def _dataset(
     *,
     table_name: str,
@@ -539,8 +880,161 @@ def _dataset(
     }
 
 
+DETAIL_LABELS: Final[dict[str, str]] = {
+    "spu": "SPU",
+    "company_sku": "公司SKU",
+    "sku": "SKU",
+    "ym": "年月",
+    "spu_previous_month_sales_level": "SPU评级",
+    "sku_level": "最终评级",
+    "product_level": "产品等级",
+    "size": "尺寸",
+    "color": "颜色",
+    "hot_product_index": "爆品指数",
+    "score": "评分",
+    "sales_amount_usd": "销售额",
+    "sales_qty": "销量",
+    "avg_daily_sales_qty": "日均销量",
+    "gross_profit_usd": "毛利润",
+    "gross_margin": "毛利率",
+    "return_goods_qty": "退货量",
+    "return_rate": "退货率",
+    "order_qty": "订单量",
+    "avg_sales_qty_7d": "近7天日均销量",
+    "avg_sales_qty_30d": "近30天日均销量",
+    "avg_sales_qty_90d": "近90天日均销量",
+    "theoretical_stock_qty": "理论库存数",
+    "actual_stock_qty": "实际库存数",
+}
+
+DETAIL_COLUMN_TYPES: Final[dict[str, str]] = {
+    "spu": "STRING",
+    "company_sku": "STRING",
+    "sku": "STRING",
+    "ym": "STRING",
+    "spu_previous_month_sales_level": "STRING",
+    "sku_level": "STRING",
+    "product_level": "STRING",
+    "size": "STRING",
+    "color": "STRING",
+    "hot_product_index": "DECIMAL",
+    "score": "DECIMAL",
+    "sales_amount_usd": "DECIMAL",
+    "sales_qty": "BIGINT",
+    "avg_daily_sales_qty": "DECIMAL",
+    "gross_profit_usd": "DECIMAL",
+    "gross_margin": "DECIMAL",
+    "return_goods_qty": "BIGINT",
+    "return_rate": "DECIMAL",
+    "order_qty": "BIGINT",
+    "avg_sales_qty_7d": "DECIMAL",
+    "avg_sales_qty_30d": "DECIMAL",
+    "avg_sales_qty_90d": "DECIMAL",
+    "theoretical_stock_qty": "DECIMAL",
+    "actual_stock_qty": "DECIMAL",
+}
+
+
+def _detail_columns(grain: str) -> list[Asset]:
+    """Build the exact visible column contract for one detail dataset."""
+    if grain == "spu":
+        names = (
+            "spu",
+            "ym",
+            "spu_previous_month_sales_level",
+            "sku_level",
+            "hot_product_index",
+            "score",
+            "sales_amount_usd",
+            "sales_qty",
+            "avg_daily_sales_qty",
+            "gross_profit_usd",
+            "gross_margin",
+            "return_goods_qty",
+            "return_rate",
+            "order_qty",
+            "avg_sales_qty_7d",
+            "avg_sales_qty_30d",
+            "avg_sales_qty_90d",
+        )
+    elif grain == "sku":
+        names = (
+            "company_sku",
+            "sku",
+            "ym",
+            "product_level",
+            "size",
+            "color",
+            "hot_product_index",
+            "score",
+            "sales_amount_usd",
+            "sales_qty",
+            "avg_daily_sales_qty",
+            "gross_profit_usd",
+            "gross_margin",
+            "return_goods_qty",
+            "return_rate",
+            "order_qty",
+            "avg_sales_qty_7d",
+            "avg_sales_qty_30d",
+            "avg_sales_qty_90d",
+            "theoretical_stock_qty",
+            "actual_stock_qty",
+        )
+    else:
+        raise ValueError(f"unsupported hot-product detail grain: {grain}")
+    return [
+        _column(
+            name,
+            DETAIL_COLUMN_TYPES[name],
+            display_name=DETAIL_LABELS[name],
+        )
+        for name in names
+    ]
+
+
+def _detail_metrics(*, include_stock: bool) -> tuple[Asset, ...]:
+    """Build metrics that aggregate already unique leaf rows."""
+    labels = DETAIL_LABELS
+    formats = {
+        "hot_product_index": ",.1~f",
+        "score": ",.1~f",
+        "sales_amount_usd": "$,.1~f",
+        "sales_qty": ",.0f",
+        "avg_daily_sales_qty": ",.1~f",
+        "gross_profit_usd": "$,.1~f",
+        "gross_margin": ".1~%",
+        "return_goods_qty": ",.0f",
+        "return_rate": ".1~%",
+        "order_qty": ",.0f",
+        "avg_sales_qty_7d": ",.1~f",
+        "avg_sales_qty_30d": ",.1~f",
+        "avg_sales_qty_90d": ",.1~f",
+        "theoretical_stock_qty": ",.1~f",
+        "actual_stock_qty": ",.1~f",
+    }
+    metric_names = list(DETAIL_METRICS)
+    if not include_stock:
+        metric_names = [
+            name
+            for name in metric_names
+            if name not in {"theoretical_stock_qty", "actual_stock_qty"}
+        ]
+    return tuple(
+        _metric(
+            name,
+            labels[name],
+            DETAIL_METRICS[name],
+            formats[name],
+            f"爆品指数明细指标：{labels[name]}。",
+        )
+        for name in metric_names
+    )
+
+
 def _datasets(database_uuid: str) -> AssetBundle:
-    """Build the three virtual semantic datasets used by the dashboard."""
+    """Build the existing semantic datasets and the two detail datasets."""
+    _validate_detail_source_columns()
     common_business_columns = [
         _column(name, type_, is_dttm=type_ in {"DATE", "DATETIME"})
         for name, type_ in COVERAGE_COLUMNS
@@ -682,7 +1176,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
         ),
     )
 
-    return {
+    datasets = {
         "datasets/Doris_ling_xing/Hot_Product_Index_Daily.yaml": _dataset(
             table_name="爆品指数-日明细",
             uuid=UUIDS["dataset_daily"],
@@ -717,7 +1211,32 @@ def _datasets(database_uuid: str) -> AssetBundle:
             metrics=(),
             database_uuid=database_uuid,
         ),
+        "datasets/Doris_ling_xing/Hot_Product_Index_SPU_Detail.yaml": _dataset(
+            table_name="爆品指数-SPU月度经营明细",
+            uuid=UUIDS["dataset_spu_detail"],
+            main_dttm_col="ym",
+            description=(
+                "爆品指数SPU月度叶子明细；按SPU、年月、SPU评级和最终评级聚合。"
+            ),
+            sql=_detail_sql(grain="spu"),
+            columns=_detail_columns("spu"),
+            metrics=_detail_metrics(include_stock=False),
+            database_uuid=database_uuid,
+        ),
+        "datasets/Doris_ling_xing/Hot_Product_Index_SKU_Detail.yaml": _dataset(
+            table_name="爆品指数-SKU月度经营明细",
+            uuid=UUIDS["dataset_sku_detail"],
+            main_dttm_col="ym",
+            description=(
+                "爆品指数SKU月度叶子明细；按公司SKU、SKU、年月、产品等级、尺寸和颜色聚合。"
+            ),
+            sql=_detail_sql(grain="sku"),
+            columns=_detail_columns("sku"),
+            metrics=_detail_metrics(include_stock=True),
+            database_uuid=database_uuid,
+        ),
     }
+    return datasets
 
 
 def _query_context(params: Asset) -> str:
@@ -1565,13 +2084,20 @@ def validate_assets(  # noqa: C901
     dashboards = _asset_family(assets, "dashboards/")
     if assets.get("metadata.yaml") != {"type": "assets", "version": ASSET_VERSION}:
         raise ValueError("metadata.yaml must declare an assets v1 bundle")
-    if (len(datasets), len(charts), len(dashboards)) != (3, 13, 2):
-        raise ValueError("bundle must contain 3 datasets, 13 charts, and 2 dashboards")
+    # Task 5 is intentionally chart-free; Task 6 adds the two detail charts.
+    # Keeping this intermediate contract strict prevents placeholder charts or
+    # a half-published detail pair from entering an import bundle.
+    if (len(datasets), len(charts), len(dashboards)) != (5, 13, 2):
+        raise ValueError(
+            "Task 5 bundle must contain 5 datasets, 13 charts, and 2 dashboards"
+        )
 
     identified_assets = [*datasets, *charts, *dashboards]
     asset_uuids = [str(asset["uuid"]) for asset in identified_assets]
     if len(asset_uuids) != len(set(asset_uuids)):
         raise ValueError("asset UUIDs must be unique")
+    if len(asset_uuids) != 20:
+        raise ValueError("Task 5 bundle must contain 20 published asset UUIDs")
     for asset_uuid in asset_uuids:
         UUID(asset_uuid)
 
