@@ -588,6 +588,7 @@ def _detail_filter_fragment(alias: str) -> str:
 
 def _detail_sql(*, grain: str) -> str:
     """Build one month-range leaf query for the SPU or SKU detail table."""
+    dimensions: tuple[str, ...]
     if grain == "spu":
         dimensions = (
             "ym",
