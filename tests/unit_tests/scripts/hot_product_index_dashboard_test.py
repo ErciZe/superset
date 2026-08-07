@@ -155,7 +155,8 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
     spu_labels = {
         column["column_name"]: column["verbose_name"]
         for column in detail_datasets["爆品指数-SPU月度经营明细"]["columns"]
-        if column["column_name"] in {
+        if column["column_name"]
+        in {
             "spu",
             "ym",
             "spu_previous_month_sales_level",
@@ -197,7 +198,8 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
     sku_labels = {
         column["column_name"]: column["verbose_name"]
         for column in detail_datasets["爆品指数-SKU月度经营明细"]["columns"]
-        if column["column_name"] in {
+        if column["column_name"]
+        in {
             "company_sku",
             "sku",
             "ym",
@@ -322,8 +324,7 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
 def test_detail_sql_has_exact_grains_filters_and_null_safe_metrics(
     tmp_path: Path,
 ) -> None:
-    """Leaf SQL consumes every page filter before aggregation and never divides by zero.
-    """
+    """Leaf SQL consumes filters before aggregation and avoids zero division."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     datasets = assets_by_key(assets, "datasets", "table_name")
     expected_filters = (
@@ -374,7 +375,7 @@ def test_detail_sql_has_exact_grains_filters_and_null_safe_metrics(
     for name, (grain_sql,) in detail_specs.items():
         sql = datasets[name]["sql"]
         assert 'default="Current month"' in sql
-        assert "target_type=\"DATE\"" in sql
+        assert 'target_type="DATE"' in sql
         assert "remove_filter=True" in sql
         assert all(fragment in sql for fragment in expected_fragments)
         assert all(
@@ -476,17 +477,17 @@ def test_detail_charts_preserve_approved_fields_pagination_and_sorting(
         ["sales_qty", False],
         ["spu", True],
     ]
-    assert spu["params"]["server_pagination_default_orderby"] == spu["params"][
-        "orderby"
-    ]
+    assert (
+        spu["params"]["server_pagination_default_orderby"] == spu["params"]["orderby"]
+    )
     assert sku["params"]["orderby"] == [
         ["ym", False],
         ["sales_qty", False],
         ["company_sku", True],
     ]
-    assert sku["params"]["server_pagination_default_orderby"] == sku["params"][
-        "orderby"
-    ]
+    assert (
+        sku["params"]["server_pagination_default_orderby"] == sku["params"]["orderby"]
+    )
 
 
 def test_detail_charts_use_one_decimal_formats_and_fixed_index_boundaries(
@@ -611,9 +612,7 @@ def test_detail_source_contract_fails_fast_when_required_ads_column_is_missing(
         dashboard,
         "DAILY_SOURCE_COLUMNS",
         tuple(
-            column
-            for column in dashboard.DAILY_SOURCE_COLUMNS
-            if column[0] != "score"
+            column for column in dashboard.DAILY_SOURCE_COLUMNS if column[0] != "score"
         ),
     )
     with pytest.raises(
@@ -780,7 +779,9 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
     assert sum(chart["viz_type"] == "big_number_total" for chart in main_charts) == 9
     assert sum(chart["viz_type"] == "funnel" for chart in main_charts) == 2
     assert sum(chart["viz_type"] == "handlebars" for chart in main_charts) == 1
-    assert sum(chart["viz_type"] == "ag-grid-table-scheme" for chart in main_charts) == 2
+    assert (
+        sum(chart["viz_type"] == "ag-grid-table-scheme" for chart in main_charts) == 2
+    )
     assert all(
         chart["params"].get("show_metric_name") is True
         for chart in main_charts
@@ -792,12 +793,8 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
         "ROW-DETAIL-TITLE",
         "TABS-DETAIL",
     ]
-    assert position["ROW-DETAIL-TITLE"]["children"] == [
-        "MARKDOWN-DETAIL-TITLE"
-    ]
-    assert "爆品指数&经营指标报表" in position["MARKDOWN-DETAIL-TITLE"]["meta"][
-        "code"
-    ]
+    assert position["ROW-DETAIL-TITLE"]["children"] == ["MARKDOWN-DETAIL-TITLE"]
+    assert "爆品指数&经营指标报表" in position["MARKDOWN-DETAIL-TITLE"]["meta"]["code"]
     assert position["TABS-DETAIL"]["children"] == [
         "TAB-SPU-DETAIL",
         "TAB-SKU-DETAIL",
@@ -908,9 +905,9 @@ def test_detail_css_is_scoped_to_table_components_and_tabs(tmp_path: Path) -> No
 def test_main_dashboard_rejects_missing_detail_chart_uuid(tmp_path: Path) -> None:
     """The 14-chart invariant fails when a detail node points to no chart asset."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
-    assets["dashboards/Hot_Product_Index.yaml"]["position"]["CHART-SPU-DETAIL"][
-        "meta"
-    ]["uuid"] = "00000000-0000-0000-0000-000000000000"
+    assets["dashboards/Hot_Product_Index.yaml"]["position"]["CHART-SPU-DETAIL"]["meta"][
+        "uuid"
+    ] = "00000000-0000-0000-0000-000000000000"
 
     with pytest.raises(ValueError, match="unknown chart UUID"):
         validate_assets(assets, DEFAULT_DATABASE_UUID)

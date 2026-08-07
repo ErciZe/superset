@@ -568,7 +568,7 @@ def _detail_filter_fragment(alias: str) -> str:
                 (
                     "{% for filter in get_filters("
                     f"'{column}', remove_filter=True) %}}",
-                    f"  {{% if filter.get('op') == 'IN' %}}",
+                    "  {% if filter.get('op') == 'IN' %}",
                     f"    AND {alias}.{column} IN "
                     "{{ filter.get('val') | where_in }}",
                     "  {% elif filter.get('op') == 'NOT IN' %}",
@@ -618,7 +618,7 @@ def _detail_sql(*, grain: str) -> str:
     )
     stock_group_dimensions = ", ".join(stock_dimensions)
     filter_sql = _detail_filter_fragment("d")
-    return f'''{{% set time_filter = get_time_filter(
+    return f"""{{% set time_filter = get_time_filter(
   "sales_date", default="Current month", target_type="DATE",
   remove_filter=True
 ) %}}
@@ -866,7 +866,7 @@ SELECT
 FROM leaf_rows
 WHERE coverage_complete = 1
   AND lookback_complete = 1
-'''
+"""
 
 
 def _dataset(
@@ -1102,9 +1102,7 @@ DETAIL_NUMERIC_COLUMNS: Final[frozenset[str]] = frozenset(
         "actual_stock_qty",
     }
 )
-DETAIL_RATE_COLUMNS: Final[frozenset[str]] = frozenset(
-    {"gross_margin", "return_rate"}
-)
+DETAIL_RATE_COLUMNS: Final[frozenset[str]] = frozenset({"gross_margin", "return_rate"})
 DETAIL_MONEY_COLUMNS: Final[frozenset[str]] = frozenset(
     {"sales_amount_usd", "gross_profit_usd"}
 )
@@ -1938,9 +1936,7 @@ def _main_position() -> Asset:
             "ROW-FUNNELS",
             ["CHART-FUNNEL-SALES-AMOUNT", "CHART-FUNNEL-SPU-COUNT"],
         ),
-        "ROW-DETAIL-TITLE": _row(
-            "ROW-DETAIL-TITLE", ["MARKDOWN-DETAIL-TITLE"]
-        ),
+        "ROW-DETAIL-TITLE": _row("ROW-DETAIL-TITLE", ["MARKDOWN-DETAIL-TITLE"]),
         "MARKDOWN-DETAIL-TITLE": {
             "children": [],
             "id": "MARKDOWN-DETAIL-TITLE",
@@ -1960,12 +1956,8 @@ def _main_position() -> Asset:
             "parents": ["ROOT_ID", "GRID_ID"],
             "type": "TABS",
         },
-        "TAB-SPU-DETAIL": _tab(
-            "TAB-SPU-DETAIL", "SPU维度", ["ROW-SPU-DETAIL"]
-        ),
-        "TAB-SKU-DETAIL": _tab(
-            "TAB-SKU-DETAIL", "SKU维度", ["ROW-SKU-DETAIL"]
-        ),
+        "TAB-SPU-DETAIL": _tab("TAB-SPU-DETAIL", "SPU维度", ["ROW-SPU-DETAIL"]),
+        "TAB-SKU-DETAIL": _tab("TAB-SKU-DETAIL", "SKU维度", ["ROW-SKU-DETAIL"]),
         "ROW-SPU-DETAIL": _row(
             "ROW-SPU-DETAIL",
             ["CHART-SPU-DETAIL"],
@@ -2571,7 +2563,8 @@ def validate_assets(  # noqa: C901
     )
     if main_chart_count != 14:
         raise ValueError(
-            "main dashboard scope is status, nine KPIs, two funnels, and two detail tables"
+            "main dashboard scope is status, nine KPIs, two funnels, and "
+            "two detail tables"
         )
     filters = main["metadata"]["native_filter_configuration"]
     if len(filters) != 13:

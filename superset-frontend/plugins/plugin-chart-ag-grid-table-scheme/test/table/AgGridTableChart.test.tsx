@@ -16,12 +16,15 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { render } from '@superset-ui/core/spec';
+import { render as renderTest } from '@superset-ui/core/spec';
 import { GenericDataType } from '@apache-superset/core/common';
 import TableChart from '../../src/table/AgGridTableChart';
 import { validateRowHierarchyFields } from '../../src/table/controlPanel';
 import type { AgGridTableProps } from '../../src/table/AgGridTable';
-import type { AdvancedFilterState } from '../../src/table/types';
+import type {
+  AdvancedFilterState,
+  AgGridTableChartTransformedProps,
+} from '../../src/table/types';
 
 type MockAgGridTableProps = Pick<
   AgGridTableProps,
@@ -69,7 +72,7 @@ jest.mock('../../src/table/components/AdvancedFilterBar', () => ({
   },
 }));
 
-const baseProps = {
+const baseProps: AgGridTableChartTransformedProps = {
   height: 400,
   width: 1000,
   columns: [
@@ -99,6 +102,7 @@ const baseProps = {
   showCellBars: false,
   isUsingTimeComparison: false,
   colorPositiveNegative: false,
+  slice_id: 17,
   totals: {},
   showTotals: false,
   columnColorFormatters: [],
@@ -111,14 +115,14 @@ const baseProps = {
 
 const renderTable = (
   overrides: Partial<typeof baseProps> = {},
-): ReturnType<typeof render> =>
-  render(<TableChart {...baseProps} {...overrides} />);
+): ReturnType<typeof renderTest> =>
+  renderTest(<TableChart {...baseProps} {...overrides} />);
 
 test('marks only the WHM order detail chart for scoped advanced filter styles', () => {
-  const { container: whmContainer } = render(
+  const { container: whmContainer } = renderTest(
     <TableChart {...baseProps} slice_id={17} />,
   );
-  const { container: otherContainer } = render(
+  const { container: otherContainer } = renderTest(
     <TableChart {...baseProps} slice_id={130} />,
   );
 
