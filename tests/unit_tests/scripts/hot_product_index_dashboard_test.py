@@ -1,0 +1,406 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+from __future__ import annotations
+
+import json  # noqa: TID251
+from pathlib import Path
+from typing import Any
+from uuid import UUID
+from zipfile import ZipFile
+
+import pytest
+
+from scripts.hot_product_index_dashboard import (
+    DEFAULT_DATABASE_UUID,
+    write_bundle,
+)
+
+
+def read_bundle(path: Path) -> dict[str, dict[str, Any]]:
+    """Read generated JSON-as-YAML assets and strip the ZIP root directory."""
+    with ZipFile(path) as bundle:
+        names = bundle.namelist()
+        roots = {name.split("/", maxsplit=1)[0] for name in names}
+        assert roots == {"hot_product_index_assets"}
+        return {
+            name.split("/", maxsplit=1)[1]: json.loads(bundle.read(name))
+            for name in names
+        }
+
+
+def assets_by_key(
+    assets: dict[str, dict[str, Any]], prefix: str, key: str
+) -> dict[str, dict[str, Any]]:
+    """Index one asset family by a business-facing field."""
+    return {
+        asset[key]: asset
+        for path, asset in assets.items()
+        if path.startswith(f"{prefix}/")
+    }
+
+
+def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> None:
+    """A repeat build must be byte-identical and contain every import dependency."""
+    first = tmp_path / "first.zip"
+    second = tmp_path / "second.zip"
+
+    assert write_bundle(first) == first
+    write_bundle(second)
+
+    assert first.read_bytes() == second.read_bytes()
+    assets = read_bundle(first)
+    assert assets["metadata.yaml"] == {"type": "assets", "version": "1.0.0"}
+    assert not any(path.startswith("databases/") for path in assets)
+    assert sum(path.startswith("datasets/") for path in assets) == 3
+    assert sum(path.startswith("charts/") for path in assets) == 13
+    assert sum(path.startswith("dashboards/") for path in assets) == 2
+
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    charts = assets_by_key(assets, "charts", "slice_name")
+    dashboards = assets_by_key(assets, "dashboards", "dashboard_title")
+    assert set(datasets) == {
+        "爆品指数-日明细",
+        "爆品指数-月末在售",
+        "爆品指数-数据状态",
+    }
+    assert set(dashboards) == {
+        "拉杆箱在售产品爆品指数看板",
+        "爆品指数说明文档",
+    }
+
+    uuids = [
+        asset["uuid"]
+        for asset in [*datasets.values(), *charts.values(), *dashboards.values()]
+    ]
+    assert len(uuids) == len(set(uuids)) == 18
+    assert all(str(UUID(value)) == value for value in uuids)
+    assert datasets["爆品指数-日明细"]["uuid"] == (
+        "ea2025d6-91ac-502f-9238-9f21ca62b761"
+    )
+    assert all(
+        dataset["database_uuid"] == DEFAULT_DATABASE_UUID
+        for dataset in datasets.values()
+    )
+    assert {chart["dataset_uuid"] for chart in charts.values()} <= {
+        dataset["uuid"] for dataset in datasets.values()
+    }
+    for chart in charts.values():
+        query_context = json.loads(chart["query_context"])
+        assert query_context["datasource"] == {"id": 0, "type": "table"}
+        assert query_context["form_data"]["datasource"] == "0__table"
+        assert query_context["queries"]
+        assert query_context["queries"][0]["datasource"] == {
+            "id": 0,
+            "type": "table",
+        }
+        if chart["viz_type"] in {"big_number_total", "funnel"}:
+            assert query_context["queries"][0]["metrics"] == [chart["params"]["metric"]]
+        else:
+            assert (
+                query_context["queries"][0]["columns"] == chart["params"]["all_columns"]
+            )
+        assert query_context["result_format"] == "json"
+        assert query_context["result_type"] == "full"
+
+
+def test_virtual_datasets_fail_closed_on_incomplete_month_publication(
+    tmp_path: Path,
+) -> None:
+    """Business rows must disappear unless daily and monthly targets cover the range."""
+    bundle_path = write_bundle(tmp_path / "assets.zip")
+    assets = read_bundle(bundle_path)
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    daily = datasets["爆品指数-日明细"]
+    monthly = datasets["爆品指数-月末在售"]
+    status = datasets["爆品指数-数据状态"]
+
+    assert daily["main_dttm_col"] == "sales_date"
+    assert monthly["main_dttm_col"] == "month_start_date"
+    for dataset in (daily, monthly):
+        column_types = {
+            column["column_name"]: column["type"] for column in dataset["columns"]
+        }
+        assert column_types["theoretical_stock_qty"] == "DECIMAL"
+        assert column_types["eligibility_value"] == "DECIMAL"
+        assert column_types["rating_complete"] == "TINYINT"
+    status_columns = {column["column_name"] for column in status["columns"]}
+    assert {
+        "daily_missing_rating_count",
+        "monthly_missing_rating_count",
+        "coverage_complete",
+        "rating_complete",
+        "rating_status_message",
+    } <= status_columns
+    for dataset in datasets.values():
+        sql = dataset["sql"]
+        assert "get_time_filter(" in sql
+        assert 'default="Current month"' in sql
+        assert 'target_type="DATE"' in sql
+        assert "remove_filter=True" in sql
+        assert "selected_end_exclusive_date" in sql
+        assert "TIMESTAMPDIFF(MONTH" in sql
+        assert "daily_quality AS (" in sql
+        assert "monthly_quality AS (" in sql
+        assert "COUNT(DISTINCT d.ym)" in sql
+        assert "COUNT(DISTINCT m.ym)" in sql
+        assert "daily_month_count = expected_month_count" in sql
+        assert "monthly_month_count = expected_month_count" in sql
+        assert "coverage_complete" in sql
+        assert "ads.ads_pdm_lx_hot_product_index_sku_d" in sql
+        assert "ads.ads_pdm_lx_hot_product_index_sku_m" in sql
+
+    assert "WHERE v.coverage_complete = 1" in daily["sql"]
+    assert "d.is_eligible = 1" in daily["sql"]
+    assert "d.sales_date >= v.selected_start_date" in daily["sql"]
+    assert "d.sales_date < v.effective_end_exclusive_date" in daily["sql"]
+    assert "WHERE v.coverage_complete = 1" in monthly["sql"]
+    assert "m.is_eligible = 1" in monthly["sql"]
+    assert "DATE_TRUNC(v.selected_end_date, 'month')" in monthly["sql"]
+    assert "is_stale" in status["sql"]
+    assert "DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)" in status["sql"]
+
+    daily_metrics = {
+        metric["metric_name"]: metric["expression"] for metric in daily["metrics"]
+    }
+    assert daily_metrics == {
+        "avg_daily_sales_qty": (
+            "SUM(sales_qty) / NULLIF(MAX(selected_calendar_days), 0)"
+        ),
+        "gross_margin": ("SUM(gross_profit_usd) / NULLIF(SUM(sales_amount_usd), 0)"),
+        "gross_profit_usd_total": "SUM(gross_profit_usd)",
+        "hot_product_index": (
+            "SUM(sales_qty) / NULLIF(COUNT(DISTINCT sales_date, sku), 0)"
+        ),
+        "return_rate": "SUM(return_goods_qty) / NULLIF(SUM(sales_qty), 0)",
+        "sales_amount_usd_total": "SUM(sales_amount_usd)",
+        "sales_amount_usd_funnel": (
+            "CASE WHEN MIN(rating_complete) = 1 "
+            "THEN SUM(sales_amount_usd) ELSE NULL END"
+        ),
+        "sales_qty_total": "SUM(sales_qty)",
+        "spu_previous_month_sales_level_sort_metric": (
+            "MIN(spu_previous_month_sales_level_sort)"
+        ),
+    }
+    monthly_metrics = {
+        metric["metric_name"]: metric["expression"] for metric in monthly["metrics"]
+    }
+    assert monthly_metrics == {
+        "in_sale_spu_count_funnel": (
+            "CASE WHEN MIN(rating_complete) = 1 THEN COUNT(DISTINCT spu) ELSE NULL END"
+        ),
+        "in_sale_sku_count": (
+            "CASE WHEN COUNT(*) = 0 THEN NULL ELSE COUNT(DISTINCT sku) END"
+        ),
+        "in_sale_spu_count": (
+            "CASE WHEN COUNT(*) = 0 THEN NULL ELSE COUNT(DISTINCT spu) END"
+        ),
+        "spu_previous_month_sales_level_sort_metric": (
+            "MIN(spu_previous_month_sales_level_sort)"
+        ),
+    }
+
+
+def test_funnels_stop_when_any_selected_eligible_rating_is_missing(
+    tmp_path: Path,
+) -> None:
+    """A null source rating must blank both funnels without blanking KPI rows."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    charts = assets_by_key(assets, "charts", "slice_name")
+    daily = datasets["爆品指数-日明细"]
+    monthly = datasets["爆品指数-月末在售"]
+    status = datasets["爆品指数-数据状态"]
+
+    for dataset in (daily, monthly, status):
+        assert "daily_missing_rating_count" in dataset["sql"]
+        assert "monthly_missing_rating_count" in dataset["sql"]
+        assert "rating_complete" in dataset["sql"]
+    assert "spu_previous_month_sales_level IS NULL" in daily["sql"]
+    assert "spu_previous_month_sales_level IS NULL" in monthly["sql"]
+    assert "COALESCE(d.spu_previous_month_sales_level" not in daily["sql"]
+    assert "COALESCE(m.spu_previous_month_sales_level" not in monthly["sql"]
+
+    daily_metrics = {
+        metric["metric_name"]: metric["expression"] for metric in daily["metrics"]
+    }
+    assert daily_metrics["sales_amount_usd_funnel"] == (
+        "CASE WHEN MIN(rating_complete) = 1 THEN SUM(sales_amount_usd) ELSE NULL END"
+    )
+    assert daily_metrics["sales_qty_total"] == "SUM(sales_qty)"
+    assert charts["SPU销售额漏斗"]["params"]["metric"] == ("sales_amount_usd_funnel")
+    assert charts["SPU数漏斗"]["params"]["metric"] == ("in_sale_spu_count_funnel")
+    assert "评级源不完整" in charts["爆品指数数据状态"]["params"]["handlebarsTemplate"]
+
+
+def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> None:
+    """The main canvas stays limited to status, nine KPIs, and two funnels."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    dashboards = assets_by_key(assets, "dashboards", "dashboard_title")
+    main = dashboards["拉杆箱在售产品爆品指数看板"]
+
+    main_chart_nodes = [
+        node
+        for node in main["position"].values()
+        if isinstance(node, dict) and node.get("type") == "CHART"
+    ]
+    main_chart_uuids = {node["meta"]["uuid"] for node in main_chart_nodes}
+    main_charts = [
+        chart for chart in charts.values() if chart["uuid"] in main_chart_uuids
+    ]
+    assert len(main_charts) == 12
+    assert sum(chart["viz_type"] == "big_number_total" for chart in main_charts) == 9
+    assert sum(chart["viz_type"] == "funnel" for chart in main_charts) == 2
+    assert sum(chart["viz_type"] == "handlebars" for chart in main_charts) == 1
+    assert all(
+        chart["params"].get("show_metric_name") is True
+        for chart in main_charts
+        if chart["viz_type"] == "big_number_total"
+    )
+
+    filters = main["metadata"]["native_filter_configuration"]
+    assert [item["name"] for item in filters] == [
+        "渠道",
+        "品线",
+        "SPU",
+        "国家",
+        "公司SKU",
+        "SKU",
+        "尺寸",
+        "颜色",
+        "年月",
+        "开发经理",
+        "型号",
+        "SKU等级",
+        "产品等级",
+    ]
+    assert all(
+        "datasetUuid" in target and "datasetId" not in target
+        for item in filters
+        for target in item["targets"]
+    )
+    month_filter = next(item for item in filters if item["name"] == "年月")
+    assert month_filter["filterType"] == "filter_month_range"
+    assert month_filter["controlValues"]["monthSelectionMode"] == "range"
+    assert month_filter["controlValues"]["monthTimeZone"] == "Asia/Shanghai"
+    assert month_filter["defaultDataMask"]["extraFormData"] == {
+        "time_range": "Current month"
+    }
+    assert month_filter["defaultDataMask"]["filterState"] == {"value": "Current month"}
+    assert {
+        (target["datasetUuid"], target["column"]["name"])
+        for target in month_filter["targets"]
+    } == {
+        ("ea2025d6-91ac-502f-9238-9f21ca62b761", "sales_date"),
+        ("669d6bf7-779b-545b-9b9d-5b45a5d3842c", "month_start_date"),
+        ("bd0d4806-9f13-59a0-be0b-4d7458f88e7f", "selected_start_date"),
+    }
+
+    status_uuid = charts["爆品指数数据状态"]["uuid"]
+    for item in filters:
+        if item["filterType"] == "filter_select":
+            assert status_uuid not in item["chartsInScope"]
+            assert item["scope"]["excluded"] == [1000]
+    assert status_uuid in month_filter["chartsInScope"]
+
+
+def test_funnels_keep_the_business_grade_order(tmp_path: Path) -> None:
+    """Funnel geometry must follow Ps/S/A/B/C/- rather than metric magnitude."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    funnels = [chart for chart in charts.values() if chart["viz_type"] == "funnel"]
+
+    assert len(funnels) == 2
+    for funnel in funnels:
+        params = funnel["params"]
+        assert params["groupby"] == ["spu_previous_month_sales_level"]
+        assert params["order_by_cols"] == [
+            '["spu_previous_month_sales_level_sort_metric", true]'
+        ]
+        assert params["sort_by_metric"] is False
+        assert params["sort"] == "none"
+        assert params["label_type"] == 5
+        assert params["tooltip_label_type"] == 5
+        assert params["percent_calculation_type"] == "total"
+        assert params["label_template"] == "{name}\\n{value} | {percent}"
+        query_context = json.loads(funnel["query_context"])
+        assert query_context["queries"][0]["orderby"] == [
+            ["spu_previous_month_sales_level_sort_metric", True]
+        ]
+
+    main = assets_by_key(assets, "dashboards", "dashboard_title")[
+        "拉杆箱在售产品爆品指数看板"
+    ]
+    assert main["metadata"]["label_colors"] == {
+        "-": "#9CA3AF",
+        "A": "#92D050",
+        "B": "#FFE600",
+        "C": "#FFC000",
+        "Ps": "#E84A5F",
+        "S": "#1677C8",
+    }
+
+    sales_funnel = charts["SPU销售额漏斗"]["params"]
+    assert sales_funnel["label_value_divisor"] == 10000
+    assert sales_funnel["label_value_suffix"] == "万"
+    assert sales_funnel["number_format"] == "$,.1f"
+    spu_funnel = charts["SPU数漏斗"]["params"]
+    assert spu_funnel["label_value_divisor"] == 1
+    assert spu_funnel["label_value_suffix"] == ""
+
+
+def test_guide_link_is_a_header_layout_component(tmp_path: Path) -> None:
+    """The guide entry belongs to the green title area, not the status row."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    main = assets_by_key(assets, "dashboards", "dashboard_title")[
+        "拉杆箱在售产品爆品指数看板"
+    ]
+
+    status = charts["爆品指数数据状态"]
+    assert "说明文档" not in status["params"]["handlebarsTemplate"]
+    assert "hot-product-index-guide" not in status["params"]["handlebarsTemplate"]
+
+    position = main["position"]
+    assert position["GRID_ID"]["children"][0] == "ROW-DOC-LINK"
+    assert position["ROW-DOC-LINK"]["children"] == ["MARKDOWN-DOC-LINK"]
+    guide_link = position["MARKDOWN-DOC-LINK"]
+    assert guide_link == {
+        "children": [],
+        "id": "MARKDOWN-DOC-LINK",
+        "meta": {
+            "code": "[说明文档](/dashboard/hot-product-index-guide/)",
+            "height": 1,
+            "openLinksInNewTab": True,
+            "width": 12,
+        },
+        "parents": ["ROOT_ID", "GRID_ID", "ROW-DOC-LINK"],
+        "type": "MARKDOWN",
+    }
+    assert "#MARKDOWN-DOC-LINK" in main["css"]
+    assert "position: fixed" in main["css"]
+
+
+def test_write_bundle_rejects_an_invalid_database_uuid(tmp_path: Path) -> None:
+    """A typo in the production database identity must stop before ZIP creation."""
+    output = tmp_path / "assets.zip"
+
+    with pytest.raises(ValueError, match="database_uuid"):
+        write_bundle(output, database_uuid="not-a-uuid")
+
+    assert not output.exists()

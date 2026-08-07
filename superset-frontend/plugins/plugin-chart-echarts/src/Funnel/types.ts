@@ -33,7 +33,10 @@ export type EchartsFunnelFormData = QueryFormData &
     colorScheme?: string;
     groupby: QueryFormData[];
     labelLine: boolean;
+    labelTemplate: string | null;
     labelType: EchartsFunnelLabelType;
+    labelValueDivisor: number;
+    labelValueSuffix: string;
     tooltipLabelType: EchartsFunnelLabelType;
     metric?: string;
     showLabels: boolean;
@@ -64,7 +67,10 @@ export const DEFAULT_FORM_DATA: EchartsFunnelFormData = {
   ...DEFAULT_LEGEND_FORM_DATA,
   groupby: [],
   labelLine: false,
+  labelTemplate: null,
   labelType: EchartsFunnelLabelType.Key,
+  labelValueDivisor: 1,
+  labelValueSuffix: '',
   defaultTooltipLabel: EchartsFunnelLabelType.KeyValuePercent,
   legendOrientation: LegendOrientation.Top,
   legendType: LegendType.Scroll,

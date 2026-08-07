@@ -109,7 +109,10 @@ export default function transformProps(
     sort,
     gap,
     labelLine,
+    labelTemplate,
     labelType,
+    labelValueDivisor,
+    labelValueSuffix,
     tooltipLabelType,
     legendMargin,
     legendOrientation,
@@ -215,6 +218,23 @@ export default function transformProps(
       numberFormatter,
       percentCalculationType,
     });
+    if (labelTemplate) {
+      if (!Number.isFinite(labelValueDivisor) || labelValueDivisor <= 0) {
+        throw new Error('Label value divisor must be greater than zero');
+      }
+      const templateValues = {
+        '{name}': name,
+        '{value}': `${numberFormatter(
+          (params.value as number) / labelValueDivisor,
+        )}${labelValueSuffix}`,
+        '{percent}': formattedPercent,
+        '\\n': '\n',
+      };
+      return Object.entries(templateValues).reduce(
+        (label, [placeholder, value]) => label.replaceAll(placeholder, value),
+        labelTemplate,
+      );
+    }
     switch (labelType) {
       case EchartsFunnelLabelType.Key:
         return name;

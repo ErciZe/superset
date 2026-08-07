@@ -19,6 +19,7 @@
 import { t } from '@apache-superset/core/translation';
 import {
   ControlPanelConfig,
+  ControlPanelsContainerProps,
   ControlSubSectionHeader,
   D3_FORMAT_DOCS,
   D3_FORMAT_OPTIONS,
@@ -125,6 +126,50 @@ const config: ControlPanelConfig = {
                 ],
               ],
               description: t('What should be shown as the label'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'label_template',
+            config: {
+              type: 'TextControl',
+              label: t('Label Template'),
+              renderTrigger: true,
+              description: t(
+                'Format labels with {name}, {value}, and {percent}. \\n represents a new line.',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'label_value_divisor',
+            config: {
+              type: 'NumberControl',
+              label: t('Label value divisor'),
+              min: Number.MIN_VALUE,
+              default: 1,
+              renderTrigger: true,
+              description: t(
+                'Divide values for labels without changing funnel geometry or tooltip values.',
+              ),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                Boolean(controls?.label_template?.value),
+            },
+          },
+        ],
+        [
+          {
+            name: 'label_value_suffix',
+            config: {
+              type: 'TextControl',
+              label: t('Label value suffix'),
+              default: '',
+              renderTrigger: true,
+              description: t('Append text to the formatted label value.'),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                Boolean(controls?.label_template?.value),
             },
           },
         ],
