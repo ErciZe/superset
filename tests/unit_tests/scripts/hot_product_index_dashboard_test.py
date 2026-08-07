@@ -392,10 +392,16 @@ def test_detail_charts_preserve_approved_fields_pagination_and_sorting(
         ["sales_qty", False],
         ["spu", True],
     ]
+    assert spu["params"]["server_pagination_default_orderby"] == spu["params"][
+        "orderby"
+    ]
     assert sku["params"]["orderby"] == [
         ["ym", False],
         ["sales_qty", False],
         ["company_sku", True],
+    ]
+    assert sku["params"]["server_pagination_default_orderby"] == sku["params"][
+        "orderby"
     ]
 
 
@@ -440,6 +446,7 @@ def test_detail_charts_use_one_decimal_formats_and_fixed_index_boundaries(
     for chart in (charts["SPU维度"], charts["SKU维度"]):
         config = chart["params"]["column_config"]
         assert config["hot_product_index"]["d3NumberFormat"] == ",.1~f"
+        assert config["hot_product_index"]["nullValue"] == "-"
         assert config["gross_margin"]["d3NumberFormat"] == ".1~%"
         assert config["sales_amount_usd"]["currencyFormat"]["symbol"] == "USD"
         if chart["slice_name"] == "SPU维度":

@@ -38,19 +38,20 @@ import DateWithFormatter from './DateWithFormatter';
 function formatValue(
   formatter: DataColumnMeta['formatter'],
   value: DataRecordValue,
+  nullValue = 'N/A',
 ): [boolean, string] {
   // render undefined as empty string
   if (value === undefined) {
     return [false, ''];
   }
-  // render null as `N/A`
+  // Render null with the configured per-column placeholder.
   if (
     value === null ||
     // null values in temporal columns are wrapped in a Date object, so make sure we
     // handle them here too
     (value instanceof DateWithFormatter && value.input === null)
   ) {
-    return [false, 'N/A'];
+    return [false, nullValue];
   }
   if (formatter) {
     return [false, formatter(value as number)];
@@ -81,6 +82,7 @@ export function formatColumnValue(
       ? smallNumberFormatter
       : formatter,
     value,
+    config.nullValue,
   );
 }
 
@@ -89,11 +91,16 @@ export const valueFormatter = (
   col: InputColumn,
 ): string => {
   const { value, node } = params;
-  if (
-    isDefined(value) &&
-    value !== '' &&
-    !(value instanceof DateWithFormatter && value.input === null)
-  ) {
+  const isNull =
+    value === null ||
+    (value instanceof DateWithFormatter && value.input === null);
+  if (isNull) {
+    if (node?.level === -1) {
+      return '';
+    }
+    return col.config?.nullValue ?? 'N/A';
+  }
+  if (isDefined(value) && value !== '' && !isNull) {
     return col.formatter?.(value) || value;
   }
   if (node?.level === -1) {

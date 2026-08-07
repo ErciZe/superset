@@ -1120,6 +1120,7 @@ def _detail_column_config(grain: str) -> Asset:
         column_config: Asset = {
             "columnWidth": 120 if name in dimensions else 112,
             "horizontalAlign": "left" if name in dimensions else "right",
+            "nullValue": "-",
             "truncateLongCells": True,
         }
         if name in DETAIL_NUMERIC_COLUMNS:
@@ -1204,6 +1205,7 @@ def _detail_chart_params(grain: str) -> Asset:
         "query_mode": "aggregate",
         "row_hierarchy_fields": groupby if grain == "spu" else [],
         "row_limit": 100000,
+        "server_pagination_default_orderby": orderby,
         "server_page_length": 50,
         "server_pagination": True,
         "show_totals": True,

@@ -177,6 +177,8 @@ const buildQuery: BuildQuery<TableChartFormData> = (
   return buildQueryContext(formDataCopy, baseQueryObject => {
     let { metrics, orderby = [], columns = [] } = baseQueryObject;
     const { extras = {} } = baseQueryObject;
+    const stablePaginationOrderby =
+      formData.server_pagination_default_orderby ?? [];
     let postProcessing: PostProcessingRule[] = [];
     const nonCustomNorInheritShifts = ensureIsArray(
       formData.time_compare,
@@ -216,6 +218,11 @@ const buildQuery: BuildQuery<TableChartFormData> = (
       // override orderby with timeseries metric when in aggregation mode
       if (sortByMetric) {
         orderby = [[sortByMetric, !orderDesc]];
+      } else if (
+        formData.server_pagination &&
+        stablePaginationOrderby.length > 0
+      ) {
+        orderby = stablePaginationOrderby;
       } else if (metrics?.length > 0) {
         // default to ordering by first metric in descending order
         // when no "sort by" metric is set (regardless if "SORT DESC" is set to true)
@@ -307,8 +314,27 @@ const buildQuery: BuildQuery<TableChartFormData> = (
     // getting sort by in case of server pagination from own state
     let sortByFromOwnState: QueryFormOrderBy[] | undefined;
     if (Array.isArray(ownState?.sortBy) && ownState?.sortBy.length > 0) {
-      const sortByItem = ownState?.sortBy[0];
-      sortByFromOwnState = [[sortByItem?.key, !sortByItem?.desc]];
+      sortByFromOwnState = ownState.sortBy
+        .map(sortByItem => {
+          if (!sortByItem?.key) {
+            return null;
+          }
+          return [sortByItem.key, !sortByItem.desc] as QueryFormOrderBy;
+        })
+        .filter((item): item is QueryFormOrderBy => item !== null);
+
+      // Keep pagination deterministic when a user changes the primary sort.
+      // The configured order supplies the stable tie-breakers for equal values.
+      stablePaginationOrderby.forEach(orderItem => {
+        const orderKey = String(orderItem[0]);
+        if (
+          !sortByFromOwnState?.some(
+            currentItem => String(currentItem[0]) === orderKey,
+          )
+        ) {
+          sortByFromOwnState?.push(orderItem);
+        }
+      });
     }
 
     let queryObject = {
@@ -316,7 +342,7 @@ const buildQuery: BuildQuery<TableChartFormData> = (
       columns,
       extras,
       orderby:
-        formData.server_pagination && sortByFromOwnState
+        formData.server_pagination && sortByFromOwnState?.length
           ? sortByFromOwnState
           : orderby,
       metrics,

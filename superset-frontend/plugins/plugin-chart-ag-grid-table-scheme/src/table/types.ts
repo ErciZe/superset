@@ -24,6 +24,7 @@ import {
   TimeGranularity,
   QueryFormMetric,
   QueryFormColumn,
+  QueryFormOrderBy,
   ChartProps,
   DataRecord,
   DataRecordValue,
@@ -62,6 +63,7 @@ export type TableColumnConfig = {
   customColumnName?: string;
   displayTypeIcon?: boolean;
   pinned?: 'left' | 'right' | null;
+  nullValue?: string;
 };
 
 export interface DataColumnMeta {
@@ -120,6 +122,7 @@ export type TableChartFormData = QueryFormData & {
   groupby?: QueryFormColumn[] | null;
   all_columns?: QueryFormMetric[] | null;
   order_desc?: boolean;
+  server_pagination_default_orderby?: QueryFormOrderBy[];
   show_cell_bars?: boolean;
   table_timestamp_format?: string;
   time_grain_sqla?: TimeGranularity;
