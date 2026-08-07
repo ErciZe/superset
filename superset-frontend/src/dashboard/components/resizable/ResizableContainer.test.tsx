@@ -42,4 +42,12 @@ describe('ResizableContainer', () => {
     );
     expect(resizableContainer).toBeVisible();
   });
+
+  test('should forward the stable layout id to the root element', () => {
+    const rendered = render(setup({ ...props, id: 'CHART-SPU-DETAIL' }));
+    const resizableContainer = rendered.container.querySelector(
+      '.resizable-container',
+    );
+    expect(resizableContainer).toHaveAttribute('id', 'CHART-SPU-DETAIL');
+  });
 });
