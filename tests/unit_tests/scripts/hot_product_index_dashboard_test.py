@@ -403,6 +403,29 @@ def test_detail_sql_has_exact_grains_filters_and_null_safe_metrics(
         assert ")) AS days_90d" in rolling_sql
 
 
+def test_spu_stock_leaf_groups_once_per_spu_leaf(tmp_path: Path) -> None:
+    """SPU stock input deduplicates SKU rows before one leaf-level join."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    sql = datasets["爆品指数-SPU月度经营明细"]["sql"]
+    stock_sql = sql[
+        sql.index("LEFT JOIN (\n    SELECT") : sql.index("  ) stock_leaf\n")
+    ]
+    assert (
+        "SELECT DISTINCT ym, spu, spu_previous_month_sales_level, sku_level, sku"
+        in stock_sql
+    )
+    assert "p.sku AS sku" not in stock_sql
+    assert (
+        "GROUP BY p.ym, p.spu, p.spu_previous_month_sales_level, p.sku_level"
+        in stock_sql
+    )
+    assert (
+        "GROUP BY p.ym, p.spu, p.spu_previous_month_sales_level, p.sku_level, p.sku"
+        not in stock_sql
+    )
+
+
 def test_detail_charts_preserve_approved_fields_pagination_and_sorting(
     tmp_path: Path,
 ) -> None:

@@ -611,10 +611,10 @@ def _detail_sql(*, grain: str) -> str:
     )
     stock_dimensions = dimensions if "sku" in dimensions else (*dimensions, "sku")
     stock_leaf_dimensions = ", ".join(
-        f"p.{column} AS {column}" for column in stock_dimensions
+        f"p.{column} AS {column}" for column in dimensions
     )
     stock_leaf_group_dimensions = ", ".join(
-        f"p.{column}" for column in stock_dimensions
+        f"p.{column}" for column in dimensions
     )
     stock_group_dimensions = ", ".join(stock_dimensions)
     filter_sql = _detail_filter_fragment("d")
