@@ -613,9 +613,7 @@ def _detail_sql(*, grain: str) -> str:
     stock_leaf_dimensions = ", ".join(
         f"p.{column} AS {column}" for column in dimensions
     )
-    stock_leaf_group_dimensions = ", ".join(
-        f"p.{column}" for column in dimensions
-    )
+    stock_leaf_group_dimensions = ", ".join(f"p.{column}" for column in dimensions)
     stock_group_dimensions = ", ".join(stock_dimensions)
     filter_sql = _detail_filter_fragment("d")
     return f"""{{% set time_filter = get_time_filter(
