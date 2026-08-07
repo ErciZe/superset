@@ -635,6 +635,18 @@ WITH selected_bounds AS (
     FROM ads.ads_pdm_lx_hot_product_index_sku_d
   ) w
 ),
+lookback_quality AS (
+  SELECT
+    COUNT(DISTINCT d.sales_date) AS lookback_calendar_day_count,
+    DATEDIFF(
+      b.effective_end_exclusive_date,
+      DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
+    ) AS expected_lookback_day_count
+  FROM ads.ads_pdm_lx_hot_product_index_sku_d d
+  CROSS JOIN selected_bounds b
+  WHERE d.sales_date >= DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
+    AND d.sales_date < b.effective_end_exclusive_date
+),
 daily_quality AS (
   SELECT
     COUNT(DISTINCT d.ym) AS daily_month_count,
@@ -679,6 +691,8 @@ quality AS (
     m.monthly_month_count,
     d.daily_missing_rating_count,
     m.monthly_missing_rating_count,
+    l.lookback_calendar_day_count,
+    l.expected_lookback_day_count,
     CASE
       WHEN b.expected_month_count > 0
         AND DAY(b.selected_start_date) = 1
@@ -696,12 +710,18 @@ quality AS (
       ELSE 0
     END AS rating_complete,
     CASE
+      WHEN l.lookback_calendar_day_count = l.expected_lookback_day_count
+      THEN 1
+      ELSE 0
+    END AS lookback_complete,
+    CASE
       WHEN b.global_data_through_date IS NULL
         OR b.global_data_through_date < DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY)
       THEN 1
       ELSE 0
     END AS is_stale
   FROM selected_bounds b
+  CROSS JOIN lookback_quality l
   CROSS JOIN daily_quality d
   CROSS JOIN monthly_quality m
 ),
@@ -710,6 +730,7 @@ filtered_daily AS (
   FROM ads.ads_pdm_lx_hot_product_index_sku_d d
   CROSS JOIN quality b
   WHERE b.coverage_complete = 1
+    AND b.lookback_complete = 1
     AND d.is_eligible = 1
     AND d.sales_date >= DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
     AND d.sales_date < b.effective_end_exclusive_date
@@ -790,7 +811,8 @@ leaf_rows AS (
       r.days_90d,
       stock_leaf.theoretical_stock_qty,
       stock_leaf.actual_stock_qty,
-      b.coverage_complete
+      b.coverage_complete,
+      b.lookback_complete
   FROM leaf_additive a
   LEFT JOIN rolling r
     ON {rolling_dimension_join}
@@ -835,9 +857,12 @@ SELECT
     days_90d,
     theoretical_stock_qty,
     actual_stock_qty,
-    coverage_complete
+    CAST(CONCAT(ym, '-01') AS DATE) AS month_start_date,
+    coverage_complete,
+    lookback_complete
 FROM leaf_rows
 WHERE coverage_complete = 1
+  AND lookback_complete = 1
 '''
 
 
@@ -983,7 +1008,7 @@ def _detail_columns(grain: str) -> list[Asset]:
         )
     else:
         raise ValueError(f"unsupported hot-product detail grain: {grain}")
-    return [
+    columns = [
         _column(
             name,
             DETAIL_COLUMN_TYPES[name],
@@ -991,6 +1016,15 @@ def _detail_columns(grain: str) -> list[Asset]:
         )
         for name in names
     ]
+    columns.append(
+        _column(
+            "month_start_date",
+            "DATE",
+            is_dttm=True,
+            description="由年月字段推导的月份起始日期，仅用于月份筛选。",
+        )
+    )
+    return columns
 
 
 def _detail_metrics(*, include_stock: bool) -> tuple[Asset, ...]:
@@ -1214,7 +1248,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
         "datasets/Doris_ling_xing/Hot_Product_Index_SPU_Detail.yaml": _dataset(
             table_name="爆品指数-SPU月度经营明细",
             uuid=UUIDS["dataset_spu_detail"],
-            main_dttm_col="ym",
+            main_dttm_col="month_start_date",
             description=(
                 "爆品指数SPU月度叶子明细；按SPU、年月、SPU评级和最终评级聚合。"
             ),
@@ -1226,7 +1260,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
         "datasets/Doris_ling_xing/Hot_Product_Index_SKU_Detail.yaml": _dataset(
             table_name="爆品指数-SKU月度经营明细",
             uuid=UUIDS["dataset_sku_detail"],
-            main_dttm_col="ym",
+            main_dttm_col="month_start_date",
             description=(
                 "爆品指数SKU月度叶子明细；按公司SKU、SKU、年月、产品等级、尺寸和颜色聚合。"
             ),

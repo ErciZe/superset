@@ -150,6 +150,7 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
     spu_labels = {
         column["column_name"]: column["verbose_name"]
         for column in detail_datasets["爆品指数-SPU月度经营明细"]["columns"]
+        if column["column_name"] != "month_start_date"
     }
     assert spu_labels == {
         "spu": "SPU",
@@ -173,6 +174,7 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
     sku_labels = {
         column["column_name"]: column["verbose_name"]
         for column in detail_datasets["爆品指数-SKU月度经营明细"]["columns"]
+        if column["column_name"] != "month_start_date"
     }
     assert sku_labels == {
         "company_sku": "公司SKU",
@@ -202,7 +204,15 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
             column["verbose_name"] != column["column_name"]
             for column in dataset["columns"]
         )
-        assert dataset["main_dttm_col"] == "ym"
+        assert dataset["main_dttm_col"] == "month_start_date"
+        month_column = next(
+            column
+            for column in dataset["columns"]
+            if column["column_name"] == "month_start_date"
+        )
+        assert month_column["type"] == "DATE"
+        assert month_column["is_dttm"] is True
+        assert month_column["verbose_name"] == "月份开始日期"
         metric_names = {metric["metric_name"] for metric in dataset["metrics"]}
         assert {
             "hot_product_index",
@@ -244,12 +254,16 @@ def test_detail_sql_has_exact_grains_filters_and_null_safe_metrics(
     )
     expected_fragments = (
         "get_time_filter(",
+        "lookback_quality AS (",
+        "COUNT(DISTINCT d.sales_date)",
+        "expected_lookback_day_count",
         "DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)",
         "d.sales_date >= DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)",
         "d.sales_date < b.effective_end_exclusive_date",
         "p.sales_date >= b.selected_start_date",
         "p.sales_date < b.effective_end_exclusive_date",
         "WHERE b.coverage_complete = 1",
+        "AND b.lookback_complete = 1",
         "AND d.is_eligible = 1",
         "COUNT(DISTINCT sales_date, sku)",
         "SUM(sales_qty) / NULLIF(COUNT(DISTINCT sales_date, sku), 0)",
@@ -284,6 +298,32 @@ def test_detail_sql_has_exact_grains_filters_and_null_safe_metrics(
         assert "0 AS score" not in sql
         assert "0 AS order_qty" not in sql
         assert "0 AS actual_stock_qty" not in sql
+
+
+def test_detail_sql_fails_closed_on_an_interior_lookback_date_gap(
+    tmp_path: Path,
+) -> None:
+    """The 90-day gate is source-wide and runs before page filters."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    for dataset in (
+        datasets["爆品指数-SPU月度经营明细"],
+        datasets["爆品指数-SKU月度经营明细"],
+    ):
+        sql = dataset["sql"]
+        lookback_start = sql.index("lookback_quality AS (")
+        lookback_end = sql.index("daily_quality AS (")
+        lookback_sql = sql[lookback_start:lookback_end]
+        assert "get_filters(" not in lookback_sql
+        assert "COUNT(DISTINCT d.sales_date)" in lookback_sql
+        assert "DATEDIFF(" in lookback_sql
+        assert "DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)" in (
+            lookback_sql
+        )
+        assert sql.index("lookback_quality AS (") < sql.index("filtered_daily AS (")
+        assert "lookback_complete" in sql
+        assert "AND b.lookback_complete = 1" in sql
+        assert "WHERE coverage_complete = 1\n  AND lookback_complete = 1" in sql
 
 
 def test_detail_source_contract_fails_fast_when_required_ads_column_is_missing(
