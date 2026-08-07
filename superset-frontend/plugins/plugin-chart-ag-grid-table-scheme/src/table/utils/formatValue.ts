@@ -115,8 +115,10 @@ export const valueGetter = (params: ValueGetterParams, col: InputColumn) => {
     const modifiedColId = `Main ${params.column.getColId()}`;
     return params.data[modifiedColId];
   }
-  if (isDefined(params.data?.[params.column.getColId()])) {
-    return params.data[params.column.getColId()];
+  const columnId = params.column.getColId();
+  const value = params.data?.[columnId];
+  if (value === null || isDefined(value)) {
+    return value;
   }
   if (col.isNumeric) {
     return undefined;
