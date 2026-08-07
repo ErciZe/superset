@@ -932,6 +932,51 @@ DETAIL_LABELS: Final[dict[str, str]] = {
     "actual_stock_qty": "实际库存数",
 }
 
+DETAIL_DISPLAYED_COLUMNS: Final[dict[str, tuple[str, ...]]] = {
+    "spu": (
+        "spu",
+        "ym",
+        "spu_previous_month_sales_level",
+        "sku_level",
+        "hot_product_index",
+        "score",
+        "sales_amount_usd",
+        "sales_qty",
+        "avg_daily_sales_qty",
+        "gross_profit_usd",
+        "gross_margin",
+        "return_goods_qty",
+        "return_rate",
+        "order_qty",
+        "avg_sales_qty_7d",
+        "avg_sales_qty_30d",
+        "avg_sales_qty_90d",
+    ),
+    "sku": (
+        "company_sku",
+        "sku",
+        "ym",
+        "product_level",
+        "size",
+        "color",
+        "hot_product_index",
+        "score",
+        "sales_amount_usd",
+        "sales_qty",
+        "avg_daily_sales_qty",
+        "gross_profit_usd",
+        "gross_margin",
+        "return_goods_qty",
+        "return_rate",
+        "order_qty",
+        "avg_sales_qty_7d",
+        "avg_sales_qty_30d",
+        "avg_sales_qty_90d",
+        "theoretical_stock_qty",
+        "actual_stock_qty",
+    ),
+}
+
 DETAIL_COLUMN_TYPES: Final[dict[str, str]] = {
     "spu": "STRING",
     "company_sku": "STRING",
@@ -962,52 +1007,10 @@ DETAIL_COLUMN_TYPES: Final[dict[str, str]] = {
 
 def _detail_columns(grain: str) -> list[Asset]:
     """Build the exact visible column contract for one detail dataset."""
-    if grain == "spu":
-        names = (
-            "spu",
-            "ym",
-            "spu_previous_month_sales_level",
-            "sku_level",
-            "hot_product_index",
-            "score",
-            "sales_amount_usd",
-            "sales_qty",
-            "avg_daily_sales_qty",
-            "gross_profit_usd",
-            "gross_margin",
-            "return_goods_qty",
-            "return_rate",
-            "order_qty",
-            "avg_sales_qty_7d",
-            "avg_sales_qty_30d",
-            "avg_sales_qty_90d",
-        )
-    elif grain == "sku":
-        names = (
-            "company_sku",
-            "sku",
-            "ym",
-            "product_level",
-            "size",
-            "color",
-            "hot_product_index",
-            "score",
-            "sales_amount_usd",
-            "sales_qty",
-            "avg_daily_sales_qty",
-            "gross_profit_usd",
-            "gross_margin",
-            "return_goods_qty",
-            "return_rate",
-            "order_qty",
-            "avg_sales_qty_7d",
-            "avg_sales_qty_30d",
-            "avg_sales_qty_90d",
-            "theoretical_stock_qty",
-            "actual_stock_qty",
-        )
-    else:
-        raise ValueError(f"unsupported hot-product detail grain: {grain}")
+    try:
+        names = DETAIL_DISPLAYED_COLUMNS[grain]
+    except KeyError as ex:
+        raise ValueError(f"unsupported hot-product detail grain: {grain}") from ex
     columns = [
         _column(
             name,
@@ -1064,6 +1067,149 @@ def _detail_metrics(*, include_stock: bool) -> tuple[Asset, ...]:
         )
         for name in metric_names
     )
+
+
+DETAIL_NUMERIC_COLUMNS: Final[frozenset[str]] = frozenset(
+    {
+        "hot_product_index",
+        "score",
+        "sales_amount_usd",
+        "sales_qty",
+        "avg_daily_sales_qty",
+        "gross_profit_usd",
+        "return_goods_qty",
+        "order_qty",
+        "avg_sales_qty_7d",
+        "avg_sales_qty_30d",
+        "avg_sales_qty_90d",
+        "theoretical_stock_qty",
+        "actual_stock_qty",
+    }
+)
+DETAIL_RATE_COLUMNS: Final[frozenset[str]] = frozenset(
+    {"gross_margin", "return_rate"}
+)
+DETAIL_MONEY_COLUMNS: Final[frozenset[str]] = frozenset(
+    {"sales_amount_usd", "gross_profit_usd"}
+)
+DETAIL_IDENTIFIER_COLUMNS: Final[dict[str, tuple[str, ...]]] = {
+    "spu": ("spu", "ym", "spu_previous_month_sales_level", "sku_level"),
+    "sku": ("company_sku", "sku"),
+}
+DETAIL_GROUPBY: Final[dict[str, tuple[str, ...]]] = {
+    "spu": ("spu", "ym", "spu_previous_month_sales_level", "sku_level"),
+    "sku": ("company_sku", "sku", "ym", "product_level", "size", "color"),
+}
+DETAIL_SORT: Final[dict[str, tuple[tuple[str, bool], ...]]] = {
+    "spu": (("ym", False), ("sales_qty", False), ("spu", True)),
+    "sku": (("ym", False), ("sales_qty", False), ("company_sku", True)),
+}
+
+
+def _detail_column_config(grain: str) -> Asset:
+    """Build fixed widths, alignment, formats, and pinned detail columns."""
+    try:
+        names = DETAIL_DISPLAYED_COLUMNS[grain]
+        dimensions = set(DETAIL_GROUPBY[grain])
+        pinned_columns = set(DETAIL_IDENTIFIER_COLUMNS[grain])
+    except KeyError as ex:
+        raise ValueError(f"unsupported hot-product detail grain: {grain}") from ex
+
+    config: Asset = {}
+    for name in names:
+        column_config: Asset = {
+            "columnWidth": 120 if name in dimensions else 112,
+            "horizontalAlign": "left" if name in dimensions else "right",
+            "truncateLongCells": True,
+        }
+        if name in DETAIL_NUMERIC_COLUMNS:
+            column_config["d3NumberFormat"] = ",.1~f"
+        if name in DETAIL_RATE_COLUMNS:
+            column_config["d3NumberFormat"] = ".1~%"
+        if name in DETAIL_MONEY_COLUMNS:
+            column_config["currencyFormat"] = {
+                "symbol": "USD",
+                "symbolPosition": "prefix",
+            }
+        if name in pinned_columns:
+            column_config["pinned"] = "left"
+        config[name] = column_config
+    return config
+
+
+def _detail_conditional_formatting() -> list[Asset]:
+    """Return the four fixed solid fills for the hot-product index."""
+    return [
+        {
+            "column": "hot_product_index",
+            "operator": "≤",
+            "targetValue": 0,
+            "colorScheme": "#DF7461",
+            "useGradient": False,
+        },
+        {
+            "column": "hot_product_index",
+            "operator": "< x <",
+            "targetValueLeft": 0,
+            "targetValueRight": 5,
+            "colorScheme": "#FFC947",
+            "useGradient": False,
+        },
+        {
+            "column": "hot_product_index",
+            "operator": "≤ x <",
+            "targetValueLeft": 5,
+            "targetValueRight": 10,
+            "colorScheme": "#B7D2B6",
+            "useGradient": False,
+        },
+        {
+            "column": "hot_product_index",
+            "operator": "≥",
+            "targetValue": 10,
+            "colorScheme": "#2978B5",
+            "useGradient": False,
+        },
+    ]
+
+
+def _detail_chart_params(grain: str) -> Asset:
+    """Build one stable AG Grid detail chart form-data contract."""
+    try:
+        groupby = list(DETAIL_GROUPBY[grain])
+        metric_names = list(DETAIL_METRICS)
+        if grain == "spu":
+            metric_names = [
+                name
+                for name in metric_names
+                if name not in {"theoretical_stock_qty", "actual_stock_qty"}
+            ]
+        displayed_columns = list(DETAIL_DISPLAYED_COLUMNS[grain])
+        orderby = [list(item) for item in DETAIL_SORT[grain]]
+    except KeyError as ex:
+        raise ValueError(f"unsupported hot-product detail grain: {grain}") from ex
+
+    return {
+        "adhoc_filters": [],
+        "allow_rearrange_columns": True,
+        "column_config": _detail_column_config(grain),
+        "conditional_formatting": _detail_conditional_formatting(),
+        "displayed_columns": displayed_columns,
+        "emit_filter": False,
+        "groupby": groupby,
+        "include_search": True,
+        "metrics": metric_names,
+        "order_desc": False,
+        "orderby": orderby,
+        "query_mode": "aggregate",
+        "row_hierarchy_fields": groupby if grain == "spu" else [],
+        "row_limit": 100000,
+        "server_page_length": 50,
+        "server_pagination": True,
+        "show_totals": True,
+        "time_range": "Current month",
+        "viz_type": "ag-grid-table-scheme",
+    }
 
 
 def _datasets(database_uuid: str) -> AssetBundle:
@@ -1273,9 +1419,75 @@ def _datasets(database_uuid: str) -> AssetBundle:
     return datasets
 
 
+def _table_query_context(params: Asset) -> str:
+    """Build AG Grid base, row-count, and totals queries in plugin order."""
+    columns = list(params["groupby"])
+    metrics = list(params["metrics"])
+    orderby = [list(item) for item in params["orderby"]]
+    query: Asset = {
+        "annotation_layers": [],
+        "applied_time_extras": {},
+        "columns": columns,
+        "custom_form_data": {},
+        "custom_params": {},
+        "extras": {"having": "", "where": ""},
+        "filters": [],
+        "group_others_when_limit_reached": False,
+        "metrics": metrics,
+        "order_desc": bool(params.get("order_desc", False)),
+        "orderby": orderby,
+        "post_processing": [],
+        "row_limit": int(params["server_page_length"]),
+        "row_offset": 0,
+        "series_limit": 0,
+        "time_offsets": [],
+        "time_range": str(params.get("time_range", "Current month")),
+        "url_params": {},
+    }
+    row_count_query = {
+        **query,
+        "is_rowcount": True,
+        "row_limit": int(params["row_limit"]),
+        "row_offset": 0,
+        "time_offsets": [],
+    }
+    totals_query = {
+        **query,
+        "columns": [],
+        "post_processing": [],
+        "row_limit": 0,
+        "row_offset": 0,
+        "time_offsets": [],
+    }
+    totals_query.pop("order_desc")
+    totals_query.pop("orderby")
+
+    datasource = {"id": 0, "type": "table"}
+    form_data = {
+        **params,
+        "datasource": "0__table",
+        "force": False,
+        "result_format": "json",
+        "result_type": "full",
+    }
+    context = {
+        "datasource": datasource,
+        "force": False,
+        "form_data": form_data,
+        "queries": [query, row_count_query, totals_query],
+        "result_format": "json",
+        "result_type": "full",
+    }
+    return json.dumps(
+        context, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    )
+
+
 def _query_context(params: Asset) -> str:
     """Build a saved query context that the chart data endpoint can execute."""
     viz_type = str(params["viz_type"])
+    if viz_type == "ag-grid-table-scheme":
+        return _table_query_context(params)
     if viz_type == "big_number_total":
         columns: list[str] = []
         metrics = [str(params["metric"])]
@@ -1524,7 +1736,7 @@ def _guide_chart_params() -> Asset:
 
 
 def _charts() -> AssetBundle:
-    """Build all KPI, funnel, status, and guide chart assets."""
+    """Build all overview and detail chart assets."""
     charts: AssetBundle = {}
     dataset_uuids = {
         "dataset_daily": UUIDS["dataset_daily"],
@@ -1581,6 +1793,22 @@ def _charts() -> AssetBundle:
         dataset_uuid=UUIDS["dataset_status"],
         params=_guide_chart_params(),
         description="爆品指数指标、时间、在售范围和产品等级口径。",
+    )
+    charts["charts/Hot_Product_Index_SPU_Detail.yaml"] = _chart(
+        slice_name="SPU维度",
+        uuid=UUIDS["chart_spu_detail"],
+        viz_type="ag-grid-table-scheme",
+        dataset_uuid=UUIDS["dataset_spu_detail"],
+        params=_detail_chart_params("spu"),
+        description="按SPU、年月、SPU评级和最终评级展示经营明细。",
+    )
+    charts["charts/Hot_Product_Index_SKU_Detail.yaml"] = _chart(
+        slice_name="SKU维度",
+        uuid=UUIDS["chart_sku_detail"],
+        viz_type="ag-grid-table-scheme",
+        dataset_uuid=UUIDS["dataset_sku_detail"],
+        params=_detail_chart_params("sku"),
+        description="按公司SKU、SKU、年月、产品等级、尺寸和颜色展示经营明细。",
     )
     return charts
 
@@ -2118,20 +2346,17 @@ def validate_assets(  # noqa: C901
     dashboards = _asset_family(assets, "dashboards/")
     if assets.get("metadata.yaml") != {"type": "assets", "version": ASSET_VERSION}:
         raise ValueError("metadata.yaml must declare an assets v1 bundle")
-    # Task 5 is intentionally chart-free; Task 6 adds the two detail charts.
-    # Keeping this intermediate contract strict prevents placeholder charts or
-    # a half-published detail pair from entering an import bundle.
-    if (len(datasets), len(charts), len(dashboards)) != (5, 13, 2):
+    if (len(datasets), len(charts), len(dashboards)) != (5, 15, 2):
         raise ValueError(
-            "Task 5 bundle must contain 5 datasets, 13 charts, and 2 dashboards"
+            "hot-product bundle must contain 5 datasets, 15 charts, and 2 dashboards"
         )
 
     identified_assets = [*datasets, *charts, *dashboards]
     asset_uuids = [str(asset["uuid"]) for asset in identified_assets]
     if len(asset_uuids) != len(set(asset_uuids)):
         raise ValueError("asset UUIDs must be unique")
-    if len(asset_uuids) != 20:
-        raise ValueError("Task 5 bundle must contain 20 published asset UUIDs")
+    if len(asset_uuids) != 22:
+        raise ValueError("hot-product bundle must contain 22 published asset UUIDs")
     for asset_uuid in asset_uuids:
         UUID(asset_uuid)
 

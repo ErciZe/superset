@@ -66,7 +66,7 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
     assert assets["metadata.yaml"] == {"type": "assets", "version": "1.0.0"}
     assert not any(path.startswith("databases/") for path in assets)
     assert sum(path.startswith("datasets/") for path in assets) == 5
-    assert sum(path.startswith("charts/") for path in assets) == 13
+    assert sum(path.startswith("charts/") for path in assets) == 15
     assert sum(path.startswith("dashboards/") for path in assets) == 2
 
     datasets = assets_by_key(assets, "datasets", "table_name")
@@ -88,7 +88,7 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
         asset["uuid"]
         for asset in [*datasets.values(), *charts.values(), *dashboards.values()]
     ]
-    assert len(uuids) == len(set(uuids)) == 20
+    assert len(uuids) == len(set(uuids)) == 22
     assert all(str(UUID(value)) == value for value in uuids)
     assert datasets["爆品指数-日明细"]["uuid"] == (
         "ea2025d6-91ac-502f-9238-9f21ca62b761"
@@ -121,10 +121,14 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
         assert "datasource" not in query_context["queries"][0]
         if chart["viz_type"] in {"big_number_total", "funnel"}:
             assert query_context["queries"][0]["metrics"] == [chart["params"]["metric"]]
-        else:
+        elif chart["viz_type"] == "handlebars":
             assert (
                 query_context["queries"][0]["columns"] == chart["params"]["all_columns"]
             )
+        else:
+            assert chart["viz_type"] == "ag-grid-table-scheme"
+            assert query_context["queries"][0]["columns"] == chart["params"]["groupby"]
+            assert query_context["queries"][0]["metrics"] == chart["params"]["metrics"]
         assert query_context["result_format"] == "json"
         assert query_context["result_type"] == "full"
 
@@ -298,6 +302,185 @@ def test_detail_sql_has_exact_grains_filters_and_null_safe_metrics(
         assert "0 AS score" not in sql
         assert "0 AS order_qty" not in sql
         assert "0 AS actual_stock_qty" not in sql
+
+
+def test_detail_charts_preserve_approved_fields_pagination_and_sorting(
+    tmp_path: Path,
+) -> None:
+    """Detail charts use the approved groupings, visible field order and stable sort."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    spu = charts["SPU维度"]
+    sku = charts["SKU维度"]
+
+    assert spu["uuid"] == "4454d29b-3161-5d51-9e7b-7c1a9e96db06"
+    assert sku["uuid"] == "76d38770-7b51-5f9e-b9df-d1b48113b8a3"
+    assert spu["params"]["groupby"] == [
+        "spu",
+        "ym",
+        "spu_previous_month_sales_level",
+        "sku_level",
+    ]
+    assert spu["params"]["row_hierarchy_fields"] == spu["params"]["groupby"]
+    assert sku["params"]["groupby"] == [
+        "company_sku",
+        "sku",
+        "ym",
+        "product_level",
+        "size",
+        "color",
+    ]
+    assert sku["params"]["row_hierarchy_fields"] == []
+
+    assert spu["params"]["displayed_columns"] == [
+        "spu",
+        "ym",
+        "spu_previous_month_sales_level",
+        "sku_level",
+        "hot_product_index",
+        "score",
+        "sales_amount_usd",
+        "sales_qty",
+        "avg_daily_sales_qty",
+        "gross_profit_usd",
+        "gross_margin",
+        "return_goods_qty",
+        "return_rate",
+        "order_qty",
+        "avg_sales_qty_7d",
+        "avg_sales_qty_30d",
+        "avg_sales_qty_90d",
+    ]
+    assert sku["params"]["displayed_columns"] == [
+        "company_sku",
+        "sku",
+        "ym",
+        "product_level",
+        "size",
+        "color",
+        "hot_product_index",
+        "score",
+        "sales_amount_usd",
+        "sales_qty",
+        "avg_daily_sales_qty",
+        "gross_profit_usd",
+        "gross_margin",
+        "return_goods_qty",
+        "return_rate",
+        "order_qty",
+        "avg_sales_qty_7d",
+        "avg_sales_qty_30d",
+        "avg_sales_qty_90d",
+        "theoretical_stock_qty",
+        "actual_stock_qty",
+    ]
+
+    for chart in (spu, sku):
+        params = chart["params"]
+        assert params["viz_type"] == "ag-grid-table-scheme"
+        assert params["query_mode"] == "aggregate"
+        assert params["server_pagination"] is True
+        assert params["server_page_length"] == 50
+        assert params["show_totals"] is True
+        assert params["include_search"] is True
+        assert params["allow_rearrange_columns"] is True
+        assert params["emit_filter"] is False
+        assert params["row_limit"] == 100000
+
+    assert spu["params"]["orderby"] == [
+        ["ym", False],
+        ["sales_qty", False],
+        ["spu", True],
+    ]
+    assert sku["params"]["orderby"] == [
+        ["ym", False],
+        ["sales_qty", False],
+        ["company_sku", True],
+    ]
+
+
+def test_detail_charts_use_one_decimal_formats_and_fixed_index_boundaries(
+    tmp_path: Path,
+) -> None:
+    """Detail table number formats and index colors stay deterministic."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    expected_rules = [
+        {
+            "column": "hot_product_index",
+            "operator": "≤",
+            "targetValue": 0,
+            "colorScheme": "#DF7461",
+            "useGradient": False,
+        },
+        {
+            "column": "hot_product_index",
+            "operator": "< x <",
+            "targetValueLeft": 0,
+            "targetValueRight": 5,
+            "colorScheme": "#FFC947",
+            "useGradient": False,
+        },
+        {
+            "column": "hot_product_index",
+            "operator": "≤ x <",
+            "targetValueLeft": 5,
+            "targetValueRight": 10,
+            "colorScheme": "#B7D2B6",
+            "useGradient": False,
+        },
+        {
+            "column": "hot_product_index",
+            "operator": "≥",
+            "targetValue": 10,
+            "colorScheme": "#2978B5",
+            "useGradient": False,
+        },
+    ]
+    for chart in (charts["SPU维度"], charts["SKU维度"]):
+        config = chart["params"]["column_config"]
+        assert config["hot_product_index"]["d3NumberFormat"] == ",.1~f"
+        assert config["gross_margin"]["d3NumberFormat"] == ".1~%"
+        assert config["sales_amount_usd"]["currencyFormat"]["symbol"] == "USD"
+        if chart["slice_name"] == "SPU维度":
+            assert config["spu"]["pinned"] == "left"
+        assert chart["params"]["conditional_formatting"] == expected_rules
+        assert all(
+            "NULL" not in str(rule)
+            for rule in chart["params"]["conditional_formatting"]
+        )
+
+
+def test_detail_query_context_matches_table_server_query_order(
+    tmp_path: Path,
+) -> None:
+    """Table query contexts contain base, row-count and totals queries only."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    for chart in (charts["SPU维度"], charts["SKU维度"]):
+        params = chart["params"]
+        context = json.loads(chart["query_context"])
+        assert len(context["queries"]) == 3
+        base, row_count, totals = context["queries"]
+        assert context["datasource"] == {"id": 0, "type": "table"}
+        assert context["form_data"]["datasource"] == "0__table"
+        assert context["result_format"] == "json"
+        assert context["result_type"] == "full"
+        assert base["columns"] == params["groupby"]
+        assert base["metrics"] == params["metrics"]
+        assert base["row_limit"] == 50
+        assert base["row_offset"] == 0
+        assert base["orderby"] == params["orderby"]
+        assert row_count["is_rowcount"] is True
+        assert row_count["row_limit"] == params["row_limit"]
+        assert row_count["row_offset"] == 0
+        assert totals["columns"] == []
+        assert totals["metrics"] == params["metrics"]
+        assert totals["row_limit"] == 0
+        assert totals["row_offset"] == 0
+        assert "orderby" not in totals
+        assert "order_desc" not in totals
+        assert all("datasource" not in query for query in context["queries"])
 
 
 def test_detail_sql_fails_closed_on_an_interior_lookback_date_gap(
