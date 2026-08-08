@@ -21,7 +21,12 @@ from pathlib import Path
 from typing import Any
 from zipfile import ZipFile
 
-from scripts.hot_product_index_dashboard import write_bundle
+from scripts.hot_product_index_dashboard import (
+    DAILY_SOURCE_COLUMNS,
+    FILTERS,
+    MONTHLY_SOURCE_COLUMNS,
+    write_bundle,
+)
 
 
 def read_bundle(path: Path) -> dict[str, dict[str, Any]]:
@@ -105,3 +110,56 @@ def test_new_daily_metrics_have_chinese_labels_and_approved_formats(
         name: (metrics[name]["verbose_name"], metrics[name]["d3format"])
         for name in expected_metadata
     } == expected_metadata
+
+
+def test_spu_leaderboard_uses_watermark_anchored_two_period_contract(
+    tmp_path: Path,
+) -> None:
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    leaderboard = datasets["爆品指数-SPU销量排行榜"]
+    sql = leaderboard["sql"]
+
+    assert leaderboard["uuid"] == "2b5c33b2-2af6-5436-8b3d-e7292e5a64ae"
+    assert leaderboard["main_dttm_col"] == "watermark_month_start_date"
+    assert "get_time_filter(" not in sql
+    for _, column in FILTERS:
+        assert sql.count(f"get_filters('{column}', remove_filter=True)") == 2
+    assert "spu_previous_month_sales_amount_cny" not in sql
+    assert "SUM(m.sales_amount_usd)" in sql
+    assert "GROUP BY m.spu, m.spu_previous_month_sales_level, m.sku_level" in sql
+    assert "DAY(a.data_through_date) / DAY(LAST_DAY(a.data_through_date))" in sql
+
+    columns = {column["column_name"]: column for column in leaderboard["columns"]}
+    assert {
+        columns[name]["verbose_name"]
+        for name in (
+            "spu",
+            "spu_rating",
+            "final_rating",
+            "previous_month_sales_amount_usd",
+            "current_month_sales_amount_usd",
+            "rating_progress",
+            "time_progress",
+        )
+    } == {
+        "SPU",
+        "SPU评级",
+        "最终评级",
+        "上月销售额",
+        "本月销量额",
+        "本月评级达标进度",
+        "本月时间达标进度",
+    }
+
+
+def test_remaining_charts_preflight_enumerates_all_source_columns() -> None:
+    preflight = Path(
+        "scripts/hot_product_index_remaining_charts_preflight.sql"
+    ).read_text()
+    for table_name, source_columns in (
+        ("ads_pdm_lx_hot_product_index_sku_d", DAILY_SOURCE_COLUMNS),
+        ("ads_pdm_lx_hot_product_index_sku_m", MONTHLY_SOURCE_COLUMNS),
+    ):
+        assert table_name in preflight
+        assert all(f"'{column_name}'" in preflight for column_name, _ in source_columns)

@@ -693,8 +693,19 @@ def test_virtual_datasets_fail_closed_on_incomplete_month_publication(
         "rating_complete",
         "rating_status_message",
     } <= status_columns
-    for dataset in datasets.values():
+    for dataset_name, dataset in datasets.items():
         sql = dataset["sql"]
+        if dataset_name == "爆品指数-SPU销量排行榜":
+            assert "get_time_filter(" not in sql
+            assert "WITH watermark AS (" in sql
+            assert "MAX(data_through_date)" in sql
+            assert "daily_quality AS (" in sql
+            assert "monthly_quality AS (" in sql
+            assert "coverage_complete" in sql
+            assert "current_filtered AS (" in sql
+            assert "previous_filtered AS (" in sql
+            assert "WHERE q.coverage_complete = 1" in sql
+            continue
         assert "get_time_filter(" in sql
         assert 'default="Current month"' in sql
         assert 'target_type="DATE"' in sql

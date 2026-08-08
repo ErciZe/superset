@@ -39,6 +39,7 @@ UUIDS: Final = {
     "dataset_status": "bd0d4806-9f13-59a0-be0b-4d7458f88e7f",
     "dataset_spu_detail": "de2f3527-4fb7-51df-a1ef-067567348ee6",
     "dataset_sku_detail": "baea3900-76bf-5de9-8f10-aad2cc5e4b60",
+    "dataset_spu_leaderboard": "2b5c33b2-2af6-5436-8b3d-e7292e5a64ae",
     "chart_kpi_sales_qty": "c5749623-be9e-5116-8c2f-de2b3e77e3a8",
     "chart_kpi_avg_daily_sales_qty": "aa2a07b5-35d7-581c-b8c2-c58918efd11f",
     "chart_kpi_sales_amount_usd": "b76f494e-2743-5215-b310-0d068ba44c8c",
@@ -218,6 +219,13 @@ COLUMN_VERBOSE_NAMES: Final = {
     "status_message": "数据状态",
     "rating_status_message": "评级状态",
     "hot_product_index": "爆品指数",
+    "watermark_month_start_date": "水位月份开始日期",
+    "spu_rating": "SPU评级",
+    "final_rating": "最终评级",
+    "previous_month_sales_amount_usd": "上月销售额",
+    "current_month_sales_amount_usd": "本月销量额",
+    "rating_progress": "本月评级达标进度",
+    "time_progress": "本月时间达标进度",
     "avg_daily_sales_qty": "日均销量",
     "gross_margin": "毛利率",
     "return_rate": "退货率",
@@ -570,10 +578,14 @@ def _validate_detail_source_columns() -> None:
         )
 
 
-def _detail_filter_fragment(alias: str) -> str:
-    """Render the equality-only native-filter contract for detail SQL."""
+def _native_filter_fragment(
+    alias: str,
+    columns: Sequence[str] | None = None,
+) -> str:
+    """Render fail-fast IN/NOT IN predicates consumed inside virtual SQL."""
+    filter_columns = columns or tuple(name for _, name in FILTERS)
     fragments: list[str] = []
-    for column in (name for _, name in FILTERS):
+    for column in filter_columns:
         fragments.append(
             "\n".join(
                 (
@@ -595,6 +607,94 @@ def _detail_filter_fragment(alias: str) -> str:
             )
         )
     return "\n".join(fragments)
+
+
+def _leaderboard_sql() -> str:
+    """Build the watermark-anchored SPU leaderboard query."""
+    current_filter_sql = _native_filter_fragment("m")
+    previous_filter_sql = _native_filter_fragment("m")
+    return f"""WITH watermark AS (
+  SELECT MAX(data_through_date) AS data_through_date
+  FROM ads.ads_pdm_lx_hot_product_index_sku_d
+),
+anchor AS (
+  SELECT data_through_date,
+         DATE_TRUNC(data_through_date, 'month') AS watermark_month_start_date,
+         DATE_FORMAT(data_through_date, '%Y-%m') AS current_ym,
+         DATE_FORMAT(DATE_SUB(DATE_TRUNC(data_through_date, 'month'), INTERVAL 1 MONTH), '%Y-%m') AS previous_ym
+  FROM watermark
+),
+daily_quality AS (
+  SELECT
+    COUNT(DISTINCT CASE WHEN d.ym = a.current_ym THEN d.sales_date END) AS current_days,
+    COUNT(DISTINCT CASE WHEN d.ym = a.previous_ym THEN d.sales_date END) AS previous_days
+  FROM ads.ads_pdm_lx_hot_product_index_sku_d d CROSS JOIN anchor a
+  WHERE d.ym IN (a.current_ym, a.previous_ym)
+),
+monthly_quality AS (
+  SELECT COUNT(DISTINCT m.ym) AS monthly_months
+  FROM ads.ads_pdm_lx_hot_product_index_sku_m m CROSS JOIN anchor a
+  WHERE m.ym IN (a.current_ym, a.previous_ym)
+),
+quality AS (
+  SELECT a.*,
+    DAY(a.data_through_date) / DAY(LAST_DAY(a.data_through_date))
+      AS watermark_time_progress,
+    CASE WHEN q.current_days = DAY(a.data_through_date)
+      AND q.previous_days = DAY(LAST_DAY(DATE_SUB(a.watermark_month_start_date, INTERVAL 1 MONTH)))
+      AND m.monthly_months = 2 THEN 1 ELSE 0 END AS coverage_complete
+  FROM anchor a CROSS JOIN daily_quality q CROSS JOIN monthly_quality m
+),
+current_filtered AS (
+  SELECT m.*
+  FROM ads.ads_pdm_lx_hot_product_index_sku_m m
+  CROSS JOIN quality q
+  WHERE q.coverage_complete = 1
+    AND m.ym = q.current_ym
+    AND m.is_eligible = 1
+{current_filter_sql}
+),
+previous_filtered AS (
+  SELECT m.*
+  FROM ads.ads_pdm_lx_hot_product_index_sku_m m
+  CROSS JOIN quality q
+  WHERE q.coverage_complete = 1
+    AND m.ym = q.previous_ym
+    AND m.is_eligible = 1
+{previous_filter_sql}
+),
+current_rows AS (
+  SELECT m.spu,
+         m.spu_previous_month_sales_level AS spu_rating,
+         m.sku_level AS final_rating,
+         SUM(m.sales_amount_usd) AS current_month_sales_amount_usd
+  FROM current_filtered m
+  GROUP BY m.spu, m.spu_previous_month_sales_level, m.sku_level
+),
+previous_rows AS (
+  SELECT m.spu, SUM(m.sales_amount_usd) AS previous_month_sales_amount_usd
+  FROM previous_filtered m GROUP BY m.spu
+)
+SELECT
+  q.watermark_month_start_date,
+  q.current_ym AS ym,
+  c.spu,
+  c.spu_rating,
+  c.final_rating,
+  p.previous_month_sales_amount_usd,
+  c.current_month_sales_amount_usd,
+  c.current_month_sales_amount_usd /
+    NULLIF(p.previous_month_sales_amount_usd, 0) AS rating_progress,
+  (c.current_month_sales_amount_usd /
+    NULLIF(p.previous_month_sales_amount_usd, 0)) /
+    NULLIF(DAY(q.data_through_date) / DAY(LAST_DAY(q.data_through_date)), 0)
+    AS time_progress,
+  q.coverage_complete
+FROM current_rows c
+LEFT JOIN previous_rows p ON c.spu <=> p.spu
+CROSS JOIN quality q
+WHERE q.coverage_complete = 1
+"""
 
 
 def _detail_sql(*, grain: str) -> str:
@@ -626,7 +726,7 @@ def _detail_sql(*, grain: str) -> str:
     )
     stock_leaf_group_dimensions = ", ".join(f"p.{column}" for column in dimensions)
     stock_group_dimensions = ", ".join(stock_dimensions)
-    filter_sql = _detail_filter_fragment("d")
+    filter_sql = _native_filter_fragment("d")
     return f"""{{% set time_filter = get_time_filter(
   "sales_date", default="Current month", target_type="DATE",
   remove_filter=True
@@ -1014,6 +1114,74 @@ DETAIL_COLUMN_TYPES: Final[dict[str, str]] = {
     "theoretical_stock_qty": "DECIMAL",
     "actual_stock_qty": "DECIMAL",
 }
+
+
+def _leaderboard_columns() -> list[Asset]:
+    """Build the SPU leaderboard output and native-filter column contract."""
+    output_columns: tuple[tuple[str, str, bool], ...] = (
+        ("watermark_month_start_date", "DATE", True),
+        ("ym", "STRING", False),
+        ("spu", "STRING", False),
+        ("spu_rating", "STRING", False),
+        ("final_rating", "STRING", False),
+        ("previous_month_sales_amount_usd", "DECIMAL", False),
+        ("current_month_sales_amount_usd", "DECIMAL", False),
+        ("rating_progress", "DECIMAL", False),
+        ("time_progress", "DECIMAL", False),
+        ("coverage_complete", "TINYINT", False),
+    )
+    columns = [
+        _column(name, type_, is_dttm=is_dttm)
+        for name, type_, is_dttm in output_columns
+    ]
+    visible_names = {name for name, _, _ in output_columns}
+    source_types = dict(MONTHLY_SOURCE_COLUMNS)
+    for _, filter_column in FILTERS:
+        if filter_column in visible_names:
+            continue
+        columns.append(
+            _column(
+                filter_column,
+                source_types[filter_column],
+                description="仅作为原生筛选目标，不参与排行榜展示或聚合。",
+                groupby=False,
+            )
+        )
+    return columns
+
+
+def _leaderboard_metrics() -> Sequence[Asset]:
+    """Build saved metrics that aggregate one SPU leaderboard row."""
+    return (
+        _metric(
+            "previous_month_sales_amount_usd",
+            "上月销售额",
+            "MAX(previous_month_sales_amount_usd)",
+            "$,.1~f",
+            "上一完整月美元销售额。",
+        ),
+        _metric(
+            "current_month_sales_amount_usd",
+            "本月销量额",
+            "MAX(current_month_sales_amount_usd)",
+            "$,.1~f",
+            "水位月MTD美元销售额。",
+        ),
+        _metric(
+            "rating_progress",
+            "本月评级达标进度",
+            "MAX(rating_progress)",
+            ".1~%",
+            "本月销售额除以上月销售额。",
+        ),
+        _metric(
+            "time_progress",
+            "本月时间达标进度",
+            "MAX(time_progress)",
+            ".1~%",
+            "评级进度除以水位月时间进度。",
+        ),
+    )
 
 
 def _detail_columns(grain: str) -> list[Asset]:
@@ -1491,6 +1659,19 @@ def _datasets(database_uuid: str) -> AssetBundle:
             sql=_detail_sql(grain="sku"),
             columns=_detail_columns("sku"),
             metrics=_detail_metrics(include_stock=True),
+            database_uuid=database_uuid,
+        ),
+        "datasets/Doris_ling_xing/Hot_Product_Index_SPU_Leaderboard.yaml": _dataset(
+            table_name="爆品指数-SPU销量排行榜",
+            uuid=UUIDS["dataset_spu_leaderboard"],
+            main_dttm_col="watermark_month_start_date",
+            description=(
+                "爆品指数SPU销量排行榜；以日表数据水位锚定本月与上一完整月，"
+                "两期覆盖不完整时不返回业务数据。"
+            ),
+            sql=_leaderboard_sql(),
+            columns=_leaderboard_columns(),
+            metrics=_leaderboard_metrics(),
             database_uuid=database_uuid,
         ),
     }
@@ -2573,17 +2754,17 @@ def validate_assets(  # noqa: C901
     dashboards = _asset_family(assets, "dashboards/")
     if assets.get("metadata.yaml") != {"type": "assets", "version": ASSET_VERSION}:
         raise ValueError("metadata.yaml must declare an assets v1 bundle")
-    if (len(datasets), len(charts), len(dashboards)) != (5, 15, 2):
+    if (len(datasets), len(charts), len(dashboards)) != (6, 15, 2):
         raise ValueError(
-            "hot-product bundle must contain 5 datasets, 15 charts, and 2 dashboards"
+            "hot-product bundle must contain 6 datasets, 15 charts, and 2 dashboards"
         )
 
     identified_assets = [*datasets, *charts, *dashboards]
     asset_uuids = [str(asset["uuid"]) for asset in identified_assets]
     if len(asset_uuids) != len(set(asset_uuids)):
         raise ValueError("asset UUIDs must be unique")
-    if len(asset_uuids) != 22:
-        raise ValueError("hot-product bundle must contain 22 published asset UUIDs")
+    if len(asset_uuids) != 23:
+        raise ValueError("hot-product bundle must contain 23 published asset UUIDs")
     for asset_uuid in asset_uuids:
         UUID(asset_uuid)
 
