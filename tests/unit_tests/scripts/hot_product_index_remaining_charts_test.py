@@ -27,6 +27,7 @@ from scripts.hot_product_index_dashboard import (
     DAILY_SOURCE_COLUMNS,
     FILTERS,
     MONTHLY_SOURCE_COLUMNS,
+    UUIDS,
     write_bundle,
 )
 
@@ -52,6 +53,173 @@ def assets_by_key(
         for path, asset in assets.items()
         if path.startswith(f"{prefix}/")
     }
+
+
+def test_remaining_analysis_layout_and_parent_chains(tmp_path: Path) -> None:
+    """The remaining analysis charts form the approved two-row nested grid."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    main = assets_by_key(assets, "dashboards", "dashboard_title")[
+        "拉杆箱在售产品爆品指数看板"
+    ]
+    position = main["position"]
+
+    assert position["GRID_ID"]["children"][-2:] == [
+        "ROW-ANALYSIS-PRIMARY",
+        "ROW-ANALYSIS-SHARES",
+    ]
+    assert position["ROW-ANALYSIS-PRIMARY"]["children"] == [
+        "COLUMN-TREND",
+        "COLUMN-LEADERBOARD",
+    ]
+    assert position["COLUMN-TREND"]["meta"]["width"] == 8
+    assert position["COLUMN-LEADERBOARD"]["meta"]["width"] == 4
+    assert position["TABS-TREND"]["children"] == [
+        "TAB-TREND-DAY",
+        "TAB-TREND-WEEK",
+        "TAB-TREND-MONTH",
+    ]
+    assert [
+        position[key]["meta"]["text"] for key in position["TABS-TREND"]["children"]
+    ] == ["天", "周", "月"]
+    assert position["ROW-ANALYSIS-SHARES"]["children"] == [
+        "CHART-SPU-SHARE",
+        "CHART-SKU-SHARE",
+        "COLUMN-COLOR-TREND",
+        "CHART-COLOR-DISTRIBUTION",
+    ]
+    assert position["COLUMN-COLOR-TREND"]["meta"]["width"] == 3
+
+    for component_id in (
+        "CHART-SPU-SHARE",
+        "CHART-SKU-SHARE",
+        "CHART-COLOR-DISTRIBUTION",
+    ):
+        assert position[component_id]["meta"]["width"] == 3
+        assert position[component_id]["meta"]["height"] == 52
+        assert position[component_id]["parents"] == [
+            "ROOT_ID",
+            "GRID_ID",
+            "ROW-ANALYSIS-SHARES",
+        ]
+
+    assert position["CHART-SPU-LEADERBOARD"]["meta"]["width"] == 12
+    assert position["CHART-SPU-LEADERBOARD"]["meta"]["height"] == 56
+    assert position["CHART-SPU-LEADERBOARD"]["parents"] == [
+        "ROOT_ID",
+        "GRID_ID",
+        "ROW-ANALYSIS-PRIMARY",
+        "COLUMN-LEADERBOARD",
+    ]
+
+    trend_parent = [
+        "ROOT_ID",
+        "GRID_ID",
+        "ROW-ANALYSIS-PRIMARY",
+        "COLUMN-TREND",
+        "TABS-TREND",
+    ]
+    for tab_id, row_id, chart_id in (
+        ("TAB-TREND-DAY", "ROW-TREND-DAY", "CHART-TREND-DAY"),
+        ("TAB-TREND-WEEK", "ROW-TREND-WEEK", "CHART-TREND-WEEK"),
+        ("TAB-TREND-MONTH", "ROW-TREND-MONTH", "CHART-TREND-MONTH"),
+    ):
+        assert position[tab_id]["parents"] == [*trend_parent]
+        assert position[row_id]["parents"] == [*trend_parent, tab_id]
+        assert position[chart_id]["parents"] == [
+            *trend_parent,
+            tab_id,
+            row_id,
+        ]
+        assert position[chart_id]["meta"]["width"] == 12
+        assert position[chart_id]["meta"]["height"] == 56
+
+    color_parent = [
+        "ROOT_ID",
+        "GRID_ID",
+        "ROW-ANALYSIS-SHARES",
+        "COLUMN-COLOR-TREND",
+        "TABS-COLOR-TREND",
+    ]
+    assert position["TABS-COLOR-TREND"]["children"] == [
+        "TAB-COLOR-WEEK",
+        "TAB-COLOR-MONTH",
+    ]
+    for tab_id, row_id, chart_id in (
+        ("TAB-COLOR-WEEK", "ROW-COLOR-WEEK", "CHART-COLOR-WEEK"),
+        ("TAB-COLOR-MONTH", "ROW-COLOR-MONTH", "CHART-COLOR-MONTH"),
+    ):
+        assert position[tab_id]["parents"] == [*color_parent]
+        assert position[row_id]["parents"] == [*color_parent, tab_id]
+        assert position[chart_id]["parents"] == [
+            *color_parent,
+            tab_id,
+            row_id,
+        ]
+        assert position[chart_id]["meta"]["width"] == 12
+        assert position[chart_id]["meta"]["height"] == 52
+
+
+def test_remaining_analysis_filter_scope_includes_leaderboard_only_daily(
+    tmp_path: Path,
+) -> None:
+    """Selects target the leaderboard while the month range excludes it."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    main = assets_by_key(assets, "dashboards", "dashboard_title")[
+        "拉杆箱在售产品爆品指数看板"
+    ]
+    filters = main["metadata"]["native_filter_configuration"]
+    select_filters = [item for item in filters if item["filterType"] == "filter_select"]
+    month_filter = next(
+        item for item in filters if item["filterType"] == "filter_month_range"
+    )
+
+    leaderboard_uuid = UUIDS["chart_spu_leaderboard"]
+    leaderboard_dataset_uuid = UUIDS["dataset_spu_leaderboard"]
+    new_chart_uuids = {
+        UUIDS[key]
+        for key in (
+            "chart_trend_day",
+            "chart_trend_week",
+            "chart_trend_month",
+            "chart_spu_share",
+            "chart_sku_share",
+            "chart_spu_leaderboard",
+            "chart_color_trend_week",
+            "chart_color_trend_month",
+            "chart_color_distribution",
+        )
+    }
+
+    assert len(select_filters) == 12
+    for item in select_filters:
+        assert leaderboard_uuid in item["chartsInScope"]
+        assert leaderboard_dataset_uuid in {
+            target["datasetUuid"] for target in item["targets"]
+        }
+        assert new_chart_uuids <= set(item["chartsInScope"])
+
+    assert leaderboard_uuid not in month_filter["chartsInScope"]
+    assert leaderboard_dataset_uuid not in {
+        target["datasetUuid"] for target in month_filter["targets"]
+    }
+    assert new_chart_uuids - {leaderboard_uuid} <= set(month_filter["chartsInScope"])
+
+
+def test_remaining_analysis_css_is_root_scoped(tmp_path: Path) -> None:
+    """New chart styling is limited to the two tabs and leaderboard roots."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    main = assets_by_key(assets, "dashboards", "dashboard_title")[
+        "拉杆箱在售产品爆品指数看板"
+    ]
+    css = main["css"]
+
+    assert "#TABS-TREND .ant-tabs-card > .ant-tabs-nav .ant-tabs-ink-bar" in css
+    assert "#TABS-COLOR-TREND .ant-tabs-card > .ant-tabs-nav .ant-tabs-ink-bar" in css
+    assert "#CHART-SPU-LEADERBOARD .ag-header" in css
+    assert "#2978B5" in css
+    assert "#8AA964" in css
+    assert "rgba(138,169,100,.05)" in css
+    assert "rgba(138,169,100,.10)" in css
 
 
 def test_daily_dataset_exposes_trend_and_color_semantics(tmp_path: Path) -> None:

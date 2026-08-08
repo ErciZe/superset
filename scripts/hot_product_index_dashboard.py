@@ -334,7 +334,7 @@ TREND_SECONDARY_METRICS: Final[tuple[str, ...]] = (
 )
 
 
-def _column(
+def _dataset_column(
     name: str,
     type_: str,
     *,
@@ -1163,7 +1163,8 @@ def _leaderboard_columns() -> list[Asset]:
         ("coverage_complete", "TINYINT", False),
     )
     columns = [
-        _column(name, type_, is_dttm=is_dttm) for name, type_, is_dttm in output_columns
+        _dataset_column(name, type_, is_dttm=is_dttm)
+        for name, type_, is_dttm in output_columns
     ]
     visible_names = {name for name, _, _ in output_columns}
     source_types = dict(MONTHLY_SOURCE_COLUMNS)
@@ -1171,7 +1172,7 @@ def _leaderboard_columns() -> list[Asset]:
         if filter_column in visible_names:
             continue
         columns.append(
-            _column(
+            _dataset_column(
                 filter_column,
                 source_types[filter_column],
                 description="仅作为原生筛选目标，不参与排行榜展示或聚合。",
@@ -1222,7 +1223,7 @@ def _detail_columns(grain: str) -> list[Asset]:
     except KeyError as ex:
         raise ValueError(f"unsupported hot-product detail grain: {grain}") from ex
     columns = [
-        _column(
+        _dataset_column(
             name,
             DETAIL_COLUMN_TYPES[name],
             display_name=DETAIL_LABELS[name],
@@ -1230,7 +1231,7 @@ def _detail_columns(grain: str) -> list[Asset]:
         for name in names
     ]
     columns.append(
-        _column(
+        _dataset_column(
             "month_start_date",
             "DATE",
             is_dttm=True,
@@ -1243,7 +1244,7 @@ def _detail_columns(grain: str) -> list[Asset]:
         if filter_column in visible_names:
             continue
         columns.append(
-            _column(
+            _dataset_column(
                 filter_column,
                 source_types[filter_column],
                 description="仅作为原生筛选目标，不参与明细表展示或聚合。",
@@ -1441,19 +1442,19 @@ def _datasets(database_uuid: str) -> AssetBundle:
     """Build the existing semantic datasets and the two detail datasets."""
     _validate_detail_source_columns()
     common_business_columns = [
-        _column(name, type_, is_dttm=type_ in {"DATE", "DATETIME"})
+        _dataset_column(name, type_, is_dttm=type_ in {"DATE", "DATETIME"})
         for name, type_ in COVERAGE_COLUMNS
     ]
     daily_columns = [
-        _column(name, type_, is_dttm=type_ in {"DATE", "DATETIME"})
+        _dataset_column(name, type_, is_dttm=type_ in {"DATE", "DATETIME"})
         for name, type_ in DAILY_SOURCE_COLUMNS
     ]
     daily_columns.extend(
         [
-            _column("week_start_date", "DATE", is_dttm=True),
-            _column("yw", "STRING"),
-            _column("color_code", "STRING"),
-            _column(
+            _dataset_column("week_start_date", "DATE", is_dttm=True),
+            _dataset_column("yw", "STRING"),
+            _dataset_column("color_code", "STRING"),
+            _dataset_column(
                 "spu_previous_month_sales_level_sort",
                 "BIGINT",
                 description="固定产品等级顺序：Ps、S、A、B、C、-。",
@@ -1462,12 +1463,12 @@ def _datasets(database_uuid: str) -> AssetBundle:
         ]
     )
     monthly_columns = [
-        _column(name, type_, is_dttm=type_ in {"DATE", "DATETIME"})
+        _dataset_column(name, type_, is_dttm=type_ in {"DATE", "DATETIME"})
         for name, type_ in MONTHLY_SOURCE_COLUMNS
     ]
     monthly_columns.extend(
         [
-            _column(
+            _dataset_column(
                 "spu_previous_month_sales_level_sort",
                 "BIGINT",
                 description="固定产品等级顺序：Ps、S、A、B、C、-。",
@@ -1477,9 +1478,9 @@ def _datasets(database_uuid: str) -> AssetBundle:
     )
     status_columns = [
         *common_business_columns,
-        *(_column(name, type_) for name, type_ in STATUS_DISPLAY_COLUMNS),
-        _column("status_message", "STRING"),
-        _column("rating_status_message", "STRING"),
+        *(_dataset_column(name, type_) for name, type_ in STATUS_DISPLAY_COLUMNS),
+        _dataset_column("status_message", "STRING"),
+        _dataset_column("rating_status_message", "STRING"),
     ]
 
     daily_metrics = (
@@ -2636,8 +2637,34 @@ def _row(
     }
 
 
-def _tab(tab_id: str, text: str, children: Sequence[str]) -> Asset:
+def _column(
+    column_id: str,
+    children: Sequence[str],
+    *,
+    width: int,
+    parent_ids: Sequence[str],
+) -> Asset:
+    """Build one transparent dashboard column with an explicit grid width."""
+    return {
+        "children": list(children),
+        "id": column_id,
+        "meta": {"background": "BACKGROUND_TRANSPARENT", "width": width},
+        "parents": list(parent_ids),
+        "type": "COLUMN",
+    }
+
+
+def _tab(
+    tab_id: str,
+    text: str,
+    children: Sequence[str],
+    *,
+    tabs_id: str,
+    parent_ids: Sequence[str] | None = None,
+) -> Asset:
     """Build a dashboard tab with the same editable-title metadata as Superset."""
+    parents = list(parent_ids or ("ROOT_ID", "GRID_ID"))
+    parents.append(tabs_id)
     return {
         "children": list(children),
         "id": tab_id,
@@ -2646,7 +2673,7 @@ def _tab(tab_id: str, text: str, children: Sequence[str]) -> Asset:
             "placeholder": "Tab title",
             "text": text,
         },
-        "parents": ["ROOT_ID", "GRID_ID", "TABS-DETAIL"],
+        "parents": parents,
         "type": "TAB",
     }
 
@@ -2663,6 +2690,8 @@ def _main_position() -> Asset:
                 "ROW-FUNNELS",
                 "ROW-DETAIL-TITLE",
                 "TABS-DETAIL",
+                "ROW-ANALYSIS-PRIMARY",
+                "ROW-ANALYSIS-SHARES",
             ],
             "id": "GRID_ID",
             "parents": ["ROOT_ID"],
@@ -2717,8 +2746,18 @@ def _main_position() -> Asset:
             "parents": ["ROOT_ID", "GRID_ID"],
             "type": "TABS",
         },
-        "TAB-SPU-DETAIL": _tab("TAB-SPU-DETAIL", "SPU维度", ["ROW-SPU-DETAIL"]),
-        "TAB-SKU-DETAIL": _tab("TAB-SKU-DETAIL", "SKU维度", ["ROW-SKU-DETAIL"]),
+        "TAB-SPU-DETAIL": _tab(
+            "TAB-SPU-DETAIL",
+            "SPU维度",
+            ["ROW-SPU-DETAIL"],
+            tabs_id="TABS-DETAIL",
+        ),
+        "TAB-SKU-DETAIL": _tab(
+            "TAB-SKU-DETAIL",
+            "SKU维度",
+            ["ROW-SKU-DETAIL"],
+            tabs_id="TABS-DETAIL",
+        ),
         "ROW-SPU-DETAIL": _row(
             "ROW-SPU-DETAIL",
             ["CHART-SPU-DETAIL"],
@@ -2748,6 +2787,311 @@ def _main_position() -> Asset:
             width=12,
             height=72,
             parent_ids=["ROOT_ID", "GRID_ID", "TABS-DETAIL", "TAB-SKU-DETAIL"],
+        ),
+        "ROW-ANALYSIS-PRIMARY": _row(
+            "ROW-ANALYSIS-PRIMARY",
+            ["COLUMN-TREND", "COLUMN-LEADERBOARD"],
+        ),
+        "COLUMN-TREND": _column(
+            "COLUMN-TREND",
+            ["TABS-TREND"],
+            width=8,
+            parent_ids=["ROOT_ID", "GRID_ID", "ROW-ANALYSIS-PRIMARY"],
+        ),
+        "COLUMN-LEADERBOARD": _column(
+            "COLUMN-LEADERBOARD",
+            ["CHART-SPU-LEADERBOARD"],
+            width=4,
+            parent_ids=["ROOT_ID", "GRID_ID", "ROW-ANALYSIS-PRIMARY"],
+        ),
+        "TABS-TREND": {
+            "children": [
+                "TAB-TREND-DAY",
+                "TAB-TREND-WEEK",
+                "TAB-TREND-MONTH",
+            ],
+            "id": "TABS-TREND",
+            "meta": {},
+            "parents": [
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-PRIMARY",
+                "COLUMN-TREND",
+            ],
+            "type": "TABS",
+        },
+        "TAB-TREND-DAY": _tab(
+            "TAB-TREND-DAY",
+            "天",
+            ["ROW-TREND-DAY"],
+            tabs_id="TABS-TREND",
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-PRIMARY",
+                "COLUMN-TREND",
+            ],
+        ),
+        "TAB-TREND-WEEK": _tab(
+            "TAB-TREND-WEEK",
+            "周",
+            ["ROW-TREND-WEEK"],
+            tabs_id="TABS-TREND",
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-PRIMARY",
+                "COLUMN-TREND",
+            ],
+        ),
+        "TAB-TREND-MONTH": _tab(
+            "TAB-TREND-MONTH",
+            "月",
+            ["ROW-TREND-MONTH"],
+            tabs_id="TABS-TREND",
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-PRIMARY",
+                "COLUMN-TREND",
+            ],
+        ),
+        "ROW-TREND-DAY": _row(
+            "ROW-TREND-DAY",
+            ["CHART-TREND-DAY"],
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-PRIMARY",
+                "COLUMN-TREND",
+                "TABS-TREND",
+                "TAB-TREND-DAY",
+            ],
+        ),
+        "ROW-TREND-WEEK": _row(
+            "ROW-TREND-WEEK",
+            ["CHART-TREND-WEEK"],
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-PRIMARY",
+                "COLUMN-TREND",
+                "TABS-TREND",
+                "TAB-TREND-WEEK",
+            ],
+        ),
+        "ROW-TREND-MONTH": _row(
+            "ROW-TREND-MONTH",
+            ["CHART-TREND-MONTH"],
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-PRIMARY",
+                "COLUMN-TREND",
+                "TABS-TREND",
+                "TAB-TREND-MONTH",
+            ],
+        ),
+        "CHART-TREND-DAY": _chart_node(
+            component_id="CHART-TREND-DAY",
+            chart_id=1014,
+            chart_uuid=UUIDS["chart_trend_day"],
+            slice_name="指标整体趋势-天",
+            row_id="ROW-TREND-DAY",
+            width=12,
+            height=56,
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-PRIMARY",
+                "COLUMN-TREND",
+                "TABS-TREND",
+                "TAB-TREND-DAY",
+            ],
+        ),
+        "CHART-TREND-WEEK": _chart_node(
+            component_id="CHART-TREND-WEEK",
+            chart_id=1015,
+            chart_uuid=UUIDS["chart_trend_week"],
+            slice_name="指标整体趋势-周",
+            row_id="ROW-TREND-WEEK",
+            width=12,
+            height=56,
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-PRIMARY",
+                "COLUMN-TREND",
+                "TABS-TREND",
+                "TAB-TREND-WEEK",
+            ],
+        ),
+        "CHART-TREND-MONTH": _chart_node(
+            component_id="CHART-TREND-MONTH",
+            chart_id=1016,
+            chart_uuid=UUIDS["chart_trend_month"],
+            slice_name="指标整体趋势-月",
+            row_id="ROW-TREND-MONTH",
+            width=12,
+            height=56,
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-PRIMARY",
+                "COLUMN-TREND",
+                "TABS-TREND",
+                "TAB-TREND-MONTH",
+            ],
+        ),
+        "CHART-SPU-LEADERBOARD": _chart_node(
+            component_id="CHART-SPU-LEADERBOARD",
+            chart_id=1019,
+            chart_uuid=UUIDS["chart_spu_leaderboard"],
+            slice_name="SPU销量排行榜",
+            row_id="COLUMN-LEADERBOARD",
+            width=12,
+            height=56,
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-PRIMARY",
+            ],
+        ),
+        "ROW-ANALYSIS-SHARES": _row(
+            "ROW-ANALYSIS-SHARES",
+            [
+                "CHART-SPU-SHARE",
+                "CHART-SKU-SHARE",
+                "COLUMN-COLOR-TREND",
+                "CHART-COLOR-DISTRIBUTION",
+            ],
+        ),
+        "CHART-SPU-SHARE": _chart_node(
+            component_id="CHART-SPU-SHARE",
+            chart_id=1017,
+            chart_uuid=UUIDS["chart_spu_share"],
+            slice_name="SPU销售比例",
+            row_id="ROW-ANALYSIS-SHARES",
+            width=3,
+            height=52,
+        ),
+        "CHART-SKU-SHARE": _chart_node(
+            component_id="CHART-SKU-SHARE",
+            chart_id=1018,
+            chart_uuid=UUIDS["chart_sku_share"],
+            slice_name="SKU销售比例",
+            row_id="ROW-ANALYSIS-SHARES",
+            width=3,
+            height=52,
+        ),
+        "COLUMN-COLOR-TREND": _column(
+            "COLUMN-COLOR-TREND",
+            ["TABS-COLOR-TREND"],
+            width=3,
+            parent_ids=["ROOT_ID", "GRID_ID", "ROW-ANALYSIS-SHARES"],
+        ),
+        "TABS-COLOR-TREND": {
+            "children": ["TAB-COLOR-WEEK", "TAB-COLOR-MONTH"],
+            "id": "TABS-COLOR-TREND",
+            "meta": {},
+            "parents": [
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-SHARES",
+                "COLUMN-COLOR-TREND",
+            ],
+            "type": "TABS",
+        },
+        "TAB-COLOR-WEEK": _tab(
+            "TAB-COLOR-WEEK",
+            "周",
+            ["ROW-COLOR-WEEK"],
+            tabs_id="TABS-COLOR-TREND",
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-SHARES",
+                "COLUMN-COLOR-TREND",
+            ],
+        ),
+        "TAB-COLOR-MONTH": _tab(
+            "TAB-COLOR-MONTH",
+            "月",
+            ["ROW-COLOR-MONTH"],
+            tabs_id="TABS-COLOR-TREND",
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-SHARES",
+                "COLUMN-COLOR-TREND",
+            ],
+        ),
+        "ROW-COLOR-WEEK": _row(
+            "ROW-COLOR-WEEK",
+            ["CHART-COLOR-WEEK"],
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-SHARES",
+                "COLUMN-COLOR-TREND",
+                "TABS-COLOR-TREND",
+                "TAB-COLOR-WEEK",
+            ],
+        ),
+        "ROW-COLOR-MONTH": _row(
+            "ROW-COLOR-MONTH",
+            ["CHART-COLOR-MONTH"],
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-SHARES",
+                "COLUMN-COLOR-TREND",
+                "TABS-COLOR-TREND",
+                "TAB-COLOR-MONTH",
+            ],
+        ),
+        "CHART-COLOR-WEEK": _chart_node(
+            component_id="CHART-COLOR-WEEK",
+            chart_id=1020,
+            chart_uuid=UUIDS["chart_color_trend_week"],
+            slice_name="颜色销售比例-周",
+            row_id="ROW-COLOR-WEEK",
+            width=12,
+            height=52,
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-SHARES",
+                "COLUMN-COLOR-TREND",
+                "TABS-COLOR-TREND",
+                "TAB-COLOR-WEEK",
+            ],
+        ),
+        "CHART-COLOR-MONTH": _chart_node(
+            component_id="CHART-COLOR-MONTH",
+            chart_id=1021,
+            chart_uuid=UUIDS["chart_color_trend_month"],
+            slice_name="颜色销售比例-月",
+            row_id="ROW-COLOR-MONTH",
+            width=12,
+            height=52,
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "ROW-ANALYSIS-SHARES",
+                "COLUMN-COLOR-TREND",
+                "TABS-COLOR-TREND",
+                "TAB-COLOR-MONTH",
+            ],
+        ),
+        "CHART-COLOR-DISTRIBUTION": _chart_node(
+            component_id="CHART-COLOR-DISTRIBUTION",
+            chart_id=1022,
+            chart_uuid=UUIDS["chart_color_distribution"],
+            slice_name="颜色销量分布",
+            row_id="ROW-ANALYSIS-SHARES",
+            width=3,
+            height=52,
         ),
         "CHART-STATUS": _chart_node(
             component_id="CHART-STATUS",
@@ -2871,6 +3215,10 @@ def _select_filter(
                 "column": {"name": column},
                 "datasetUuid": UUIDS["dataset_sku_detail"],
             },
+            {
+                "column": {"name": column},
+                "datasetUuid": UUIDS["dataset_spu_leaderboard"],
+            },
         ],
         "type": "NATIVE_FILTER",
     }
@@ -2933,8 +3281,22 @@ def _main_metadata() -> Asset:
         UUIDS["chart_funnel_spu_count"],
         UUIDS["chart_spu_detail"],
         UUIDS["chart_sku_detail"],
+        UUIDS["chart_trend_day"],
+        UUIDS["chart_trend_week"],
+        UUIDS["chart_trend_month"],
+        UUIDS["chart_spu_share"],
+        UUIDS["chart_sku_share"],
+        UUIDS["chart_spu_leaderboard"],
+        UUIDS["chart_color_trend_week"],
+        UUIDS["chart_color_trend_month"],
+        UUIDS["chart_color_distribution"],
     ]
+    leaderboard_uuid = UUIDS["chart_spu_leaderboard"]
     main_chart_uuids = [UUIDS["chart_status"], *business_chart_uuids]
+    month_scoped_chart_uuids = [
+        UUIDS["chart_status"],
+        *(uuid for uuid in business_chart_uuids if uuid != leaderboard_uuid),
+    ]
     select_filters = {
         column: _select_filter(
             name=name,
@@ -2945,7 +3307,7 @@ def _main_metadata() -> Asset:
     }
     native_filters = [
         *(select_filters[column] for _, column in FILTERS[:8]),
-        _month_filter(main_chart_uuids),
+        _month_filter(month_scoped_chart_uuids),
         *(select_filters[column] for _, column in FILTERS[8:]),
     ]
     return {
@@ -3164,6 +3526,25 @@ body:has(#main-menu) #MARKDOWN-DOC-LINK { top: 65px; }
 #TABS-DETAIL .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active .ant-tabs-tab-btn {
   color: #2978B5;
 }
+#TABS-TREND .ant-tabs-card > .ant-tabs-nav .ant-tabs-ink-bar,
+#TABS-COLOR-TREND .ant-tabs-card > .ant-tabs-nav .ant-tabs-ink-bar {
+  background: #2978B5;
+}
+#TABS-TREND .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active .ant-tabs-tab-btn,
+#TABS-COLOR-TREND .ant-tabs-card > .ant-tabs-nav
+  .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #2978B5;
+}
+#CHART-SPU-LEADERBOARD .ag-header {
+  background: #8AA964;
+  color: #fff;
+}
+#CHART-SPU-LEADERBOARD .ag-row-even:not(.ag-row-pinned) {
+  background: rgba(138,169,100,.05);
+}
+#CHART-SPU-LEADERBOARD .ag-row-odd:not(.ag-row-pinned) {
+  background: rgba(138,169,100,.10);
+}
 @media (max-width: 900px) {
   #CHART-STATUS + .chart-slice .handlebars section {
     align-items: flex-start;
@@ -3322,9 +3703,9 @@ def validate_assets(  # noqa: C901
         isinstance(node, dict) and node.get("type") == "CHART"
         for node in main["position"].values()
     )
-    if main_chart_count != 14:
+    if main_chart_count != 23:
         raise ValueError(
-            "main dashboard scope must contain exactly 14 approved chart nodes"
+            "main dashboard scope must contain exactly 23 approved chart nodes"
         )
     filters = main["metadata"]["native_filter_configuration"]
     if len(filters) != 13:

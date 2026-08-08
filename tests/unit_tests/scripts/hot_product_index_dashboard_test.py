@@ -847,12 +847,18 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
     main_charts = [
         chart for chart in charts.values() if chart["uuid"] in main_chart_uuids
     ]
-    assert len(main_charts) == 14
+    assert len(main_charts) == 23
     assert sum(chart["viz_type"] == "big_number_total" for chart in main_charts) == 9
     assert sum(chart["viz_type"] == "funnel" for chart in main_charts) == 2
     assert sum(chart["viz_type"] == "handlebars" for chart in main_charts) == 1
     assert (
-        sum(chart["viz_type"] == "ag-grid-table-scheme" for chart in main_charts) == 2
+        sum(chart["viz_type"] == "ag-grid-table-scheme" for chart in main_charts) == 3
+    )
+    assert sum(chart["viz_type"] == "mixed_timeseries" for chart in main_charts) == 3
+    assert sum(chart["viz_type"] == "pie" for chart in main_charts) == 3
+    assert (
+        sum(chart["viz_type"] == "echarts_timeseries_line" for chart in main_charts)
+        == 2
     )
     assert all(
         chart["params"].get("show_metric_name") is True
@@ -861,9 +867,11 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
     )
 
     position = main["position"]
-    assert position["GRID_ID"]["children"][-2:] == [
+    assert position["GRID_ID"]["children"][-4:] == [
         "ROW-DETAIL-TITLE",
         "TABS-DETAIL",
+        "ROW-ANALYSIS-PRIMARY",
+        "ROW-ANALYSIS-SHARES",
     ]
     assert position["ROW-DETAIL-TITLE"]["children"] == ["MARKDOWN-DETAIL-TITLE"]
     assert "爆品指数&经营指标报表" in position["MARKDOWN-DETAIL-TITLE"]["meta"]["code"]
@@ -937,15 +945,23 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
         if item["filterType"] == "filter_select":
             assert status_uuid not in item["chartsInScope"]
             assert item["scope"]["excluded"] == [1000]
-            assert item["chartsInScope"][-2:] == [
-                "4454d29b-3161-5d51-9e7b-7c1a9e96db06",
-                "76d38770-7b51-5f9e-b9df-d1b48113b8a3",
+            assert item["chartsInScope"][-9:] == [
+                "582d0460-8034-5a12-9f27-4de03b050cd4",
+                "d3504cb6-8abf-5d22-807b-326948e6b79b",
+                "8f36f17e-c95c-5076-9090-24652b22bb00",
+                "a5fc632c-e635-5cf0-8270-f9a1d135c664",
+                "7dbc534e-5c09-52e5-8dfa-0d42ddb44576",
+                "d35f4185-5103-5e75-85c7-2cfa7ae83731",
+                "90eed32b-5a2c-5cd5-8d6e-b38d98c720b8",
+                "267d5d23-3a69-5f8a-aca0-15b0020c9599",
+                "e77069a0-1a40-583b-bae5-5ccba309c34b",
             ]
             assert [target["datasetUuid"] for target in item["targets"]] == [
                 "ea2025d6-91ac-502f-9238-9f21ca62b761",
                 "669d6bf7-779b-545b-9b9d-5b45a5d3842c",
                 "de2f3527-4fb7-51df-a1ef-067567348ee6",
                 "baea3900-76bf-5de9-8f10-aad2cc5e4b60",
+                "2b5c33b2-2af6-5436-8b3d-e7292e5a64ae",
             ]
             assert len({target["column"]["name"] for target in item["targets"]}) == 1
     assert status_uuid in month_filter["chartsInScope"]
