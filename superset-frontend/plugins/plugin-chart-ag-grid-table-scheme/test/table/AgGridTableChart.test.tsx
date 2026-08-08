@@ -33,7 +33,9 @@ type MockAgGridTableProps = Pick<
   | 'onSearchColChange'
   | 'onSearchChange'
   | 'onSortChange'
->;
+> & {
+  gridHeight?: number;
+};
 
 type MockColDefsProps = {
   rowHierarchyFields?: string[];
@@ -117,6 +119,26 @@ const renderTable = (
   overrides: Partial<typeof baseProps> = {},
 ): ReturnType<typeof renderTest> =>
   renderTest(<TableChart {...baseProps} {...overrides} />);
+
+test('renders advanced filters by default and hides them when disabled', () => {
+  const { container: defaultContainer } = renderTable();
+  const defaultGridHeight = mockAgGridTableProps.gridHeight;
+
+  const { container: disabledContainer } = renderTable({
+    formData: {
+      ...baseProps.formData,
+      advanced_filter_enabled: false,
+    },
+  });
+
+  expect(
+    defaultContainer.querySelector('[data-test="advanced-filter-bar"]'),
+  ).not.toBeNull();
+  expect(
+    disabledContainer.querySelector('[data-test="advanced-filter-bar"]'),
+  ).toBeNull();
+  expect(mockAgGridTableProps.gridHeight).toBe((defaultGridHeight ?? 0) + 44);
+});
 
 test('marks only the WHM order detail chart for scoped advanced filter styles', () => {
   const { container: whmContainer } = renderTest(

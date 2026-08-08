@@ -239,7 +239,9 @@ export default function TableChart<D extends DataRecord = DataRecord>(
   });
 
   const showAdvancedFilter = Boolean(
-    serverPagination && advancedFilterOptions.length,
+    props.formData.advanced_filter_enabled !== false &&
+    serverPagination &&
+    advancedFilterOptions.length,
   );
   const isWhmOrderDetailChart = slice_id === 17;
 

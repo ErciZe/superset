@@ -1204,6 +1204,7 @@ def _detail_chart_params(grain: str) -> Asset:
     return {
         "adhoc_filters": [],
         "allow_rearrange_columns": True,
+        "advanced_filter_enabled": False,
         "column_config": _detail_column_config(grain),
         "column_view_schemes_enabled": False,
         "conditional_formatting": _detail_conditional_formatting(),

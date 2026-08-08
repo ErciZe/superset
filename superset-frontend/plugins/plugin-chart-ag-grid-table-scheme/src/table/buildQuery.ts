@@ -396,7 +396,11 @@ const buildQuery: BuildQuery<TableChartFormData> = (
 
     if (formData.server_pagination) {
       // Add search filter if search text exists
-      if (ownState.searchText && ownState?.searchColumn) {
+      if (
+        formData.include_search !== false &&
+        ownState.searchText &&
+        ownState?.searchColumn
+      ) {
         queryObject = {
           ...queryObject,
           filters: [
@@ -410,9 +414,12 @@ const buildQuery: BuildQuery<TableChartFormData> = (
         };
       }
 
-      const advancedFilter = buildAdvancedFilter(
-        ownState.advancedFilter as AdvancedFilterState | undefined,
-      );
+      const advancedFilter =
+        formData.advanced_filter_enabled === false
+          ? null
+          : buildAdvancedFilter(
+              ownState.advancedFilter as AdvancedFilterState | undefined,
+            );
       if (advancedFilter) {
         queryObject = {
           ...queryObject,

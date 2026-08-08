@@ -80,3 +80,65 @@ test('keeps the legacy metric default unless stable pagination order is opted in
 
   expect(baseQuery.orderby).toEqual([['hot_product_index', false]]);
 });
+
+test('ignores stale search and advanced filter state when disabled', () => {
+  const [baseQuery] = buildQuery(
+    {
+      ...detailFormData,
+      advanced_filter_enabled: false,
+      include_search: false,
+    },
+    {
+      ownState: {
+        searchColumn: 'spu',
+        searchText: '8010',
+        advancedFilter: {
+          column: 'ym',
+          operator: 'equals',
+          value: '2026-03',
+        },
+      },
+    },
+  ).queries;
+
+  const filters = baseQuery.filters ?? [];
+  expect(filters).not.toContainEqual({
+    col: 'spu',
+    op: 'ILIKE',
+    val: '8010%',
+  });
+  expect(filters).not.toContainEqual({
+    col: 'ym',
+    op: '==',
+    val: '2026-03',
+  });
+});
+
+test('keeps stale search and advanced filter state by default', () => {
+  const [baseQuery] = buildQuery(detailFormData, {
+    ownState: {
+      searchColumn: 'spu',
+      searchText: '8010',
+      advancedFilter: {
+        column: 'ym',
+        operator: 'equals',
+        value: '2026-03',
+      },
+    },
+  }).queries;
+
+  expect(baseQuery.filters).toEqual(
+    expect.arrayContaining([
+      {
+        col: 'spu',
+        op: 'ILIKE',
+        val: '8010%',
+      },
+      {
+        col: 'ym',
+        op: '==',
+        val: '2026-03',
+      },
+    ]),
+  );
+});
