@@ -247,6 +247,16 @@ def test_daily_dataset_exposes_trend_and_color_semantics(tmp_path: Path) -> None
     assert metrics["avg_daily_sales_qty_period"]["expression"] == (
         "SUM(sales_qty) / NULLIF(COUNT(DISTINCT sales_date), 0)"
     )
+    hot_product_index = metrics["hot_product_index"]["expression"]
+    assert hot_product_index == (
+        "SUM(sales_qty) / NULLIF("
+        "COUNT(DISTINCT CONCAT("
+        "DATE_FORMAT(sales_date, '%Y-%m-%d'), '#', HEX(sku))), 0)"
+    )
+    assert "COUNT(DISTINCT sales_date, sku)" not in hot_product_index
+    assert metrics["hot_product_index"]["description"] == (
+        "销量除以有记录的日期-SKU组合数（按日期和SKU的可逆编码精确去重）。"
+    )
     assert metrics["return_goods_qty_total"]["expression"] == "SUM(return_goods_qty)"
     assert metrics["order_qty_total"]["expression"] == "SUM(order_qty)"
     assert metrics["in_sale_sku_count_period"]["expression"] == "COUNT(DISTINCT sku)"

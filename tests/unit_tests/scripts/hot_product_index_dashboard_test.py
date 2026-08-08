@@ -759,7 +759,9 @@ def test_virtual_datasets_fail_closed_on_incomplete_month_publication(
         "gross_margin": ("SUM(gross_profit_usd) / NULLIF(SUM(sales_amount_usd), 0)"),
         "gross_profit_usd_total": "SUM(gross_profit_usd)",
         "hot_product_index": (
-            "SUM(sales_qty) / NULLIF(COUNT(DISTINCT sales_date, sku), 0)"
+            "SUM(sales_qty) / NULLIF("
+            "COUNT(DISTINCT CONCAT("
+            "DATE_FORMAT(sales_date, '%Y-%m-%d'), '#', HEX(sku))), 0)"
         ),
         "return_rate": "SUM(return_goods_qty) / NULLIF(SUM(sales_qty), 0)",
         "sales_amount_usd_total": "SUM(sales_amount_usd)",

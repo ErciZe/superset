@@ -1525,9 +1525,11 @@ def _datasets(database_uuid: str) -> AssetBundle:
         _metric(
             "hot_product_index",
             "爆品指数",
-            "SUM(sales_qty) / NULLIF(COUNT(DISTINCT sales_date, sku), 0)",
+            "SUM(sales_qty) / NULLIF("
+            "COUNT(DISTINCT CONCAT("
+            "DATE_FORMAT(sales_date, '%Y-%m-%d'), '#', HEX(sku))), 0)",
             ",.1~f",
-            "销量除以有记录的日期-SKU组合数。",
+            "销量除以有记录的日期-SKU组合数（按日期和SKU的可逆编码精确去重）。",
         ),
         _metric(
             "gross_profit_usd_total",
