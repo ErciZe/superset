@@ -195,13 +195,22 @@ def test_remaining_charts_preflight_uses_exact_two_stage_cardinality_gate() -> N
     assert "WITH eligible AS (" in cardinality_result_set
     assert "monthly_category_distinct AS (" in cardinality_result_set
     assert "history_category_distinct AS (" in cardinality_result_set
+    assert "dimension_seed AS (" in cardinality_result_set
+    assert "SELECT 'spu' AS dimension_name" in cardinality_result_set
+    assert "UNION ALL SELECT 'sku'" in cardinality_result_set
+    assert "UNION ALL SELECT 'color_code'" in cardinality_result_set
+    assert "history_category_counts AS (" in cardinality_result_set
+    assert "FROM dimension_seed s" in cardinality_result_set
+    assert "LEFT JOIN history_category_counts h" in cardinality_result_set
+    assert "COALESCE(h.distinct_count, 0)" in cardinality_result_set
     assert "GROUP BY ym, spu" in cardinality_result_set
     assert "GROUP BY ym, sku" in cardinality_result_set
     assert "GROUP BY ym, color_code" in cardinality_result_set
     assert "GROUP BY dimension_name, dimension_value" in cardinality_result_set
     assert "COUNT(*) AS distinct_count" in cardinality_result_set
-    assert "CASE WHEN COUNT(*) <= 1000 THEN 1 ELSE 0 END AS within_limit" in (
-        cardinality_result_set
+    assert (
+        "CASE WHEN COALESCE(h.distinct_count, 0) <= 1000 THEN 1 ELSE 0 END AS within_limit"
+        in cardinality_result_set
     )
     assert not re.search(
         r"COUNT\s*\(\s*DISTINCT\s+(?:spu|sku|color_code)\b",

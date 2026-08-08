@@ -119,13 +119,29 @@ history_category_distinct AS (
   SELECT dimension_name, dimension_value
   FROM monthly_category_distinct
   GROUP BY dimension_name, dimension_value
+),
+dimension_seed AS (
+  SELECT 'spu' AS dimension_name
+  UNION ALL SELECT 'sku'
+  UNION ALL SELECT 'color_code'
+),
+history_category_counts AS (
+  SELECT dimension_name, COUNT(*) AS distinct_count
+  FROM history_category_distinct
+  GROUP BY dimension_name
 )
 SELECT
-  dimension_name,
-  COUNT(*) AS distinct_count,
-  CASE WHEN COUNT(*) <= 1000 THEN 1 ELSE 0 END AS within_limit
-FROM history_category_distinct
-GROUP BY dimension_name;
+  s.dimension_name,
+  COALESCE(h.distinct_count, 0) AS distinct_count,
+  CASE WHEN COALESCE(h.distinct_count, 0) <= 1000 THEN 1 ELSE 0 END AS within_limit
+FROM dimension_seed s
+LEFT JOIN history_category_counts h
+  ON h.dimension_name = s.dimension_name
+ORDER BY CASE s.dimension_name
+  WHEN 'spu' THEN 1
+  WHEN 'sku' THEN 2
+  ELSE 3
+END;
 
 -- 3. Watermark and current/previous month day coverage.
 WITH watermark AS (
