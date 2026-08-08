@@ -54,9 +54,12 @@ def test_daily_dataset_exposes_trend_and_color_semantics(tmp_path: Path) -> None
     metrics = {item["metric_name"]: item for item in daily["metrics"]}
 
     assert columns["week_start_date"]["verbose_name"] == "周一日期"
+    assert columns["week_start_date"]["type"] == "DATE"
     assert columns["week_start_date"]["is_dttm"] is True
     assert columns["yw"]["verbose_name"] == "年周"
+    assert columns["yw"]["type"] == "STRING"
     assert columns["color_code"]["verbose_name"] == "颜色代码"
+    assert columns["color_code"]["type"] == "STRING"
     assert "DATE_SUB(d.sales_date, INTERVAL WEEKDAY(d.sales_date) DAY)" in daily[
         "sql"
     ]
@@ -89,21 +92,16 @@ def test_new_daily_metrics_have_chinese_labels_and_approved_formats(
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     daily = assets_by_key(assets, "datasets", "table_name")["爆品指数-日明细"]
     metrics = {item["metric_name"]: item for item in daily["metrics"]}
-    new_metric_names = {
-        "avg_daily_sales_qty_period",
-        "return_goods_qty_total",
-        "order_qty_total",
-        "in_sale_sku_count_period",
-        "in_sale_spu_count_period",
-        "sales_amount_usd_wan",
-        "gross_profit_usd_wan",
+    expected_metadata = {
+        "avg_daily_sales_qty_period": ("日均销量", ",.1~f"),
+        "return_goods_qty_total": ("退货量", ",.0f"),
+        "order_qty_total": ("订单量", ",.0f"),
+        "in_sale_sku_count_period": ("在售SKU数", ",.0f"),
+        "in_sale_spu_count_period": ("在售SPU数", ",.0f"),
+        "sales_amount_usd_wan": ("销售额", ",.1~f"),
+        "gross_profit_usd_wan": ("毛利润", ",.1~f"),
     }
-    approved_formats = {",.0f", ",.1~f", ".1~%"}
-
-    for name in new_metric_names:
-        assert metrics[name]["verbose_name"]
-        assert any(
-            "\u4e00" <= char <= "\u9fff"
-            for char in metrics[name]["verbose_name"]
-        )
-        assert metrics[name]["d3format"] in approved_formats
+    assert {
+        name: (metrics[name]["verbose_name"], metrics[name]["d3format"])
+        for name in expected_metadata
+    } == expected_metadata

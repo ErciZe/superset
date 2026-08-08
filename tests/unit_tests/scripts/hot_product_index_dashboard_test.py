@@ -746,6 +746,15 @@ def test_virtual_datasets_fail_closed_on_incomplete_month_publication(
         "spu_previous_month_sales_level_sort_metric": (
             "MIN(spu_previous_month_sales_level_sort)"
         ),
+        "avg_daily_sales_qty_period": (
+            "SUM(sales_qty) / NULLIF(COUNT(DISTINCT sales_date), 0)"
+        ),
+        "return_goods_qty_total": "SUM(return_goods_qty)",
+        "order_qty_total": "SUM(order_qty)",
+        "in_sale_sku_count_period": "COUNT(DISTINCT sku)",
+        "in_sale_spu_count_period": "COUNT(DISTINCT spu)",
+        "sales_amount_usd_wan": "SUM(sales_amount_usd) / 10000.0",
+        "gross_profit_usd_wan": "SUM(gross_profit_usd) / 10000.0",
     }
     monthly_metrics = {
         metric["metric_name"]: metric["expression"] for metric in monthly["metrics"]
