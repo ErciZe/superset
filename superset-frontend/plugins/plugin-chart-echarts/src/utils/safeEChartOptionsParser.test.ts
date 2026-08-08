@@ -227,6 +227,34 @@ test('safeParseEChartOptions returns data on success', () => {
   expect(result).toEqual({ title: { text: 'Test' } });
 });
 
+test('safeParseEChartOptions preserves a static legend selected map', () => {
+  const result = safeParseEChartOptions(`{
+    legend: {
+      selected: {
+        '爆品指数': true,
+        '销量': false,
+        '销售额': true
+      }
+    }
+  }`);
+
+  expect(result.legend).toEqual({
+    selected: {
+      爆品指数: true,
+      销量: false,
+      销售额: true,
+    },
+  });
+});
+
+test('safeParseEChartOptions rejects dynamic legend selected values', () => {
+  expect(() =>
+    safeParseEChartOptions(`{
+      legend: { selected: { sales: () => true } }
+    }`),
+  ).toThrow(EChartOptionsParseError);
+});
+
 test('parseEChartOptions handles complex real-world EChart options', () => {
   const input = `{
     title: {

@@ -168,6 +168,7 @@ export default function transformProps(
     showLabelsThreshold,
     sliceId,
     showTotal,
+    totalLabel,
     roseType,
     thresholdForOther,
   }: EchartsPieFormData = {
@@ -474,7 +475,9 @@ export default function transformProps(
           type: 'text',
           ...getTotalValuePadding({ chartPadding, donut, width, height }),
           style: {
-            text: t('Total: %s', numberFormatter(totalValue)),
+            text: totalLabel
+              ? `${totalLabel}\n${numberFormatter(totalValue)}`
+              : t('Total: %s', numberFormatter(totalValue)),
             fontSize: 16,
             fontWeight: 'bold',
             fill: theme.colorText,

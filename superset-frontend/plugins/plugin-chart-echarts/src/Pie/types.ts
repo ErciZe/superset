@@ -46,6 +46,7 @@ export type EchartsPieFormData = QueryFormData &
     numberFormat: string;
     dateFormat: string;
     showLabelsThreshold: number;
+    totalLabel?: string;
     roseType: 'radius' | 'area' | null;
     thresholdForOther: number;
   };
@@ -82,6 +83,7 @@ export const DEFAULT_FORM_DATA: EchartsPieFormData = {
   showLabelsThreshold: 5,
   dateFormat: 'smart_date',
   roseType: null,
+  totalLabel: '',
   thresholdForOther: 0,
 };
 

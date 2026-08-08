@@ -243,6 +243,7 @@ export const legendSchema = z.object({
   pageIconInactiveColor: colorSchema.optional(),
   pageIconSize: z.union([z.number(), z.array(z.number())]).optional(),
   pageTextStyle: textStyleSchema.optional(),
+  selected: z.record(z.string(), z.boolean()).optional(),
 });
 
 // =============================================================================

@@ -227,6 +227,38 @@ test('should transform chart props for viz with showQueryIdentifiers=false', () 
   ]);
 });
 
+test('custom ECharts options set the initial mixed-timeseries legend state', () => {
+  const chartProps = createEchartsTimeseriesTestChartProps<
+    EchartsMixedTimeseriesFormData,
+    EchartsMixedTimeseriesProps
+  >({
+    ...MIXED_TIMESERIES_CHART_PROPS_DEFAULTS,
+    defaultQueriesData: queriesData,
+    formData: {
+      ...formData,
+      showLegend: true,
+      echartOptions: `{
+        legend: {
+          selected: {
+            '爆品指数': true,
+            '销量': false,
+            '销售额': true
+          }
+        }
+      }`,
+    },
+  });
+
+  const legend = transformProps(chartProps).echartOptions.legend as {
+    selected?: Record<string, boolean>;
+  };
+  expect(legend.selected).toEqual({
+    爆品指数: true,
+    销量: false,
+    销售额: true,
+  });
+});
+
 test('should transform chart props for viz with showQueryIdentifiers=true', () => {
   const chartProps = createEchartsTimeseriesTestChartProps<
     EchartsMixedTimeseriesFormData,
