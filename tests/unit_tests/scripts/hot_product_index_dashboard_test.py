@@ -504,7 +504,8 @@ def test_detail_charts_preserve_approved_fields_pagination_and_sorting(
         assert params["server_pagination"] is True
         assert params["server_page_length"] == 50
         assert params["show_totals"] is True
-        assert params["include_search"] is True
+        assert params["column_view_schemes_enabled"] is False
+        assert params["include_search"] is False
         assert params["allow_rearrange_columns"] is True
         assert params["emit_filter"] is False
         assert params["row_limit"] == 100000
