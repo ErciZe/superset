@@ -66,8 +66,8 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
     assets = read_bundle(first)
     assert assets["metadata.yaml"] == {"type": "assets", "version": "1.0.0"}
     assert not any(path.startswith("databases/") for path in assets)
-    assert sum(path.startswith("datasets/") for path in assets) == 5
-    assert sum(path.startswith("charts/") for path in assets) == 15
+    assert sum(path.startswith("datasets/") for path in assets) == 6
+    assert sum(path.startswith("charts/") for path in assets) == 24
     assert sum(path.startswith("dashboards/") for path in assets) == 2
 
     datasets = assets_by_key(assets, "datasets", "table_name")
@@ -79,6 +79,7 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
         "爆品指数-数据状态",
         "爆品指数-SPU月度经营明细",
         "爆品指数-SKU月度经营明细",
+        "爆品指数-SPU销量排行榜",
     }
     assert set(dashboards) == {
         "拉杆箱在售产品爆品指数看板",
@@ -89,7 +90,7 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
         asset["uuid"]
         for asset in [*datasets.values(), *charts.values(), *dashboards.values()]
     ]
-    assert len(uuids) == len(set(uuids)) == 22
+    assert len(uuids) == len(set(uuids)) == 32
     assert all(str(UUID(value)) == value for value in uuids)
     assert datasets["爆品指数-日明细"]["uuid"] == (
         "ea2025d6-91ac-502f-9238-9f21ca62b761"
@@ -126,10 +127,22 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
             assert (
                 query_context["queries"][0]["columns"] == chart["params"]["all_columns"]
             )
-        else:
+        elif chart["viz_type"] == "ag-grid-table-scheme":
             assert chart["viz_type"] == "ag-grid-table-scheme"
             assert query_context["queries"][0]["columns"] == chart["params"]["groupby"]
             assert query_context["queries"][0]["metrics"] == chart["params"]["metrics"]
+        elif chart["viz_type"] == "mixed_timeseries":
+            assert len(query_context["queries"]) == 2
+            assert query_context["queries"][0]["metrics"] == chart["params"]["metrics"]
+            assert (
+                query_context["queries"][1]["metrics"] == chart["params"]["metrics_b"]
+            )
+        elif chart["viz_type"] == "echarts_timeseries_line":
+            assert query_context["queries"][0]["metrics"] == chart["params"]["metrics"]
+        elif chart["viz_type"] == "pie":
+            assert query_context["queries"][0]["metrics"] == [chart["params"]["metric"]]
+        else:
+            raise AssertionError(f"unhandled chart viz type: {chart['viz_type']}")
         assert query_context["result_format"] == "json"
         assert query_context["result_type"] == "full"
 

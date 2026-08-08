@@ -18,8 +18,9 @@ from __future__ import annotations
 
 import json  # noqa: TID251
 import re
+from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from zipfile import ZipFile
 
 from scripts.hot_product_index_dashboard import (
@@ -66,9 +67,7 @@ def test_daily_dataset_exposes_trend_and_color_semantics(tmp_path: Path) -> None
     assert columns["yw"]["type"] == "STRING"
     assert columns["color_code"]["verbose_name"] == "颜色代码"
     assert columns["color_code"]["type"] == "STRING"
-    assert "DATE_SUB(d.sales_date, INTERVAL WEEKDAY(d.sales_date) DAY)" in daily[
-        "sql"
-    ]
+    assert "DATE_SUB(d.sales_date, INTERVAL WEEKDAY(d.sales_date) DAY)" in daily["sql"]
     assert "DATE_FORMAT(d.sales_date, '%xW%v') AS yw" in daily["sql"]
     assert (
         "NULLIF(TRIM(SUBSTRING_INDEX(d.color, '-', -1)), '') AS color_code"
@@ -210,8 +209,7 @@ def test_remaining_charts_preflight_uses_exact_two_stage_cardinality_gate() -> N
     assert "COUNT(*) AS distinct_count" in cardinality_result_set
     assert (
         "CASE WHEN COALESCE(h.distinct_count, 0) <= 1000 THEN 1 ELSE 0 END "
-        "AS within_limit"
-        in cardinality_result_set
+        "AS within_limit" in cardinality_result_set
     )
     assert not re.search(
         r"COUNT\s*\(\s*DISTINCT\s+(?:spu|sku|color_code)\b",
@@ -440,12 +438,14 @@ def test_remaining_leaderboard_contract_and_conditional_formatting(
             "useGradient": False,
         },
     ]
-    assert params["column_config"]["previous_month_sales_amount_usd"][
-        "d3NumberFormat"
-    ] == "$,.1~f"
-    assert params["column_config"]["current_month_sales_amount_usd"][
-        "d3NumberFormat"
-    ] == "$,.1~f"
+    assert (
+        params["column_config"]["previous_month_sales_amount_usd"]["d3NumberFormat"]
+        == "$,.1~f"
+    )
+    assert (
+        params["column_config"]["current_month_sales_amount_usd"]["d3NumberFormat"]
+        == "$,.1~f"
+    )
     assert params["column_config"]["rating_progress"]["d3NumberFormat"] == ".1~%"
     assert params["column_config"]["time_progress"]["d3NumberFormat"] == ".1~%"
     assert all(
@@ -454,3 +454,110 @@ def test_remaining_leaderboard_contract_and_conditional_formatting(
         and rule.get("targetValueRight", 0) >= 0
         for rule in params["conditional_formatting"]
     )
+
+
+def test_remaining_query_contexts_load_chart_data_schema_and_remap_datasource(
+    tmp_path: Path,
+) -> None:
+    """Every new context survives schema loading and dashboard import remapping."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    new_chart_names = (
+        "指标整体趋势-天",
+        "指标整体趋势-周",
+        "指标整体趋势-月",
+        "SPU销售比例",
+        "SKU销售比例",
+        "SPU销量排行榜",
+        "颜色销售比例-周",
+        "颜色销售比例-月",
+        "颜色销量分布",
+    )
+
+    from tests.integration_tests.test_app import app
+
+    with app.app_context():
+        from superset.charts.schemas import ChartDataQueryContextSchema
+        from superset.commands.utils import update_chart_config_dataset
+
+        class CapturingQueryContextFactory:
+            def __init__(self) -> None:
+                self.payloads: list[dict[str, Any]] = []
+
+            def create(self, **kwargs: Any) -> dict[str, Any]:
+                self.payloads.append(kwargs)
+                return kwargs
+
+        for chart_name in new_chart_names:
+            chart = charts[chart_name]
+            context = json.loads(chart["query_context"])
+            assert context["datasource"] == {"id": 0, "type": "table"}
+            assert context["form_data"]["datasource"] == "0__table"
+
+            factory = CapturingQueryContextFactory()
+            schema = ChartDataQueryContextSchema()
+            schema.query_context_factory = cast(Any, factory)
+            loaded = schema.load(context)
+            assert loaded == factory.payloads[0]
+            assert loaded["datasource"] == {"id": 0, "type": "table"}
+            assert loaded["form_data"]["datasource"] == "0__table"
+            assert loaded["queries"]
+            for query in loaded["queries"]:
+                assert {
+                    "columns",
+                    "metrics",
+                    "post_processing",
+                    "row_limit",
+                    "row_offset",
+                } <= query.keys()
+                assert "datasource" not in query
+
+            remapped = update_chart_config_dataset(
+                deepcopy(chart),
+                {
+                    "datasource_id": 731,
+                    "datasource_type": "table",
+                    "datasource_name": "爆品指数-日明细",
+                },
+            )
+            remapped_context = json.loads(remapped["query_context"])
+            assert remapped["params"]["datasource"] == "731__table"
+            assert remapped_context["datasource"] == {"id": 731, "type": "table"}
+            assert remapped_context["form_data"]["datasource"] == "731__table"
+            assert all(
+                "datasource" not in query for query in remapped_context["queries"]
+            )
+
+
+def test_leaderboard_query_context_preserves_three_server_pagination_queries(
+    tmp_path: Path,
+) -> None:
+    """The AG Grid context keeps page, row-count, and totals requests distinct."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    leaderboard = assets_by_key(assets, "charts", "slice_name")["SPU销量排行榜"]
+    params = leaderboard["params"]
+    queries = json.loads(leaderboard["query_context"])["queries"]
+
+    assert len(queries) == 3
+    page, row_count, totals = queries
+    assert page["columns"] == params["groupby"]
+    assert page["metrics"] == params["metrics"]
+    assert page["row_limit"] == 50
+    assert page["row_offset"] == 0
+    assert page["orderby"] == params["orderby"]
+    assert page["time_range"] == "No filter"
+
+    assert row_count["is_rowcount"] is True
+    assert row_count["row_limit"] == 100000
+    assert row_count["row_offset"] == 0
+    assert row_count["columns"] == params["groupby"]
+    assert row_count["metrics"] == params["metrics"]
+    assert row_count["orderby"] == params["orderby"]
+
+    assert totals["columns"] == []
+    assert totals["metrics"] == params["metrics"]
+    assert totals["row_limit"] == 0
+    assert totals["row_offset"] == 0
+    assert "orderby" not in totals
+    assert "order_desc" not in totals
+    assert all("datasource" not in query for query in queries)

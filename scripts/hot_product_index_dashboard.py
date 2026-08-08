@@ -1163,8 +1163,7 @@ def _leaderboard_columns() -> list[Asset]:
         ("coverage_complete", "TINYINT", False),
     )
     columns = [
-        _column(name, type_, is_dttm=is_dttm)
-        for name, type_, is_dttm in output_columns
+        _column(name, type_, is_dttm=is_dttm) for name, type_, is_dttm in output_columns
     ]
     visible_names = {name for name, _, _ in output_columns}
     source_types = dict(MONTHLY_SOURCE_COLUMNS)
@@ -2367,9 +2366,7 @@ def _leaderboard_column_config() -> Asset:
     for name in LEADERBOARD_METRICS:
         config[name] = {
             "columnWidth": 132,
-            "d3NumberFormat": (
-                "$,.1~f" if "amount" in name else ".1~%"
-            ),
+            "d3NumberFormat": ("$,.1~f" if "amount" in name else ".1~%"),
             "horizontalAlign": "right",
             "nullValue": "-",
             "truncateLongCells": True,
@@ -2572,15 +2569,15 @@ def _charts() -> AssetBundle:
         ("month", "颜色销售比例-月", "chart_color_trend_month"),
     )
     for grain, slice_name, uuid_key in color_trend_charts:
-        charts[
-            f"charts/Hot_Product_Index_Color_Sales_Ratio_{grain.title()}.yaml"
-        ] = _chart(
-            slice_name=slice_name,
-            uuid=UUIDS[uuid_key],
-            viz_type="echarts_timeseries_line",
-            dataset_uuid=UUIDS["dataset_daily"],
-            params=_color_trend_params(grain),
-            description=f"按{TREND_GRAIN_LABELS[grain]}粒度展示颜色代码销量趋势。",
+        charts[f"charts/Hot_Product_Index_Color_Sales_Ratio_{grain.title()}.yaml"] = (
+            _chart(
+                slice_name=slice_name,
+                uuid=UUIDS[uuid_key],
+                viz_type="echarts_timeseries_line",
+                dataset_uuid=UUIDS["dataset_daily"],
+                params=_color_trend_params(grain),
+                description=f"按{TREND_GRAIN_LABELS[grain]}粒度展示颜色代码销量趋势。",
+            )
         )
     charts["charts/Hot_Product_Index_Color_Sales_Distribution.yaml"] = _chart(
         slice_name="颜色销量分布",
@@ -3325,9 +3322,9 @@ def validate_assets(  # noqa: C901
         isinstance(node, dict) and node.get("type") == "CHART"
         for node in main["position"].values()
     )
-    if main_chart_count not in {14, 23}:
+    if main_chart_count != 14:
         raise ValueError(
-            "main dashboard scope must contain the approved overview and detail charts"
+            "main dashboard scope must contain exactly 14 approved chart nodes"
         )
     filters = main["metadata"]["native_filter_configuration"]
     if len(filters) != 13:
