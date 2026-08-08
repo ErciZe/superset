@@ -26,6 +26,7 @@ import pytest
 
 from scripts.hot_product_index_dashboard import (
     DEFAULT_DATABASE_UUID,
+    UUIDS,
     validate_assets,
     write_bundle,
 )
@@ -865,6 +866,15 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
         for chart in main_charts
         if chart["viz_type"] == "big_number_total"
     )
+    assert (
+        not {
+            "国家维度",
+            "SPU开发经理",
+            "型号维度",
+            "渠道维度",
+        }
+        & charts.keys()
+    )
 
     position = main["position"]
     assert position["GRID_ID"]["children"][-4:] == [
@@ -991,13 +1001,40 @@ def test_detail_css_is_scoped_to_table_components_and_tabs(tmp_path: Path) -> No
 
 
 def test_main_dashboard_rejects_missing_detail_chart_uuid(tmp_path: Path) -> None:
-    """The 14-chart invariant fails when a detail node points to no chart asset."""
+    """The 23-chart invariant fails when a detail node points to no chart asset."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     assets["dashboards/Hot_Product_Index.yaml"]["position"]["CHART-SPU-DETAIL"]["meta"][
         "uuid"
     ] = "00000000-0000-0000-0000-000000000000"
 
     with pytest.raises(ValueError, match="unknown chart UUID"):
+        validate_assets(assets, DEFAULT_DATABASE_UUID)
+
+
+def test_validate_assets_requires_each_new_chart_node_once(tmp_path: Path) -> None:
+    """A duplicate node UUID cannot satisfy the nine-chart main-dashboard contract."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    position = assets["dashboards/Hot_Product_Index.yaml"]["position"]
+    position["CHART-TREND-DAY"]["meta"]["uuid"] = UUIDS["chart_trend_week"]
+
+    with pytest.raises(ValueError, match="chart_trend_day"):
+        validate_assets(assets, DEFAULT_DATABASE_UUID)
+
+
+def test_validate_assets_requires_month_scope_to_exclude_only_leaderboard(
+    tmp_path: Path,
+) -> None:
+    """The month filter must cover every main chart except the leaderboard."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    filters = assets["dashboards/Hot_Product_Index.yaml"]["metadata"][
+        "native_filter_configuration"
+    ]
+    month_filter = next(
+        item for item in filters if item["filterType"] == "filter_month_range"
+    )
+    month_filter["chartsInScope"].remove(UUIDS["chart_trend_day"])
+
+    with pytest.raises(ValueError, match="month-range filter scope"):
         validate_assets(assets, DEFAULT_DATABASE_UUID)
 
 

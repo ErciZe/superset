@@ -2179,6 +2179,27 @@ def _guide_chart_params() -> Asset:
     年月筛选采用左闭右开范围。当前月按全局数据水位截断；在售 SPU 数和在售
     SKU 数取所选范围结束月份。
   </p>
+  <h2>趋势指标</h2>
+  <p>
+    趋势图包含 11 项指标：爆品指数、销量、日均销量、销售额、退货量、订单量、
+    在售 SKU 数、在售 SPU 数、退货率、毛利率和毛利润。天按自然日，周按周一开始的
+    ISO 周，月按自然月；三种粒度均只计算所选范围内的记录。
+  </p>
+  <h2>SPU 销量排行榜</h2>
+  <p>
+    排行榜以全局数据水位所在月份作为水位月 MTD，并与上一完整月比较；两期统一使用
+    美元销售额。评级达标进度为本月销售额相对上月销售额的进度，时间达标进度再按水位
+    月已过天数折算；缺少完整月份或上月销售额为零时显示为未计算。
+  </p>
+  <h2>销量占比</h2>
+  <p>
+    SPU 和 SKU 环图按筛选后销量分别计算全量分类占比，中心显示总销量，不合并其他分类。
+  </p>
+  <h2>颜色口径</h2>
+  <p>
+    颜色趋势和分布使用颜色代码：颜色文本含连字符时取最后一个连字符后的文本，
+    不含连字符时保留原值；空颜色不生成分类。
+  </p>
   <h2>指标口径</h2>
   <ul>
     <li><strong>销量：</strong>所选期间销量合计。</li>
@@ -3655,7 +3676,8 @@ def validate_assets(  # noqa: C901
         raise ValueError("metadata.yaml must declare an assets v1 bundle")
     if (len(datasets), len(charts), len(dashboards)) != (6, 24, 2):
         raise ValueError(
-            "hot-product bundle must contain 6 datasets, 24 charts, and 2 dashboards"
+            "hot-product bundle must contain 6 datasets, 24 charts, and 2 dashboards "
+            "(9 KPI, 2 funnels, 1 status, 1 guide, 2 detail, and 9 analysis charts)"
         )
 
     identified_assets = [*datasets, *charts, *dashboards]
@@ -3705,8 +3727,34 @@ def validate_assets(  # noqa: C901
     )
     if main_chart_count != 23:
         raise ValueError(
-            "main dashboard scope must contain exactly 23 approved chart nodes"
+            "main dashboard scope must contain exactly 23 approved chart nodes "
+            "(9 KPI, 2 funnels, 1 status, 2 detail, and 9 analysis charts)"
         )
+    new_chart_keys = (
+        "chart_trend_day",
+        "chart_trend_week",
+        "chart_trend_month",
+        "chart_spu_share",
+        "chart_sku_share",
+        "chart_spu_leaderboard",
+        "chart_color_trend_week",
+        "chart_color_trend_month",
+        "chart_color_distribution",
+    )
+    main_chart_nodes = [
+        node
+        for node in main["position"].values()
+        if isinstance(node, dict) and node.get("type") == "CHART"
+    ]
+    main_chart_node_uuids = [str(node["meta"]["uuid"]) for node in main_chart_nodes]
+    for chart_key in new_chart_keys:
+        chart_uuid = UUIDS[chart_key]
+        if chart_uuid not in chart_uuids:
+            raise ValueError(f"new chart asset {chart_key} is missing")
+        if main_chart_node_uuids.count(chart_uuid) != 1:
+            raise ValueError(
+                f"main dashboard must contain exactly one {chart_key} chart node"
+            )
     filters = main["metadata"]["native_filter_configuration"]
     if len(filters) != 13:
         raise ValueError("main dashboard must contain exactly 13 native filters")
@@ -3717,6 +3765,23 @@ def validate_assets(  # noqa: C901
         raise ValueError("main dashboard must contain exactly one month-range filter")
     if month_filters[0]["defaultDataMask"]["filterState"]["value"] != "Current month":
         raise ValueError("month-range filter must default to Current month")
+    month_filter = month_filters[0]
+    month_scope = [str(uuid) for uuid in month_filter["chartsInScope"]]
+    leaderboard_uuid = UUIDS["chart_spu_leaderboard"]
+    expected_month_scope = set(main_chart_node_uuids) - {leaderboard_uuid}
+    if (
+        len(month_scope) != len(set(month_scope))
+        or set(month_scope) != expected_month_scope
+    ):
+        raise ValueError(
+            "month-range filter scope must exclude only the SPU leaderboard chart"
+        )
+    if UUIDS["dataset_spu_leaderboard"] in {
+        str(target["datasetUuid"]) for target in month_filter["targets"]
+    }:
+        raise ValueError(
+            "month-range filter must not target the SPU leaderboard dataset"
+        )
 
 
 def _json_bytes(asset: Asset) -> bytes:

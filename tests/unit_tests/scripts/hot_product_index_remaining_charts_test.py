@@ -402,6 +402,23 @@ def test_remaining_chart_identities_and_parameter_contract(tmp_path: Path) -> No
         "颜色销量分布": "e77069a0-1a40-583b-bae5-5ccba309c34b",
     }
     assert {name: charts[name]["uuid"] for name in expected} == expected
+    expected_paths = {
+        "charts/Hot_Product_Index_Trend_Day.yaml": "指标整体趋势-天",
+        "charts/Hot_Product_Index_Trend_Week.yaml": "指标整体趋势-周",
+        "charts/Hot_Product_Index_Trend_Month.yaml": "指标整体趋势-月",
+        "charts/Hot_Product_Index_SPU_Sales_Ratio.yaml": "SPU销售比例",
+        "charts/Hot_Product_Index_SKU_Sales_Ratio.yaml": "SKU销售比例",
+        "charts/Hot_Product_Index_SPU_Leaderboard.yaml": "SPU销量排行榜",
+        "charts/Hot_Product_Index_Color_Sales_Ratio_Week.yaml": "颜色销售比例-周",
+        "charts/Hot_Product_Index_Color_Sales_Ratio_Month.yaml": "颜色销售比例-月",
+        "charts/Hot_Product_Index_Color_Sales_Distribution.yaml": "颜色销量分布",
+    }
+    assert {
+        path: assets[path]["slice_name"] for path in expected_paths
+    } == expected_paths
+    assert {path: assets[path]["uuid"] for path in expected_paths} == {
+        path: expected[expected_name] for path, expected_name in expected_paths.items()
+    }
 
     selected = {
         "爆品指数": True,
@@ -622,6 +639,82 @@ def test_remaining_leaderboard_contract_and_conditional_formatting(
         and rule.get("targetValueRight", 0) >= 0
         for rule in params["conditional_formatting"]
     )
+
+
+def test_remaining_visible_numeric_fields_use_approved_formats(tmp_path: Path) -> None:
+    """Every new chart's visible number format stays within the one-decimal contract."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    allowed_formats = {",.0f", ",.1~f", "$,.1~f", ".1~%"}
+
+    for name in (
+        "指标整体趋势-天",
+        "指标整体趋势-周",
+        "指标整体趋势-月",
+    ):
+        params = charts[name]["params"]
+        assert params["y_axis_format"] in allowed_formats
+        assert params["y_axis_format_secondary"] in allowed_formats
+
+    for name in ("SPU销售比例", "SKU销售比例", "颜色销量分布"):
+        assert charts[name]["params"]["number_format"] in allowed_formats
+
+    for name in ("颜色销售比例-周", "颜色销售比例-月"):
+        assert charts[name]["params"]["y_axis_format"] in allowed_formats
+
+    leaderboard_config = charts["SPU销量排行榜"]["params"]["column_config"]
+    assert {
+        config["d3NumberFormat"]
+        for config in leaderboard_config.values()
+        if "d3NumberFormat" in config
+    } <= allowed_formats
+
+    leaderboard = assets_by_key(assets, "datasets", "table_name")[
+        "爆品指数-SPU销量排行榜"
+    ]
+    assert {metric["d3format"] for metric in leaderboard["metrics"]} <= allowed_formats
+
+
+def test_new_dataset_columns_have_chinese_verbose_names(tmp_path: Path) -> None:
+    """New datasets expose business labels rather than physical column names."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    for dataset in datasets.values():
+        for column in dataset["columns"]:
+            label = column["verbose_name"]
+            assert label
+            assert label != column["column_name"]
+            assert any("\u4e00" <= char <= "\u9fff" for char in label) or label in {
+                "SPU",
+                "SKU",
+            }
+
+
+def test_guide_describes_new_contracts_without_excluded_tabs_or_physical_fields(
+    tmp_path: Path,
+) -> None:
+    """The guide stays business-facing while documenting each approved chart family."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    template = charts["爆品指数说明"]["params"]["handlebarsTemplate"]
+
+    for phrase in (
+        "11 项指标",
+        "ISO 周",
+        "水位月 MTD",
+        "上一完整月",
+        "美元销售额",
+        "评级达标进度",
+        "SPU 和 SKU 环图",
+        "颜色代码",
+        "最后一个连字符",
+    ):
+        assert phrase in template
+    assert not any(
+        excluded in template
+        for excluded in {"国家维度", "SPU开发经理", "型号维度", "渠道维度"}
+    )
+    assert "product_level" not in template
 
 
 def test_remaining_query_contexts_load_chart_data_schema_and_remap_datasource(
