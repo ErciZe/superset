@@ -40,6 +40,15 @@ UUIDS: Final = {
     "dataset_spu_detail": "de2f3527-4fb7-51df-a1ef-067567348ee6",
     "dataset_sku_detail": "baea3900-76bf-5de9-8f10-aad2cc5e4b60",
     "dataset_spu_leaderboard": "2b5c33b2-2af6-5436-8b3d-e7292e5a64ae",
+    "chart_trend_day": "582d0460-8034-5a12-9f27-4de03b050cd4",
+    "chart_trend_week": "d3504cb6-8abf-5d22-807b-326948e6b79b",
+    "chart_trend_month": "8f36f17e-c95c-5076-9090-24652b22bb00",
+    "chart_spu_share": "a5fc632c-e635-5cf0-8270-f9a1d135c664",
+    "chart_sku_share": "7dbc534e-5c09-52e5-8dfa-0d42ddb44576",
+    "chart_spu_leaderboard": "d35f4185-5103-5e75-85c7-2cfa7ae83731",
+    "chart_color_trend_week": "90eed32b-5a2c-5cd5-8d6e-b38d98c720b8",
+    "chart_color_trend_month": "267d5d23-3a69-5f8a-aca0-15b0020c9599",
+    "chart_color_distribution": "e77069a0-1a40-583b-bae5-5ccba309c34b",
     "chart_kpi_sales_qty": "c5749623-be9e-5116-8c2f-de2b3e77e3a8",
     "chart_kpi_avg_daily_sales_qty": "aa2a07b5-35d7-581c-b8c2-c58918efd11f",
     "chart_kpi_sales_amount_usd": "b76f494e-2743-5215-b310-0d068ba44c8c",
@@ -305,6 +314,23 @@ KPI_COMPONENT_IDS: Final[tuple[str, ...]] = (
     "CHART-KPI-GROSS-PROFIT-USD",
     "CHART-KPI-GROSS-MARGIN",
     "CHART-KPI-RETURN-RATE",
+)
+
+TREND_PRIMARY_METRICS: Final[tuple[str, ...]] = (
+    "hot_product_index",
+    "sales_qty_total",
+    "avg_daily_sales_qty_period",
+    "return_goods_qty_total",
+    "order_qty_total",
+    "in_sale_sku_count_period",
+    "in_sale_spu_count_period",
+    "return_rate",
+    "gross_margin",
+)
+
+TREND_SECONDARY_METRICS: Final[tuple[str, ...]] = (
+    "sales_amount_usd_wan",
+    "gross_profit_usd_wan",
 )
 
 
@@ -621,13 +647,19 @@ anchor AS (
   SELECT data_through_date,
          DATE_TRUNC(data_through_date, 'month') AS watermark_month_start_date,
          DATE_FORMAT(data_through_date, '%Y-%m') AS current_ym,
-         DATE_FORMAT(DATE_SUB(DATE_TRUNC(data_through_date, 'month'), INTERVAL 1 MONTH), '%Y-%m') AS previous_ym
+         DATE_FORMAT(
+           DATE_SUB(
+             DATE_TRUNC(data_through_date, 'month'), INTERVAL 1 MONTH
+           ), '%Y-%m'
+         ) AS previous_ym
   FROM watermark
 ),
 daily_quality AS (
   SELECT
     COUNT(DISTINCT CASE WHEN d.ym = a.current_ym THEN d.sales_date END) AS current_days,
-    COUNT(DISTINCT CASE WHEN d.ym = a.previous_ym THEN d.sales_date END) AS previous_days
+    COUNT(DISTINCT CASE
+      WHEN d.ym = a.previous_ym THEN d.sales_date
+    END) AS previous_days
   FROM ads.ads_pdm_lx_hot_product_index_sku_d d CROSS JOIN anchor a
   WHERE d.ym IN (a.current_ym, a.previous_ym)
 ),
@@ -639,7 +671,9 @@ monthly_quality AS (
 quality AS (
   SELECT a.*,
     CASE WHEN q.current_days = DAY(a.data_through_date)
-      AND q.previous_days = DAY(LAST_DAY(DATE_SUB(a.watermark_month_start_date, INTERVAL 1 MONTH)))
+      AND q.previous_days = DAY(LAST_DAY(DATE_SUB(
+        a.watermark_month_start_date, INTERVAL 1 MONTH
+      )))
       AND m.monthly_months = 2 THEN 1 ELSE 0 END AS coverage_complete
   FROM anchor a CROSS JOIN daily_quality q CROSS JOIN monthly_quality m
 ),
@@ -1740,11 +1774,210 @@ def _table_query_context(params: Asset) -> str:
     )
 
 
+CHART_METRIC_LABELS: Final[dict[str, str]] = {
+    "hot_product_index": "爆品指数",
+    "sales_qty_total": "销量",
+    "avg_daily_sales_qty_period": "日均销量",
+    "return_goods_qty_total": "退货量",
+    "order_qty_total": "订单量",
+    "in_sale_sku_count_period": "在售SKU数",
+    "in_sale_spu_count_period": "在售SPU数",
+    "return_rate": "退货率",
+    "gross_margin": "毛利率",
+    "sales_amount_usd_wan": "销售额",
+    "gross_profit_usd_wan": "毛利润",
+}
+
+
+def _echarts_query(
+    *,
+    columns: Sequence[str],
+    metrics: Sequence[str],
+    series_columns: Sequence[str],
+    row_limit: int,
+    time_range: str,
+    series_limit: int = 0,
+    orderby: Sequence[Sequence[Any]] | None = None,
+    order_desc: bool = False,
+    post_processing: Sequence[Asset] = (),
+) -> Asset:
+    """Build a standard ECharts query object without datasource coupling."""
+    metric_names = list(metrics)
+    return {
+        "annotation_layers": [],
+        "applied_time_extras": {},
+        "columns": list(columns),
+        "custom_form_data": {},
+        "custom_params": {},
+        "extras": {"having": "", "where": ""},
+        "filters": [],
+        "group_others_when_limit_reached": False,
+        "metrics": metric_names,
+        "order_desc": order_desc,
+        "orderby": [list(item) for item in (orderby or [])],
+        "post_processing": list(post_processing),
+        "row_limit": row_limit,
+        "row_offset": 0,
+        "series_columns": list(series_columns),
+        "series_limit": series_limit,
+        "series_limit_metric": metric_names[0] if series_limit else None,
+        "time_offsets": [],
+        "time_range": time_range,
+        "url_params": {},
+    }
+
+
+def _echarts_envelope(params: Asset, queries: Sequence[Asset]) -> str:
+    """Wrap executable ECharts queries in Superset's remappable envelope."""
+    datasource = {"id": 0, "type": "table"}
+    form_data = {
+        **params,
+        "datasource": "0__table",
+        "force": False,
+        "result_format": "json",
+        "result_type": "full",
+    }
+    context = {
+        "datasource": datasource,
+        "force": False,
+        "form_data": form_data,
+        "queries": list(queries),
+        "result_format": "json",
+        "result_type": "full",
+    }
+    return json.dumps(
+        context, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    )
+
+
+def _pivot_post_processing(
+    x_axis: str, metrics: Sequence[str], series_columns: Sequence[str]
+) -> Asset:
+    """Build the ECharts pivot operation used by mixed and regular lines."""
+    return {
+        "operation": "pivot",
+        "options": {
+            "aggregates": {metric: {"operator": "mean"} for metric in metrics},
+            "columns": list(series_columns),
+            "drop_missing_columns": True,
+            "index": [x_axis],
+        },
+    }
+
+
+def _rename_post_processing(metrics: Sequence[str]) -> Asset:
+    """Rename metric levels to the approved Chinese labels before flattening."""
+    return {
+        "operation": "rename",
+        "options": {
+            "columns": {
+                metric: CHART_METRIC_LABELS.get(metric, metric) for metric in metrics
+            },
+            "inplace": True,
+            "level": 0,
+        },
+    }
+
+
+def _line_post_processing(
+    x_axis: str, metrics: Sequence[str], series_columns: Sequence[str]
+) -> list[Asset]:
+    """Return the executable pivot/rename/flatten pipeline for line charts."""
+    return [
+        _pivot_post_processing(x_axis, metrics, series_columns),
+        _rename_post_processing(metrics),
+        {"operation": "flatten"},
+    ]
+
+
+def _mixed_timeseries_query_context(params: Asset) -> str:
+    """Build both standard Mixed Timeseries query branches."""
+    x_axis = str(params["x_axis"])
+    time_range = str(params.get("time_range", "Current month"))
+    query_a = _echarts_query(
+        columns=[x_axis],
+        metrics=[str(metric) for metric in params["metrics"]],
+        series_columns=[str(column) for column in params.get("groupby", [])],
+        row_limit=int(params["row_limit"]),
+        series_limit=int(params.get("series_limit", 0)),
+        orderby=[[str(params["metrics"][0]), False]],
+        time_range=time_range,
+        post_processing=_line_post_processing(
+            x_axis,
+            [str(metric) for metric in params["metrics"]],
+            [str(column) for column in params.get("groupby", [])],
+        ),
+    )
+    query_b = _echarts_query(
+        columns=[x_axis],
+        metrics=[str(metric) for metric in params["metrics_b"]],
+        series_columns=[str(column) for column in params.get("groupby_b", [])],
+        row_limit=int(params["row_limit_b"]),
+        series_limit=int(params.get("series_limit_b", 0)),
+        orderby=[[str(params["metrics_b"][0]), False]],
+        time_range=time_range,
+        post_processing=_line_post_processing(
+            x_axis,
+            [str(metric) for metric in params["metrics_b"]],
+            [str(column) for column in params.get("groupby_b", [])],
+        ),
+    )
+    return _echarts_envelope(params, [query_a, query_b])
+
+
+def _timeseries_query_context(params: Asset) -> str:
+    """Build a standard ECharts color-series query context."""
+    x_axis = str(params["x_axis"])
+    groupby = [str(column) for column in params.get("groupby", [])]
+    metrics = [str(params["metrics"][0])]
+    query = _echarts_query(
+        columns=[x_axis, *groupby],
+        metrics=metrics,
+        series_columns=groupby,
+        row_limit=int(params["row_limit"]),
+        series_limit=int(params.get("series_limit", 0)),
+        orderby=[[metrics[0], False]],
+        time_range=str(params.get("time_range", "Current month")),
+        post_processing=_line_post_processing(x_axis, metrics, groupby),
+    )
+    return _echarts_envelope(params, [query])
+
+
+def _pie_query_context(params: Asset) -> str:
+    """Build the standard Pie query with descending metric contribution."""
+    groupby = [str(column) for column in params["groupby"]]
+    metric = str(params["metric"])
+    query = _echarts_query(
+        columns=groupby,
+        metrics=[metric],
+        series_columns=[],
+        row_limit=int(params["row_limit"]),
+        orderby=[[metric, False]],
+        time_range=str(params.get("time_range", "Current month")),
+        post_processing=[
+            {
+                "operation": "contribution",
+                "options": {
+                    "columns": [metric],
+                    "rename_columns": [f"{metric}__contribution"],
+                },
+            }
+        ],
+    )
+    return _echarts_envelope(params, [query])
+
+
 def _query_context(params: Asset) -> str:
     """Build a saved query context that the chart data endpoint can execute."""
     viz_type = str(params["viz_type"])
     if viz_type == "ag-grid-table-scheme":
         return _table_query_context(params)
+    if viz_type == "mixed_timeseries":
+        return _mixed_timeseries_query_context(params)
+    if viz_type == "echarts_timeseries_line":
+        return _timeseries_query_context(params)
+    if viz_type == "pie":
+        return _pie_query_context(params)
     if viz_type == "big_number_total":
         columns: list[str] = []
         metrics = [str(params["metric"])]
@@ -1992,6 +2225,235 @@ def _guide_chart_params() -> Asset:
     }
 
 
+TREND_X_AXES: Final[dict[str, str]] = {
+    "day": "sales_date",
+    "week": "yw",
+    "month": "ym",
+}
+TREND_GRAIN_LABELS: Final[dict[str, str]] = {"day": "天", "week": "周", "month": "月"}
+
+
+def _trend_params(grain: str) -> Asset:
+    """Build one metric trend form-data contract for a fixed time grain."""
+    try:
+        x_axis = TREND_X_AXES[grain]
+    except KeyError as ex:
+        raise ValueError(f"unsupported hot-product trend grain: {grain}") from ex
+    selected = {
+        "爆品指数": True,
+        "销量": False,
+        "日均销量": False,
+        "退货量": False,
+        "订单量": False,
+        "在售SKU数": False,
+        "在售SPU数": False,
+        "退货率": False,
+        "毛利率": False,
+        "销售额": True,
+        "毛利润": True,
+    }
+    return {
+        "adhoc_filters": [],
+        "color_scheme": "supersetColors",
+        "echart_options": json.dumps(
+            {"legend": {"selected": selected}}, ensure_ascii=False
+        ),
+        "groupby": [],
+        "groupby_b": [],
+        "metrics": list(TREND_PRIMARY_METRICS),
+        "metrics_b": list(TREND_SECONDARY_METRICS),
+        "order_desc": False,
+        "order_desc_b": False,
+        "row_limit": 100000,
+        "row_limit_b": 100000,
+        "series_limit": 0,
+        "series_limit_b": 0,
+        "seriesType": "line",
+        "seriesTypeB": "line",
+        "show_value": True,
+        "show_valueB": True,
+        "time_range": "Current month",
+        "viz_type": "mixed_timeseries",
+        "x_axis": x_axis,
+        "yAxisIndex": 0,
+        "yAxisIndexB": 1,
+        "yAxisTitleSecondary": "金额（万美元）",
+        "y_axis_format": ",.1~f",
+        "y_axis_format_secondary": ",.1~f",
+    }
+
+
+def _pie_params(groupby: str, *, legend_type: str) -> Asset:
+    """Build the shared complete-category Pie form-data contract."""
+    return {
+        "adhoc_filters": [],
+        "color_scheme": "supersetColors",
+        "donut": True,
+        "groupby": [groupby],
+        "innerRadius": 58,
+        "label_line": True,
+        "label_type": "key_percent",
+        "labels_outside": True,
+        "legendOrientation": "bottom",
+        "legendType": legend_type,
+        "metric": "sales_qty_total",
+        "number_format": ",.0f",
+        "outerRadius": 78,
+        "row_limit": 1000,
+        "show_labels": True,
+        "show_legend": True,
+        "show_total": True,
+        "total_label": "总销量",
+        "sort_by_metric": True,
+        "threshold_for_other": 0,
+        "time_range": "Current month",
+        "viz_type": "pie",
+    }
+
+
+def _color_trend_params(grain: str) -> Asset:
+    """Build one color-series trend form-data contract."""
+    try:
+        x_axis = TREND_X_AXES[grain]
+    except KeyError as ex:
+        raise ValueError(f"unsupported hot-product color trend grain: {grain}") from ex
+    if grain == "day":
+        raise ValueError("color trend supports only week or month grain")
+    return {
+        "adhoc_filters": [],
+        "color_scheme": "supersetColors",
+        "groupby": ["color_code"],
+        "metrics": ["sales_qty_total"],
+        "order_desc": False,
+        "row_limit": 100000,
+        "series_limit": 1000,
+        "series_limit_metric": "sales_qty_total",
+        "show_value": True,
+        "time_range": "Current month",
+        "viz_type": "echarts_timeseries_line",
+        "x_axis": x_axis,
+        "y_axis_format": ",.0f",
+    }
+
+
+LEADERBOARD_GROUPBY: Final[tuple[str, ...]] = (
+    "spu",
+    "spu_rating",
+    "final_rating",
+)
+LEADERBOARD_METRICS: Final[tuple[str, ...]] = (
+    "previous_month_sales_amount_usd",
+    "current_month_sales_amount_usd",
+    "rating_progress",
+    "time_progress",
+)
+LEADERBOARD_ORDERBY: Final[tuple[tuple[str, bool], ...]] = (
+    ("current_month_sales_amount_usd", False),
+    ("spu", True),
+    ("final_rating", True),
+)
+
+
+def _leaderboard_column_config() -> Asset:
+    """Build stable widths, null display and formats for leaderboard columns."""
+    config: Asset = {}
+    for name in LEADERBOARD_GROUPBY:
+        config[name] = {
+            "columnWidth": 120,
+            "horizontalAlign": "left",
+            "nullValue": "-",
+            "truncateLongCells": True,
+        }
+    for name in LEADERBOARD_METRICS:
+        config[name] = {
+            "columnWidth": 132,
+            "d3NumberFormat": (
+                "$,.1~f" if "amount" in name else ".1~%"
+            ),
+            "horizontalAlign": "right",
+            "nullValue": "-",
+            "truncateLongCells": True,
+        }
+    config["spu"]["pinned"] = "left"
+    return config
+
+
+def _leaderboard_conditional_formatting() -> list[Asset]:
+    """Return the five non-negative rating progress fills."""
+    return [
+        {
+            "column": "rating_progress",
+            "operator": "≤ x <",
+            "targetValueLeft": 0,
+            "targetValueRight": 0.2,
+            "colorScheme": "#FF0000",
+            "useGradient": False,
+        },
+        {
+            "column": "rating_progress",
+            "operator": "≤ x <",
+            "targetValueLeft": 0.2,
+            "targetValueRight": 0.4,
+            "colorScheme": "#EB8A3A",
+            "useGradient": False,
+        },
+        {
+            "column": "rating_progress",
+            "operator": "≤ x <",
+            "targetValueLeft": 0.4,
+            "targetValueRight": 0.6,
+            "colorScheme": "#FFC947",
+            "useGradient": False,
+        },
+        {
+            "column": "rating_progress",
+            "operator": "≤ x <",
+            "targetValueLeft": 0.6,
+            "targetValueRight": 0.8,
+            "colorScheme": "#00FF00",
+            "useGradient": False,
+        },
+        {
+            "column": "rating_progress",
+            "operator": "≥",
+            "targetValue": 0.8,
+            "colorScheme": "#0078FF",
+            "useGradient": False,
+        },
+    ]
+
+
+def _leaderboard_chart_params() -> Asset:
+    """Build the stable, server-paged SPU leaderboard table contract."""
+    groupby = list(LEADERBOARD_GROUPBY)
+    metrics = list(LEADERBOARD_METRICS)
+    orderby = [list(item) for item in LEADERBOARD_ORDERBY]
+    return {
+        "adhoc_filters": [],
+        "advanced_filter_enabled": False,
+        "allow_rearrange_columns": False,
+        "column_config": _leaderboard_column_config(),
+        "column_view_schemes_enabled": False,
+        "conditional_formatting": _leaderboard_conditional_formatting(),
+        "displayed_columns": [*groupby, *metrics],
+        "emit_filter": False,
+        "groupby": groupby,
+        "include_search": False,
+        "metrics": metrics,
+        "order_desc": False,
+        "orderby": orderby,
+        "query_mode": "aggregate",
+        "row_hierarchy_fields": [],
+        "row_limit": 100000,
+        "server_page_length": 50,
+        "server_pagination": True,
+        "server_pagination_default_orderby": orderby,
+        "show_totals": False,
+        "time_range": "No filter",
+        "viz_type": "ag-grid-table-scheme",
+    }
+
+
 def _charts() -> AssetBundle:
     """Build all overview and detail chart assets."""
     charts: AssetBundle = {}
@@ -2066,6 +2528,67 @@ def _charts() -> AssetBundle:
         dataset_uuid=UUIDS["dataset_sku_detail"],
         params=_detail_chart_params("sku"),
         description="按公司SKU、SKU、年月、产品等级、尺寸和颜色展示经营明细。",
+    )
+    trend_charts = (
+        ("day", "指标整体趋势-天", "chart_trend_day"),
+        ("week", "指标整体趋势-周", "chart_trend_week"),
+        ("month", "指标整体趋势-月", "chart_trend_month"),
+    )
+    for grain, slice_name, uuid_key in trend_charts:
+        charts[f"charts/Hot_Product_Index_Trend_{grain.title()}.yaml"] = _chart(
+            slice_name=slice_name,
+            uuid=UUIDS[uuid_key],
+            viz_type="mixed_timeseries",
+            dataset_uuid=UUIDS["dataset_daily"],
+            params=_trend_params(grain),
+            description=f"按{TREND_GRAIN_LABELS[grain]}粒度展示爆品指数与经营指标趋势。",
+        )
+    charts["charts/Hot_Product_Index_SPU_Sales_Ratio.yaml"] = _chart(
+        slice_name="SPU销售比例",
+        uuid=UUIDS["chart_spu_share"],
+        viz_type="pie",
+        dataset_uuid=UUIDS["dataset_daily"],
+        params=_pie_params("spu", legend_type="plain"),
+        description="按SPU展示所选范围销量比例。",
+    )
+    charts["charts/Hot_Product_Index_SKU_Sales_Ratio.yaml"] = _chart(
+        slice_name="SKU销售比例",
+        uuid=UUIDS["chart_sku_share"],
+        viz_type="pie",
+        dataset_uuid=UUIDS["dataset_daily"],
+        params=_pie_params("sku", legend_type="scroll"),
+        description="按SKU展示所选范围销量比例。",
+    )
+    charts["charts/Hot_Product_Index_SPU_Leaderboard.yaml"] = _chart(
+        slice_name="SPU销量排行榜",
+        uuid=UUIDS["chart_spu_leaderboard"],
+        viz_type="ag-grid-table-scheme",
+        dataset_uuid=UUIDS["dataset_spu_leaderboard"],
+        params=_leaderboard_chart_params(),
+        description="按本月销售额展示水位月SPU销量排行榜。",
+    )
+    color_trend_charts = (
+        ("week", "颜色销售比例-周", "chart_color_trend_week"),
+        ("month", "颜色销售比例-月", "chart_color_trend_month"),
+    )
+    for grain, slice_name, uuid_key in color_trend_charts:
+        charts[
+            f"charts/Hot_Product_Index_Color_Sales_Ratio_{grain.title()}.yaml"
+        ] = _chart(
+            slice_name=slice_name,
+            uuid=UUIDS[uuid_key],
+            viz_type="echarts_timeseries_line",
+            dataset_uuid=UUIDS["dataset_daily"],
+            params=_color_trend_params(grain),
+            description=f"按{TREND_GRAIN_LABELS[grain]}粒度展示颜色代码销量趋势。",
+        )
+    charts["charts/Hot_Product_Index_Color_Sales_Distribution.yaml"] = _chart(
+        slice_name="颜色销量分布",
+        uuid=UUIDS["chart_color_distribution"],
+        viz_type="pie",
+        dataset_uuid=UUIDS["dataset_daily"],
+        params=_pie_params("color_code", legend_type="plain"),
+        description="按颜色代码展示所选范围销量分布。",
     )
     return charts
 
@@ -2752,17 +3275,17 @@ def validate_assets(  # noqa: C901
     dashboards = _asset_family(assets, "dashboards/")
     if assets.get("metadata.yaml") != {"type": "assets", "version": ASSET_VERSION}:
         raise ValueError("metadata.yaml must declare an assets v1 bundle")
-    if (len(datasets), len(charts), len(dashboards)) != (6, 15, 2):
+    if (len(datasets), len(charts), len(dashboards)) != (6, 24, 2):
         raise ValueError(
-            "hot-product bundle must contain 6 datasets, 15 charts, and 2 dashboards"
+            "hot-product bundle must contain 6 datasets, 24 charts, and 2 dashboards"
         )
 
     identified_assets = [*datasets, *charts, *dashboards]
     asset_uuids = [str(asset["uuid"]) for asset in identified_assets]
     if len(asset_uuids) != len(set(asset_uuids)):
         raise ValueError("asset UUIDs must be unique")
-    if len(asset_uuids) != 23:
-        raise ValueError("hot-product bundle must contain 23 published asset UUIDs")
+    if len(asset_uuids) != 32:
+        raise ValueError("hot-product bundle must contain 32 published asset UUIDs")
     for asset_uuid in asset_uuids:
         UUID(asset_uuid)
 
@@ -2802,10 +3325,9 @@ def validate_assets(  # noqa: C901
         isinstance(node, dict) and node.get("type") == "CHART"
         for node in main["position"].values()
     )
-    if main_chart_count != 14:
+    if main_chart_count not in {14, 23}:
         raise ValueError(
-            "main dashboard scope is status, nine KPIs, two funnels, and "
-            "two detail tables"
+            "main dashboard scope must contain the approved overview and detail charts"
         )
     filters = main["metadata"]["native_filter_configuration"]
     if len(filters) != 13:
