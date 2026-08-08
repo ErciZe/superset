@@ -94,16 +94,38 @@ WHERE actual.column_name IS NULL;
 
 -- 2. Full eligible-history category cardinality; every value must be <= 1000.
 WITH eligible AS (
-  SELECT spu, sku,
+  SELECT ym, spu, sku,
          NULLIF(TRIM(SUBSTRING_INDEX(color, '-', -1)), '') AS color_code
   FROM ads.ads_pdm_lx_hot_product_index_sku_d
   WHERE is_eligible = 1
+),
+monthly_category_distinct AS (
+  SELECT ym, 'spu' AS dimension_name, spu AS dimension_value
+  FROM eligible
+  WHERE spu IS NOT NULL
+  GROUP BY ym, spu
+  UNION ALL
+  SELECT ym, 'sku', sku
+  FROM eligible
+  WHERE sku IS NOT NULL
+  GROUP BY ym, sku
+  UNION ALL
+  SELECT ym, 'color_code', color_code
+  FROM eligible
+  WHERE color_code IS NOT NULL
+  GROUP BY ym, color_code
+),
+history_category_distinct AS (
+  SELECT dimension_name, dimension_value
+  FROM monthly_category_distinct
+  GROUP BY dimension_name, dimension_value
 )
-SELECT 'spu' AS dimension_name, COUNT(DISTINCT spu) AS distinct_count FROM eligible WHERE spu IS NOT NULL
-UNION ALL
-SELECT 'sku', COUNT(DISTINCT sku) FROM eligible WHERE sku IS NOT NULL
-UNION ALL
-SELECT 'color_code', COUNT(DISTINCT color_code) FROM eligible WHERE color_code IS NOT NULL;
+SELECT
+  dimension_name,
+  COUNT(*) AS distinct_count,
+  CASE WHEN COUNT(*) <= 1000 THEN 1 ELSE 0 END AS within_limit
+FROM history_category_distinct
+GROUP BY dimension_name;
 
 -- 3. Watermark and current/previous month day coverage.
 WITH watermark AS (

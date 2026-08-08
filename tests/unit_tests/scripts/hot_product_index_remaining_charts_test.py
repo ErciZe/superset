@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import json  # noqa: TID251
+import re
 from pathlib import Path
 from typing import Any
 from zipfile import ZipFile
@@ -128,7 +129,11 @@ def test_spu_leaderboard_uses_watermark_anchored_two_period_contract(
     assert "spu_previous_month_sales_amount_cny" not in sql
     assert "SUM(m.sales_amount_usd)" in sql
     assert "GROUP BY m.spu, m.spu_previous_month_sales_level, m.sku_level" in sql
-    assert "DAY(a.data_through_date) / DAY(LAST_DAY(a.data_through_date))" in sql
+    assert "watermark_time_progress" not in sql
+    assert (
+        "NULLIF(DAY(q.data_through_date) / DAY(LAST_DAY(q.data_through_date)), 0)"
+        in sql
+    )
 
     columns = {column["column_name"]: column for column in leaderboard["columns"]}
     assert {
@@ -157,9 +162,49 @@ def test_remaining_charts_preflight_enumerates_all_source_columns() -> None:
     preflight = Path(
         "scripts/hot_product_index_remaining_charts_preflight.sql"
     ).read_text()
-    for table_name, source_columns in (
-        ("ads_pdm_lx_hot_product_index_sku_d", DAILY_SOURCE_COLUMNS),
-        ("ads_pdm_lx_hot_product_index_sku_m", MONTHLY_SOURCE_COLUMNS),
-    ):
-        assert table_name in preflight
-        assert all(f"'{column_name}'" in preflight for column_name, _ in source_columns)
+    sql_without_comments = re.sub(r"--[^\n]*(?:\n|$)", "", preflight)
+    first_result_set = sql_without_comments.split(";", maxsplit=1)[0]
+    pairs = re.findall(
+        r"(?:SELECT|UNION ALL SELECT)\s+'([^']+)'\s*"
+        r"(?:AS table_name,\s*|,\s*)'([^']+)'(?:\s+AS column_name)?",
+        first_result_set,
+        flags=re.IGNORECASE,
+    )
+    expected_pairs = [
+        (table_name, column_name)
+        for table_name, source_columns in (
+            ("ads_pdm_lx_hot_product_index_sku_d", DAILY_SOURCE_COLUMNS),
+            ("ads_pdm_lx_hot_product_index_sku_m", MONTHLY_SOURCE_COLUMNS),
+        )
+        for column_name, _ in source_columns
+    ]
+    assert pairs == expected_pairs
+    assert len(pairs) == len(set(pairs))
+
+
+def test_remaining_charts_preflight_uses_exact_two_stage_cardinality_gate() -> None:
+    preflight = Path(
+        "scripts/hot_product_index_remaining_charts_preflight.sql"
+    ).read_text()
+    sql_without_comments = re.sub(r"--[^\n]*(?:\n|$)", "", preflight)
+    result_sets = [
+        part.strip() for part in sql_without_comments.split(";") if part.strip()
+    ]
+    cardinality_result_set = result_sets[1]
+
+    assert "WITH eligible AS (" in cardinality_result_set
+    assert "monthly_category_distinct AS (" in cardinality_result_set
+    assert "history_category_distinct AS (" in cardinality_result_set
+    assert "GROUP BY ym, spu" in cardinality_result_set
+    assert "GROUP BY ym, sku" in cardinality_result_set
+    assert "GROUP BY ym, color_code" in cardinality_result_set
+    assert "GROUP BY dimension_name, dimension_value" in cardinality_result_set
+    assert "COUNT(*) AS distinct_count" in cardinality_result_set
+    assert "CASE WHEN COUNT(*) <= 1000 THEN 1 ELSE 0 END AS within_limit" in (
+        cardinality_result_set
+    )
+    assert not re.search(
+        r"COUNT\s*\(\s*DISTINCT\s+(?:spu|sku|color_code)\b",
+        cardinality_result_set,
+        flags=re.IGNORECASE,
+    )

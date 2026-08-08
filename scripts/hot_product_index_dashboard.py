@@ -638,8 +638,6 @@ monthly_quality AS (
 ),
 quality AS (
   SELECT a.*,
-    DAY(a.data_through_date) / DAY(LAST_DAY(a.data_through_date))
-      AS watermark_time_progress,
     CASE WHEN q.current_days = DAY(a.data_through_date)
       AND q.previous_days = DAY(LAST_DAY(DATE_SUB(a.watermark_month_start_date, INTERVAL 1 MONTH)))
       AND m.monthly_months = 2 THEN 1 ELSE 0 END AS coverage_complete
