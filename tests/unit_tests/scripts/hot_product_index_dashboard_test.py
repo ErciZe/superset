@@ -800,6 +800,33 @@ def test_virtual_datasets_fail_closed_on_incomplete_month_publication(
     }
 
 
+def test_daily_coverage_requires_every_effective_calendar_day(
+    tmp_path: Path,
+) -> None:
+    """A selected range with one missing day must fail the serving gate."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    daily_sql = assets_by_key(assets, "datasets", "table_name")["爆品指数-日明细"][
+        "sql"
+    ]
+    daily_quality_sql = daily_sql[
+        daily_sql.index("daily_quality AS (") : daily_sql.index("monthly_quality AS (")
+    ]
+    coverage_sql = daily_sql[
+        daily_sql.index("coverage AS (") : daily_sql.index("valid AS (")
+    ]
+    valid_sql = daily_sql[daily_sql.index("valid AS (") :]
+
+    assert "COUNT(DISTINCT d.sales_date) AS daily_calendar_day_count" in (
+        daily_quality_sql
+    )
+    assert "d.sales_date >= b.selected_start_date" in daily_quality_sql
+    assert "d.sales_date < b.effective_end_exclusive_date" in daily_quality_sql
+    assert "DATEDIFF(" in coverage_sql
+    assert "b.effective_end_exclusive_date" in coverage_sql
+    assert "AS expected_daily_day_count" in coverage_sql
+    assert "daily_calendar_day_count = expected_daily_day_count" in valid_sql
+
+
 def test_funnels_stop_when_any_selected_eligible_rating_is_missing(
     tmp_path: Path,
 ) -> None:

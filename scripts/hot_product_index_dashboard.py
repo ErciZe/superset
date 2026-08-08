@@ -402,17 +402,20 @@ bounds AS (
   SELECT
     CAST({{ time_filter.from_expr }} AS DATE) AS selected_start_date,
     CAST({{ time_filter.to_expr }} AS DATE) AS selected_end_exclusive_date,
-    w.global_data_through_date
+    w.global_data_through_date,
+    LEAST(
+      CAST({{ time_filter.to_expr }} AS DATE),
+      DATE_ADD(w.global_data_through_date, INTERVAL 1 DAY)
+    ) AS effective_end_exclusive_date
   FROM watermark w
 ),
 daily_quality AS (
   SELECT
     COUNT(DISTINCT d.ym) AS daily_month_count,
+    COUNT(DISTINCT d.sales_date) AS daily_calendar_day_count,
     COALESCE(SUM(
       CASE
         WHEN d.is_eligible = 1
-          AND d.sales_date >= b.selected_start_date
-          AND d.sales_date < b.selected_end_exclusive_date
           AND d.spu_previous_month_sales_level IS NULL
         THEN 1
         ELSE 0
@@ -422,6 +425,8 @@ daily_quality AS (
   CROSS JOIN bounds b
   WHERE d.ym >= DATE_FORMAT(b.selected_start_date, '%Y-%m')
     AND d.ym < DATE_FORMAT(b.selected_end_exclusive_date, '%Y-%m')
+    AND d.sales_date >= b.selected_start_date
+    AND d.sales_date < b.effective_end_exclusive_date
 ),
 monthly_quality AS (
   SELECT
@@ -442,13 +447,14 @@ monthly_quality AS (
 coverage AS (
   SELECT
     b.*,
-    LEAST(
-      b.selected_end_exclusive_date,
-      DATE_ADD(b.global_data_through_date, INTERVAL 1 DAY)
-    ) AS effective_end_exclusive_date,
     TIMESTAMPDIFF(MONTH, b.selected_start_date, b.selected_end_exclusive_date)
       AS expected_month_count,
+    DATEDIFF(
+      b.effective_end_exclusive_date,
+      b.selected_start_date
+    ) AS expected_daily_day_count,
     d.daily_month_count,
+    d.daily_calendar_day_count,
     m.monthly_month_count,
     d.daily_missing_rating_count,
     m.monthly_missing_rating_count
@@ -470,6 +476,7 @@ valid AS (
         AND DAY(selected_start_date) = 1
         AND DAY(selected_end_exclusive_date) = 1
         AND daily_month_count = expected_month_count
+        AND daily_calendar_day_count = expected_daily_day_count
         AND monthly_month_count = expected_month_count
         AND effective_end_exclusive_date > selected_start_date
       THEN 1
