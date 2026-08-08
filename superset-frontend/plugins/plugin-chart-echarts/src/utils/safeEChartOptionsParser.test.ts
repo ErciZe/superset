@@ -238,6 +238,10 @@ test('safeParseEChartOptions preserves a static legend selected map', () => {
     }
   }`);
 
+  expect(result).toBeDefined();
+  if (result === undefined) {
+    throw new Error('Expected parsed ECharts options');
+  }
   expect(result.legend).toEqual({
     selected: {
       爆品指数: true,
