@@ -1038,6 +1038,98 @@ def test_validate_assets_requires_month_scope_to_exclude_only_leaderboard(
         validate_assets(assets, DEFAULT_DATABASE_UUID)
 
 
+def test_validate_assets_rejects_guide_attached_to_wrong_chart(tmp_path: Path) -> None:
+    """The explanation dashboard must own the guide chart and no other chart."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    assets["dashboards/Hot_Product_Index_Guide.yaml"]["position"]["CHART-GUIDE"][
+        "meta"
+    ]["uuid"] = UUIDS["chart_status"]
+
+    with pytest.raises(ValueError, match="dashboard chart UUID"):
+        validate_assets(assets, DEFAULT_DATABASE_UUID)
+
+
+def test_validate_assets_rejects_orphan_guide_chart(tmp_path: Path) -> None:
+    """Every non-metadata position node must be reachable from ROOT_ID."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    guide_position = assets["dashboards/Hot_Product_Index_Guide.yaml"]["position"]
+    guide_position["GRID_ID"]["children"] = []
+
+    with pytest.raises(ValueError, match="position graph"):
+        validate_assets(assets, DEFAULT_DATABASE_UUID)
+
+
+def test_validate_assets_rejects_position_parent_child_mismatch(
+    tmp_path: Path,
+) -> None:
+    """Every position parent must list each child it claims to contain."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    position = assets["dashboards/Hot_Product_Index.yaml"]["position"]
+    position["GRID_ID"]["children"].remove("ROW-STATUS")
+
+    with pytest.raises(ValueError, match="children and parents"):
+        validate_assets(assets, DEFAULT_DATABASE_UUID)
+
+
+def test_validate_assets_rejects_disconnected_forbidden_tab(tmp_path: Path) -> None:
+    """Excluded country tabs cannot be smuggled in as disconnected layout nodes."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    position = assets["dashboards/Hot_Product_Index.yaml"]["position"]
+    position["TABS-COUNTRY"] = {
+        "children": [],
+        "id": "TABS-COUNTRY",
+        "meta": {},
+        "parents": ["ROOT_ID"],
+        "type": "TABS",
+    }
+
+    with pytest.raises(ValueError, match="approved Tabs"):
+        validate_assets(assets, DEFAULT_DATABASE_UUID)
+
+
+def test_validate_assets_rejects_hidden_approved_tab(tmp_path: Path) -> None:
+    """Approved tabs must remain visible and cannot hide excluded content."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    position = assets["dashboards/Hot_Product_Index.yaml"]["position"]
+    position["TAB-TREND-DAY"]["meta"]["hidden"] = True
+
+    with pytest.raises(ValueError, match="approved Tab"):
+        validate_assets(assets, DEFAULT_DATABASE_UUID)
+
+
+def test_validate_assets_rejects_leaderboard_dataset_month_target(
+    tmp_path: Path,
+) -> None:
+    """The leaderboard dataset must stay outside the month filter targets."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    filters = assets["dashboards/Hot_Product_Index.yaml"]["metadata"][
+        "native_filter_configuration"
+    ]
+    month_filter = next(
+        item for item in filters if item["filterType"] == "filter_month_range"
+    )
+    month_filter["targets"].append(
+        {
+            "column": {"name": "watermark_month_start_date"},
+            "datasetUuid": UUIDS["dataset_spu_leaderboard"],
+        }
+    )
+
+    with pytest.raises(ValueError, match="must not target the SPU leaderboard dataset"):
+        validate_assets(assets, DEFAULT_DATABASE_UUID)
+
+
+def test_validate_assets_reports_missing_main_dashboard(tmp_path: Path) -> None:
+    """A missing main-dashboard identity fails with an actionable error."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    assets["dashboards/Hot_Product_Index.yaml"]["uuid"] = (
+        "f0f5d4e1-14f4-4d84-9a1d-7d6b8f5c12f0"
+    )
+
+    with pytest.raises(ValueError, match="main dashboard"):
+        validate_assets(assets, DEFAULT_DATABASE_UUID)
+
+
 def test_funnels_keep_the_business_grade_order(tmp_path: Path) -> None:
     """Funnel geometry must follow Ps/S/A/B/C/- rather than metric magnitude."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))

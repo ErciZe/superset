@@ -3665,6 +3665,186 @@ def _asset_family(assets: AssetBundle, prefix: str) -> list[Asset]:
     return [asset for path, asset in assets.items() if path.startswith(prefix)]
 
 
+def _validate_approved_tabs(
+    position: Asset,
+    expected_tabs: dict[str, tuple[str, ...]],
+    dashboard_label: str,
+) -> None:
+    """Reject tabs outside the dashboard's explicitly approved layout."""
+    expected_containers = set(expected_tabs)
+    expected_children = {
+        child for children in expected_tabs.values() for child in children
+    }
+    actual_containers = {
+        key
+        for key, node in position.items()
+        if isinstance(node, dict) and node.get("type") == "TABS"
+    }
+    actual_children = {
+        key
+        for key, node in position.items()
+        if isinstance(node, dict) and node.get("type") == "TAB"
+    }
+    if actual_containers != expected_containers or actual_children != expected_children:
+        raise ValueError(
+            f"{dashboard_label} position contains only approved Tabs and Tab nodes"
+        )
+
+    for tabs_id, children in expected_tabs.items():
+        tabs_node = position[tabs_id]
+        if tabs_node.get("children") != list(children):
+            raise ValueError(
+                f"{dashboard_label} approved Tabs {tabs_id} must contain "
+                "its approved tabs"
+            )
+        if (
+            tabs_node.get("meta", {}).get("hidden") is True
+            or tabs_node.get("meta", {}).get("visible") is False
+        ):
+            raise ValueError(f"{dashboard_label} approved Tabs cannot be hidden")
+        for tab_id in children:
+            tab_node = position[tab_id]
+            if (
+                tab_node.get("meta", {}).get("hidden") is True
+                or tab_node.get("meta", {}).get("visible") is False
+            ):
+                raise ValueError(
+                    f"{dashboard_label} approved Tab {tab_id} cannot be hidden"
+                )
+
+
+def _validate_position_graph(  # noqa: C901
+    position: Asset, dashboard_label: str
+) -> list[str]:
+    """Validate a dashboard position graph and return its chart UUIDs."""
+    metadata_keys = {"DASHBOARD_VERSION_KEY", "HEADER_ID"}
+    if position.get("DASHBOARD_VERSION_KEY") != "v2":
+        raise ValueError(f"{dashboard_label} position graph metadata is invalid")
+    header = position.get("HEADER_ID")
+    if (
+        not isinstance(header, dict)
+        or header.get("id") != "HEADER_ID"
+        or header.get("type") != "HEADER"
+        or header.get("children", []) not in ([], None)
+        or header.get("parents", []) not in ([], None)
+    ):
+        raise ValueError(f"{dashboard_label} position graph header is invalid")
+    graph_nodes: dict[str, Asset] = {}
+    for key, node in position.items():
+        if key in metadata_keys:
+            continue
+        if not isinstance(node, dict):
+            raise ValueError(
+                f"{dashboard_label} position graph contains a non-node entry"
+            )
+        if node.get("id") != key:
+            raise ValueError(
+                f"{dashboard_label} position graph node IDs must match their keys"
+            )
+        graph_nodes[key] = node
+
+    root = graph_nodes.get("ROOT_ID")
+    if root is None or root.get("type") != "ROOT":
+        raise ValueError(f"{dashboard_label} position graph must define ROOT_ID")
+
+    for key, node in graph_nodes.items():
+        children = node.get("children")
+        if not isinstance(children, list) or len(children) != len(set(children)):
+            raise ValueError(
+                f"{dashboard_label} position graph children must be unique lists"
+            )
+        if key == "ROOT_ID":
+            parents = node.get("parents", [])
+            if parents not in ([], None):
+                raise ValueError(f"{dashboard_label} ROOT_ID must not have parents")
+            continue
+        parents = node.get("parents")
+        if not isinstance(parents, list) or not parents:
+            raise ValueError(
+                f"{dashboard_label} position graph nodes must have parents"
+            )
+        if parents[0] != "ROOT_ID" or len(parents) != len(set(parents)):
+            raise ValueError(
+                f"{dashboard_label} position graph parent paths are invalid"
+            )
+        for index, parent_id in enumerate(parents):
+            parent = graph_nodes.get(parent_id)
+            if parent is None:
+                raise ValueError(
+                    f"{dashboard_label} position graph references an unknown "
+                    f"parent {parent_id}"
+                )
+            expected_parent_path = parents[:index]
+            if parent_id == "ROOT_ID":
+                parent_path = parent.get("parents", [])
+            else:
+                parent_path = parent.get("parents")
+            if parent_path != expected_parent_path:
+                raise ValueError(
+                    f"{dashboard_label} position graph parent paths are inconsistent"
+                )
+        direct_parent = graph_nodes[parents[-1]]
+        if key not in direct_parent["children"]:
+            raise ValueError(
+                f"{dashboard_label} position graph children and parents disagree "
+                f"for {key}"
+            )
+
+        for child_id in children:
+            child = graph_nodes.get(child_id)
+            if child is None:
+                raise ValueError(
+                    f"{dashboard_label} position graph references an unknown "
+                    f"child {child_id}"
+                )
+            if child_id == "ROOT_ID":
+                raise ValueError(
+                    f"{dashboard_label} position graph cannot point to ROOT_ID"
+                )
+            child_parents = child.get("parents")
+            if (
+                not isinstance(child_parents, list)
+                or not child_parents
+                or child_parents[-1] != key
+            ):
+                raise ValueError(
+                    f"{dashboard_label} position graph children and parents disagree "
+                    f"for {key}"
+                )
+
+    reachable: set[str] = set()
+    visiting: set[str] = set()
+
+    def visit(node_id: str) -> None:
+        if node_id in visiting:
+            raise ValueError(f"{dashboard_label} position graph contains a cycle")
+        if node_id in reachable:
+            return
+        visiting.add(node_id)
+        reachable.add(node_id)
+        for child_id in graph_nodes[node_id]["children"]:
+            visit(child_id)
+        visiting.remove(node_id)
+
+    visit("ROOT_ID")
+    if reachable != set(graph_nodes):
+        disconnected = sorted(set(graph_nodes) - reachable)
+        raise ValueError(
+            f"{dashboard_label} position graph must be fully reachable from ROOT_ID: "
+            f"{disconnected}"
+        )
+
+    chart_uuids: list[str] = []
+    for node in graph_nodes.values():
+        if node.get("type") != "CHART":
+            continue
+        meta = node.get("meta")
+        if not isinstance(meta, dict) or not meta.get("uuid"):
+            raise ValueError(f"{dashboard_label} chart nodes must contain a UUID")
+        chart_uuids.append(str(meta["uuid"]))
+    return chart_uuids
+
+
 def validate_assets(  # noqa: C901
     assets: AssetBundle, database_uuid: str
 ) -> None:
@@ -3707,24 +3887,86 @@ def validate_assets(  # noqa: C901
             raise ValueError("chart query contexts must use the remappable datasource")
 
     chart_uuids = {str(chart["uuid"]) for chart in charts}
-    for dashboard in dashboards:
-        position_chart_uuids = {
-            str(node["meta"]["uuid"])
-            for node in dashboard["position"].values()
-            if isinstance(node, dict) and node.get("type") == "CHART"
-        }
-        if not position_chart_uuids <= chart_uuids:
-            raise ValueError("dashboard position references an unknown chart UUID")
+    dashboard_by_uuid = {str(dashboard["uuid"]): dashboard for dashboard in dashboards}
+    main = dashboard_by_uuid.get(UUIDS["dashboard_main"])
+    if main is None:
+        raise ValueError(
+            f"main dashboard with UUID {UUIDS['dashboard_main']} is missing "
+            "from the bundle"
+        )
+    guide = dashboard_by_uuid.get(UUIDS["dashboard_guide"])
+    if guide is None:
+        raise ValueError(
+            f"guide dashboard with UUID {UUIDS['dashboard_guide']} is missing "
+            "from the bundle"
+        )
+    if len(dashboard_by_uuid) != len(dashboards):
+        raise ValueError("dashboard UUIDs must be unique")
 
-    main = next(
-        dashboard
-        for dashboard in dashboards
-        if dashboard["uuid"] == UUIDS["dashboard_main"]
-    )
-    main_chart_count = sum(
-        isinstance(node, dict) and node.get("type") == "CHART"
-        for node in main["position"].values()
-    )
+    approved_tabs = {
+        UUIDS["dashboard_main"]: {
+            "TABS-DETAIL": ("TAB-SPU-DETAIL", "TAB-SKU-DETAIL"),
+            "TABS-TREND": (
+                "TAB-TREND-DAY",
+                "TAB-TREND-WEEK",
+                "TAB-TREND-MONTH",
+            ),
+            "TABS-COLOR-TREND": ("TAB-COLOR-WEEK", "TAB-COLOR-MONTH"),
+        },
+        UUIDS["dashboard_guide"]: {},
+    }
+    position_chart_uuids: dict[str, list[str]] = {}
+    for dashboard in dashboards:
+        dashboard_uuid = str(dashboard["uuid"])
+        expected_tabs = approved_tabs.get(dashboard_uuid)
+        if expected_tabs is None:
+            raise ValueError(f"dashboard UUID {dashboard_uuid} is not approved")
+        dashboard_label = f"dashboard {dashboard_uuid}"
+        _validate_approved_tabs(dashboard["position"], expected_tabs, dashboard_label)
+        chart_nodes = _validate_position_graph(dashboard["position"], dashboard_label)
+        if not set(chart_nodes) <= chart_uuids:
+            raise ValueError("dashboard position references an unknown chart UUID")
+        position_chart_uuids[dashboard_uuid] = chart_nodes
+
+    all_position_chart_uuids = [
+        chart_uuid
+        for chart_nodes in position_chart_uuids.values()
+        for chart_uuid in chart_nodes
+    ]
+    if (
+        len(all_position_chart_uuids) != len(chart_uuids)
+        or set(all_position_chart_uuids) != chart_uuids
+        or len(all_position_chart_uuids) != 24
+    ):
+        positioned_chart_uuids = set(all_position_chart_uuids)
+        missing_chart_keys = sorted(
+            key
+            for key, chart_uuid in UUIDS.items()
+            if key.startswith("chart_") and chart_uuid not in positioned_chart_uuids
+        )
+        raise ValueError(
+            "dashboard chart UUID positions must reference each of the 24 chart "
+            "UUIDs exactly once"
+            + (f"; missing {missing_chart_keys}" if missing_chart_keys else "")
+        )
+
+    main_chart_uuids = position_chart_uuids[UUIDS["dashboard_main"]]
+    guide_chart_uuids = position_chart_uuids[UUIDS["dashboard_guide"]]
+    expected_main_chart_uuids = chart_uuids - {UUIDS["chart_guide"]}
+    if (
+        len(main_chart_uuids) != 23
+        or set(main_chart_uuids) != expected_main_chart_uuids
+    ):
+        raise ValueError(
+            "main dashboard chart UUID position must contain exactly the 23 "
+            "business charts"
+        )
+    if guide_chart_uuids != [UUIDS["chart_guide"]]:
+        raise ValueError(
+            "guide dashboard chart UUID position must contain only the guide chart"
+        )
+
+    main_chart_count = len(main_chart_uuids)
     if main_chart_count != 23:
         raise ValueError(
             "main dashboard scope must contain exactly 23 approved chart nodes "
@@ -3741,12 +3983,7 @@ def validate_assets(  # noqa: C901
         "chart_color_trend_month",
         "chart_color_distribution",
     )
-    main_chart_nodes = [
-        node
-        for node in main["position"].values()
-        if isinstance(node, dict) and node.get("type") == "CHART"
-    ]
-    main_chart_node_uuids = [str(node["meta"]["uuid"]) for node in main_chart_nodes]
+    main_chart_node_uuids = main_chart_uuids
     for chart_key in new_chart_keys:
         chart_uuid = UUIDS[chart_key]
         if chart_uuid not in chart_uuids:
