@@ -158,10 +158,12 @@ STATUS_DISPLAY_COLUMNS: Final[tuple[tuple[str, str], ...]] = (
 
 COLUMN_VERBOSE_NAMES: Final = {
     "sales_date": "销售日期",
+    "week_start_date": "周一日期",
     "month_start_date": "月份开始日期",
     "sid": "店铺标识",
     "msku": "平台MSKU",
     "ym": "年月",
+    "yw": "年周",
     "sku": "SKU",
     "spu": "SPU",
     "company_sku": "公司SKU",
@@ -170,6 +172,7 @@ COLUMN_VERBOSE_NAMES: Final = {
     "country": "国家",
     "size": "尺寸",
     "color": "颜色",
+    "color_code": "颜色代码",
     "developer": "开发经理",
     "model": "型号",
     "sku_level": "SKU等级",
@@ -473,6 +476,14 @@ def _source_select_list(alias: str, columns: Sequence[tuple[str, str]]) -> list[
 def _daily_sql() -> str:
     """Build the eligible daily serving query with a left-closed month range."""
     selected = _source_select_list("d", DAILY_SOURCE_COLUMNS)
+    selected.extend(
+        (
+            "DATE_SUB(d.sales_date, INTERVAL WEEKDAY(d.sales_date) DAY) "
+            "AS week_start_date",
+            "DATE_FORMAT(d.sales_date, '%xW%v') AS yw",
+            "NULLIF(TRIM(SUBSTRING_INDEX(d.color, '-', -1)), '') AS color_code",
+        )
+    )
     selected.extend(f"v.{name}" for name, _ in COVERAGE_COLUMNS)
     select_sql = ",\n  ".join(selected)
     return (
@@ -1240,6 +1251,9 @@ def _datasets(database_uuid: str) -> AssetBundle:
     ]
     daily_columns.extend(
         [
+            _column("week_start_date", "DATE", is_dttm=True),
+            _column("yw", "STRING"),
+            _column("color_code", "STRING"),
             _column(
                 "spu_previous_month_sales_level_sort",
                 "BIGINT",
@@ -1335,6 +1349,55 @@ def _datasets(database_uuid: str) -> AssetBundle:
             "MIN(spu_previous_month_sales_level_sort)",
             ",.0f",
             "用于按 Ps、S、A、B、C、- 固定顺序排列漏斗。",
+        ),
+        _metric(
+            "avg_daily_sales_qty_period",
+            "日均销量",
+            "SUM(sales_qty) / NULLIF(COUNT(DISTINCT sales_date), 0)",
+            ",.1~f",
+            "时间桶销量除以时间桶内有效自然日数。",
+        ),
+        _metric(
+            "return_goods_qty_total",
+            "退货量",
+            "SUM(return_goods_qty)",
+            ",.0f",
+            "时间桶内退货数量。",
+        ),
+        _metric(
+            "order_qty_total",
+            "订单量",
+            "SUM(order_qty)",
+            ",.0f",
+            "时间桶内订单数量。",
+        ),
+        _metric(
+            "in_sale_sku_count_period",
+            "在售SKU数",
+            "COUNT(DISTINCT sku)",
+            ",.0f",
+            "时间桶内满足资格的SKU去重数。",
+        ),
+        _metric(
+            "in_sale_spu_count_period",
+            "在售SPU数",
+            "COUNT(DISTINCT spu)",
+            ",.0f",
+            "时间桶内满足资格的SPU去重数。",
+        ),
+        _metric(
+            "sales_amount_usd_wan",
+            "销售额",
+            "SUM(sales_amount_usd) / 10000.0",
+            ",.1~f",
+            "美元销售额按万美元显示，底层事实不降精度。",
+        ),
+        _metric(
+            "gross_profit_usd_wan",
+            "毛利润",
+            "SUM(gross_profit_usd) / 10000.0",
+            ",.1~f",
+            "美元毛利润按万美元显示，底层事实不降精度。",
         ),
     )
     monthly_metrics = (
