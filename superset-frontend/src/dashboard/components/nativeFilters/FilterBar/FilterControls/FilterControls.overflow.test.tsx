@@ -244,8 +244,10 @@ test('opt-in wide horizontal filter layout renders two rows without overflow tri
   try {
     renderHorizontal(filters, buildDataMaskSelected(filters), true);
 
-    await waitFor(() =>
-      expect(screen.getByTestId('horizontal-filter-grid')).toBeInTheDocument(),
+    const grid = await screen.findByTestId('horizontal-filter-grid');
+    expect(window.getComputedStyle(grid).gridAutoFlow).toBe('row');
+    expect(window.getComputedStyle(grid).gridTemplateColumns).toMatch(
+      /repeat\(\s*7,\s*max-content\s*\)/,
     );
     expect(
       screen.queryByTestId('dropdown-container-mock'),
@@ -256,6 +258,43 @@ test('opt-in wide horizontal filter layout renders two rows without overflow tri
       createMatchMediaResult(query, false),
     );
   }
+});
+
+test('switching from overflow to the wide layout clears overflow control styling', async () => {
+  const filters = [
+    createSelectNativeFilter('NATIVE_FILTER-1', 'country'),
+    createSelectNativeFilter('NATIVE_FILTER-2', 'region'),
+  ];
+  const mediaQuery = createMatchMediaResult('(min-width: 1440px)', false);
+  const matchMedia = window.matchMedia as jest.MockedFunction<
+    typeof window.matchMedia
+  >;
+  matchMedia.mockImplementation(query =>
+    query === '(min-width: 1440px)'
+      ? mediaQuery
+      : createMatchMediaResult(query, false),
+  );
+
+  renderHorizontal(filters, buildDataMaskSelected(filters), true);
+  await waitFor(() => expect(callbackRef.current).toBeTruthy());
+  fireOverflow(
+    filters.map(filter => filter.id),
+    [],
+  );
+
+  const changeListener = (
+    mediaQuery.addEventListener as jest.Mock
+  ).mock.calls.at(-1)?.[1] as (event: MediaQueryListEvent) => void;
+  Object.defineProperty(mediaQuery, 'matches', { value: true });
+  act(() => {
+    changeListener({ matches: true } as MediaQueryListEvent);
+  });
+
+  const grid = await screen.findByTestId('horizontal-filter-grid');
+  expect(grid).toBeInTheDocument();
+  expect(document.querySelectorAll('.ant-form-item-horizontal')).toHaveLength(
+    filters.length,
+  );
 });
 
 test('opt-in layout keeps the overflow dropdown below the wide viewport breakpoint', async () => {

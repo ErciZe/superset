@@ -146,10 +146,14 @@ const ChartCustomizationContent = styled.div`
   gap: ${({ theme }) => theme.sizeUnit * 2}px;
 `;
 
-const HorizontalFilterGrid = styled.div`
+const HorizontalFilterGrid = styled.div<{ columnCount: number }>`
   display: grid;
-  grid-auto-flow: column;
+  grid-auto-flow: row;
   grid-auto-columns: max-content;
+  grid-template-columns: repeat(
+    ${({ columnCount }) => columnCount},
+    max-content
+  );
   grid-template-rows: repeat(2, max-content);
   align-items: center;
   gap: ${({ theme }) => `${theme.sizeUnit * 2}px ${theme.sizeUnit * 4}px`};
@@ -636,7 +640,10 @@ const FilterControls: FC<FilterControlsProps> = ({
         `}
       >
         {showTwoRowLayout ? (
-          <HorizontalFilterGrid data-test="horizontal-filter-grid">
+          <HorizontalFilterGrid
+            columnCount={Math.max(1, Math.ceil(items.length / 2))}
+            data-test="horizontal-filter-grid"
+          >
             {items.map(item => (
               <Fragment key={item.id}>{item.element}</Fragment>
             ))}
@@ -730,6 +737,10 @@ const FilterControls: FC<FilterControlsProps> = ({
   );
 
   const overflowedByIndex = useMemo(() => {
+    if (showTwoRowLayout) {
+      return filtersWithValues.map(() => false);
+    }
+
     const filtersOutOfScopeIds = new Set(filtersOutOfScope.map(({ id }) => id));
     const overflowedFiltersInScopeIds = new Set(
       overflowedFiltersInScope.map(({ id }) => id),
@@ -747,13 +758,24 @@ const FilterControls: FC<FilterControlsProps> = ({
     filtersWithValues,
     overflowedFiltersInScope,
     filterBarOrientation,
+    showTwoRowLayout,
   ]);
 
   useEffect(() => {
+    if (showTwoRowLayout) {
+      if (overflowedIds.length > 0) setOverflowedIds([]);
+      return;
+    }
     if (outlinedFilterId && overflowedIds.includes(outlinedFilterId)) {
       popoverRef?.current?.open();
     }
-  }, [outlinedFilterId, lastUpdated, popoverRef, overflowedIds]);
+  }, [
+    outlinedFilterId,
+    lastUpdated,
+    popoverRef,
+    overflowedIds,
+    showTwoRowLayout,
+  ]);
 
   return (
     <>
