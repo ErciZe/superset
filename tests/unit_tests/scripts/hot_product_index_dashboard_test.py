@@ -1045,8 +1045,8 @@ def test_main_dashboard_matches_finebi_density_and_shell_contract(
 
     assert position["HEADER_ID"]["meta"]["height"] == 44
     assert main["metadata"]["horizontal_filter_bar_two_rows"] is True
-    assert position["COLUMN-TREND"]["meta"]["width"] == 7
-    assert position["COLUMN-LEADERBOARD"]["meta"]["width"] == 5
+    assert position["COLUMN-TREND"]["meta"]["width"] == 7.25
+    assert position["COLUMN-LEADERBOARD"]["meta"]["width"] == 4.75
     assert position["CHART-SPU-LEADERBOARD"]["meta"]["height"] == 38
     assert all(
         position[component_id]["meta"]["height"] == 38
@@ -1064,12 +1064,17 @@ def test_main_dashboard_matches_finebi_density_and_shell_contract(
 
     css = main["css"]
     assert "body:has(#main-menu) #main-menu" in css
-    assert "background: #0f5132" in css
+    assert "background: #90AD71" in css
     assert "height: 44px" in css
     assert "font-size: 26px" in css
+    assert "font-size: 22px" in css
+    assert ".dashboard-header-container .header-with-actions" in css
+    assert "#90AD71" in css
     assert "font-style: italic" in css
     assert "font-weight: 700" in css
     assert "border-radius: 0" in css
+    assert ".grid-row" in css
+    assert ".grid-column" in css
     assert "#MARKDOWN-DOC-LINK a" in css
 
 

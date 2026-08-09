@@ -71,8 +71,8 @@ def test_remaining_analysis_layout_and_parent_chains(tmp_path: Path) -> None:
         "COLUMN-TREND",
         "COLUMN-LEADERBOARD",
     ]
-    assert position["COLUMN-TREND"]["meta"]["width"] == 7
-    assert position["COLUMN-LEADERBOARD"]["meta"]["width"] == 5
+    assert position["COLUMN-TREND"]["meta"]["width"] == 7.25
+    assert position["COLUMN-LEADERBOARD"]["meta"]["width"] == 4.75
     assert position["TABS-TREND"]["children"] == [
         "TAB-TREND-DAY",
         "TAB-TREND-WEEK",
@@ -488,6 +488,7 @@ def test_remaining_chart_identities_and_parameter_contract(tmp_path: Path) -> No
         for query, metrics in zip(
             context["queries"],
             (params["metrics"], params["metrics_b"]),
+            strict=True,
         ):
             assert query["columns"] == [x_axis]
             assert query["series_columns"] == []

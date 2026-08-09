@@ -2679,7 +2679,7 @@ def _column(
     column_id: str,
     children: Sequence[str],
     *,
-    width: int,
+    width: float,
     parent_ids: Sequence[str],
 ) -> Asset:
     """Build one transparent dashboard column with an explicit grid width."""
@@ -2833,13 +2833,13 @@ def _main_position() -> Asset:
         "COLUMN-TREND": _column(
             "COLUMN-TREND",
             ["TABS-TREND"],
-            width=7,
+            width=7.25,
             parent_ids=["ROOT_ID", "GRID_ID", "ROW-ANALYSIS-PRIMARY"],
         ),
         "COLUMN-LEADERBOARD": _column(
             "COLUMN-LEADERBOARD",
             ["CHART-SPU-LEADERBOARD"],
-            width=5,
+            width=4.75,
             parent_ids=["ROOT_ID", "GRID_ID", "ROW-ANALYSIS-PRIMARY"],
         ),
         "TABS-TREND": {
@@ -3410,7 +3410,7 @@ def _dashboards() -> AssetBundle:
     """Build the main dashboard and its separate explanation dashboard."""
     main_css = """.dashboard-header,
 .dashboard-header-container {
-  background: #0f5132;
+  background: #90AD71;
   color: #ffffff;
   height: 44px !important;
   min-height: 44px !important;
@@ -3426,6 +3426,24 @@ def _dashboards() -> AssetBundle:
   line-height: 44px;
   text-align: center;
 }
+.dashboard-header-container .header-with-actions {
+  align-items: center;
+  background: #90AD71;
+  height: 44px !important;
+  justify-content: center;
+  min-height: 44px !important;
+  padding: 0 16px;
+  position: relative;
+}
+.dashboard-header-container .header-with-actions .title-panel {
+  justify-content: center;
+  margin-right: 0;
+  width: 100%;
+}
+.dashboard-header-container .header-with-actions .right-button-panel {
+  position: absolute;
+  right: 16px;
+}
 body:has(#main-menu) #main-menu {
   display: none !important;
 }
@@ -3434,6 +3452,18 @@ body:has(#main-menu) #main-menu {
   margin: 0 !important;
   min-height: 0 !important;
   overflow: visible;
+}
+.grid-row {
+  gap: 4px;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+.grid-column {
+  padding-left: 2px !important;
+  padding-right: 2px !important;
+}
+.dashboard-component-chart-holder {
+  border-radius: 0;
 }
 .dragdroppable-column:has(#MARKDOWN-DOC-LINK) {
   backface-visibility: visible;
@@ -3512,7 +3542,7 @@ body:has(#main-menu) #main-menu {
 }
 #CHART-STATUS + .chart-slice .handlebars section strong {
   color: #13213a;
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 700;
 }
 #CHART-STATUS + .chart-slice .handlebars section span {
