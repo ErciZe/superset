@@ -1081,18 +1081,54 @@ def test_main_dashboard_matches_finebi_density_and_shell_contract(
 def test_main_dashboard_hides_decorative_chart_header_controls_only(
     tmp_path: Path,
 ) -> None:
-    """Chart titles and badges are visually quiet while chart controls remain usable."""
+    """Only decorative view-mode headers hide; business chart titles stay visible."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
         "拉杆箱在售产品爆品指数看板"
     ]
     css = main["css"]
 
-    assert ".header-title" in css
-    assert ".filter-counts" in css
+    view_scope = ".dashboard:not(.dashboard--editing)"
+    assert view_scope in css
+    assert (
+        f"{view_scope} [id^='CHART-'] + .chart-slice"
+        " [data-test='slice-header'] .filter-counts"
+    ) in css
+    assert (
+        f"{view_scope} [id^='CHART-'] + .chart-slice"
+        " [data-test='slice-header']\n  [aria-label='More Options']"
+    ) in css
     assert ".header-controls" in css
     assert "display: none" in css
     assert "pointer-events: auto" in css
+    assert (
+        "\n[id^='CHART-'] + .chart-slice"
+        " [data-test='slice-header'] .header-title"
+    ) not in css
+
+    hidden_chart_titles = (
+        "CHART-TREND-DAY",
+        "CHART-TREND-WEEK",
+        "CHART-TREND-MONTH",
+        "CHART-COLOR-WEEK",
+        "CHART-COLOR-MONTH",
+    )
+    for chart_id in hidden_chart_titles:
+        assert f"{view_scope} #{chart_id} + .chart-slice" in css
+
+    visible_chart_titles = (
+        "CHART-FUNNEL-SALES-AMOUNT",
+        "CHART-FUNNEL-SPU-COUNT",
+        "CHART-SPU-LEADERBOARD",
+        "CHART-SPU-SHARE",
+        "CHART-SKU-SHARE",
+        "CHART-COLOR-DISTRIBUTION",
+    )
+    for chart_id in visible_chart_titles:
+        assert (
+            f"{chart_id} + .chart-slice"
+            " [data-test='slice-header'] .header-title"
+        ) not in css
 
 
 def test_main_dashboard_rejects_missing_detail_chart_uuid(tmp_path: Path) -> None:
