@@ -1245,7 +1245,9 @@ def test_funnels_keep_the_business_grade_order(tmp_path: Path) -> None:
         assert params["percent_calculation_type"] == "total"
         assert params["percent_format"] == ",.1~%"
         assert params["label_template"] == "{name}\\n{value} | {percent}"
+        assert params["rectangular_segments"] is True
         query_context = json.loads(funnel["query_context"])
+        assert query_context["form_data"]["rectangular_segments"] is True
         assert query_context["queries"][0]["orderby"] == [
             ["spu_previous_month_sales_level_sort_metric", True]
         ]
@@ -1343,6 +1345,12 @@ def test_guide_link_is_a_header_layout_component(tmp_path: Path) -> None:
     }
     assert "#MARKDOWN-DOC-LINK" in main["css"]
     assert "position: fixed" in main["css"]
+    assert "right: 140px" in main["css"]
+    assert (
+        ".dashboard-header-container .header-with-actions .right-button-panel"
+        in main["css"]
+    )
+    assert "min-width: 100px" in main["css"]
     assert """#MARKDOWN-DOC-LINK > .resizable-container {
   height: 100% !important;
   max-height: 100% !important;
@@ -1376,7 +1384,6 @@ def test_status_banner_renders_without_sanitized_css_or_row_limit_warning(
     assert "#CHART-STATUS + .chart-slice [data-test='slice-header']" in css
     assert "[id^='CHART-KPI-'] + .chart-slice [data-test='slice-header']" in css
     assert ".dashboard-component-chart-holder:has(> #CHART-STATUS)" in css
-    assert "right: 20px" in css
 
 
 def test_guide_chart_keeps_styles_outside_sanitized_handlebars(

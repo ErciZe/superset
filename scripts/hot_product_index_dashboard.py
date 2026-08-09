@@ -2108,6 +2108,7 @@ def _funnel_params(
         "metric": metric,
         "number_format": number_format,
         "percent_format": ",.1~%",
+        "rectangular_segments": True,
         "order_by_cols": ['["spu_previous_month_sales_level_sort_metric", true]'],
         "orient": "vertical",
         "percent_calculation_type": "total",
@@ -3441,6 +3442,7 @@ def _dashboards() -> AssetBundle:
   width: 100%;
 }
 .dashboard-header-container .header-with-actions .right-button-panel {
+  min-width: 100px;
   position: absolute;
   right: 16px;
 }
@@ -3475,7 +3477,7 @@ body:has(#main-menu) #main-menu {
   height: 34px !important;
   min-height: 34px !important;
   position: fixed;
-  right: 20px;
+  right: 140px;
   top: 5px;
   width: 114px !important;
   z-index: 100;
