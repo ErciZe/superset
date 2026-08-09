@@ -1345,9 +1345,11 @@ def _detail_column_config(grain: str) -> Asset:
         raise ValueError(f"unsupported hot-product detail grain: {grain}") from ex
 
     config: Asset = {}
+    dimension_width = 112 if grain == "spu" else 120
+    metric_width = 104 if grain == "spu" else 112
     for name in names:
         column_config: Asset = {
-            "columnWidth": 120 if name in dimensions else 112,
+            "columnWidth": dimension_width if name in dimensions else metric_width,
             "horizontalAlign": "left" if name in dimensions else "right",
             "nullValue": "-",
             "truncateLongCells": True,
@@ -3468,8 +3470,11 @@ body:not(:has(.dashboard--editing))
   font-weight: 700 !important;
   height: 44px !important;
   line-height: 44px !important;
+  max-width: min(360px, calc(100vw - 520px));
+  min-width: 360px;
   padding: 0 !important;
   text-align: center;
+  width: 360px !important;
   -webkit-text-fill-color: #ffffff;
 }
 body:not(:has(.dashboard--editing))

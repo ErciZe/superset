@@ -533,6 +533,22 @@ def test_detail_charts_preserve_approved_fields_pagination_and_sorting(
     assert (
         spu["params"]["server_pagination_default_orderby"] == spu["params"]["orderby"]
     )
+    spu_widths = spu["params"]["column_config"]
+    assert (
+        sum(
+            spu_widths[column]["columnWidth"]
+            for column in spu["params"]["displayed_columns"]
+        )
+        == 1800
+    )
+    assert all(
+        spu_widths[column]["columnWidth"] == 112 for column in spu["params"]["groupby"]
+    )
+    assert all(
+        spu_widths[column]["columnWidth"] == 104
+        for column in spu["params"]["displayed_columns"]
+        if column not in spu["params"]["groupby"]
+    )
     assert sku["params"]["orderby"] == [
         ["ym", False],
         ["sales_qty", False],
@@ -1101,6 +1117,12 @@ def test_main_dashboard_matches_finebi_title_and_table_readability_contract(
     assert "font-weight: 700" in css
     assert "line-height: 44px" in css
     assert "text-align: center" in css
+    assert "width: 360px !important" in css
+    assert "min-width: 360px" in css
+    assert "max-width: min(360px, calc(100vw - 520px))" in css
+    assert main["position"]["HEADER_ID"]["meta"]["text"] == (
+        "拉杆箱在售产品爆品指数看板"
+    )
     assert "body:not(:has(.dashboard--editing))" in css
     assert "[data-test='dashboard-header-wrapper']" in css
     assert "position: relative !important" in css
