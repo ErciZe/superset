@@ -187,6 +187,7 @@ function Echart(
   }
   const [didMount, setDidMount] = useState(false);
   const chartRef = useRef<EChartsType>();
+  const localeLoadGeneration = useRef(0);
   const previousQueryEventHandlers = useRef<QueryEventHandlers>([]);
   const currentSelection = useMemo(
     () => Object.keys(selectedValues) || [],
@@ -217,10 +218,16 @@ function Echart(
   );
 
   useEffect(() => {
+    localeLoadGeneration.current += 1;
+    const generation = localeLoadGeneration.current;
+    let cancelled = false;
+
     loadLocale(locale).then(localeObj => {
+      if (cancelled || generation !== localeLoadGeneration.current) return;
       if (localeObj) {
         registerLocale(locale, localeObj);
       }
+      if (cancelled || generation !== localeLoadGeneration.current) return;
       if (!divRef.current) return;
       if (!chartRef.current) {
         // Pass width and height to init to avoid "Can't get DOM width or height" warning
@@ -231,10 +238,15 @@ function Echart(
           height,
         });
       }
+      if (cancelled || generation !== localeLoadGeneration.current) return;
       // did mount
       handleSizeChange({ width, height });
       setDidMount(true);
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [locale, width, height, handleSizeChange]);
 
   useEffect(() => {
