@@ -28,6 +28,7 @@ import {
   ValueFormatter,
   VizType,
 } from '@superset-ui/core';
+import type { CustomSeriesOption, CustomSeriesRenderItem } from 'echarts';
 import type { CallbackDataParams } from 'echarts/types/src/util/types';
 import type { EChartsCoreOption } from 'echarts/core';
 import type { FunnelSeriesOption } from 'echarts/charts';
@@ -56,6 +57,105 @@ const defaultPercentFormatter = getNumberFormatter(
   NumberFormats.PERCENT_2_POINT,
 );
 
+type FunnelDataItem = {
+  value: number;
+  name: string;
+  itemStyle: { color: string; opacity: OpacityEnum };
+  firstStepPercent: number;
+  prevStepPercent: number;
+};
+
+type RectangularFunnelDataItem = Omit<FunnelDataItem, 'value'> & {
+  value: [number, number, number, number];
+  totalPercent: number;
+};
+
+type RectangularFunnelPadding = {
+  bottom: number;
+  left: number;
+  right: number;
+  top: number;
+};
+
+function getNumericFunnelValue(value: CallbackDataParams['value']): number {
+  return (Array.isArray(value) ? value[0] : value) as number;
+}
+
+function sortFunnelData(
+  data: FunnelDataItem[],
+  sort: EchartsFunnelFormData['sort'],
+): FunnelDataItem[] {
+  if (sort === 'none') {
+    return [...data];
+  }
+  return [...data].sort((a, b) =>
+    sort === 'ascending' ? a.value - b.value : b.value - a.value,
+  );
+}
+
+function createRectangularFunnelRenderItem({
+  orient,
+  gap,
+  itemCount,
+  maxValue,
+  padding,
+}: {
+  orient: EchartsFunnelFormData['orient'];
+  gap: number;
+  itemCount: number;
+  maxValue: number;
+  padding: RectangularFunnelPadding;
+}): CustomSeriesRenderItem {
+  return (params, api) => {
+    const value = Math.max(Number(api.value(0)), 0);
+    const valueRatio = maxValue > 0 ? value / maxValue : 0;
+    const chartWidth = api.getWidth();
+    const chartHeight = api.getHeight();
+    const contentWidth = Math.max(chartWidth - padding.left - padding.right, 0);
+    const contentHeight = Math.max(
+      chartHeight - padding.top - padding.bottom,
+      0,
+    );
+    const segmentGap = Math.max(gap, 0);
+
+    if (orient === 'horizontal') {
+      const segmentWidth = Math.max(
+        (contentWidth - segmentGap * (itemCount - 1)) / itemCount,
+        0,
+      );
+      const segmentHeight = contentHeight * valueRatio;
+      return {
+        type: 'rect',
+        transition: ['shape'],
+        shape: {
+          x: padding.left + params.dataIndex * (segmentWidth + segmentGap),
+          y: padding.top + (contentHeight - segmentHeight) / 2,
+          width: segmentWidth,
+          height: segmentHeight,
+        },
+        style: api.style(),
+      };
+    }
+
+    const segmentHeight = Math.max(
+      (contentHeight - segmentGap * (itemCount - 1)) / itemCount,
+      0,
+    );
+    const segmentWidth = contentWidth * valueRatio;
+    return {
+      type: 'rect',
+      transition: ['shape'],
+      shape: {
+        x: padding.left + (contentWidth - segmentWidth) / 2,
+        y: padding.top + params.dataIndex * (segmentHeight + segmentGap),
+        width: segmentWidth,
+        height: segmentHeight,
+      },
+      style: api.style(),
+    };
+  };
+}
+
 export function parseParams({
   params,
   numberFormatter,
@@ -69,12 +169,17 @@ export function parseParams({
   percentCalculationType?: PercentCalcType;
   sanitizeName?: boolean;
 }) {
-  const { name: rawName = '', value, percent: totalPercent, data } = params;
+  const { name: rawName = '', value, percent: rawTotalPercent, data } = params;
   const name = sanitizeName ? sanitizeHtml(rawName) : rawName;
-  const formattedValue = numberFormatter(value as number);
-  const { firstStepPercent, prevStepPercent } = data as {
+  const formattedValue = numberFormatter(getNumericFunnelValue(value));
+  const {
+    firstStepPercent,
+    prevStepPercent,
+    totalPercent = rawTotalPercent,
+  } = data as {
     firstStepPercent: number;
     prevStepPercent: number;
+    totalPercent?: number;
   };
   let percent;
 
@@ -132,6 +237,7 @@ export default function transformProps(
     showLegend,
     sliceId,
     percentCalculationType,
+    rectangularSegments = false,
   }: EchartsFunnelFormData = {
     ...DEFAULT_LEGEND_FORM_DATA,
     ...DEFAULT_FUNNEL_FORM_DATA,
@@ -179,11 +285,7 @@ export default function transformProps(
       metricItem => metricItem.metric_name === metricLabel,
     )?.verbose_name || metricLabel;
 
-  const transformedData: {
-    value: number;
-    name: string;
-    itemStyle: { color: string; opacity: OpacityEnum };
-  }[] = data.map((datum, index) => {
+  const transformedData: FunnelDataItem[] = data.map((datum, index) => {
     const name = extractGroupbyLabel({
       datum,
       groupby: groupbyLabels,
@@ -209,9 +311,32 @@ export default function transformProps(
     };
   });
 
+  const sortedRectangularData = rectangularSegments
+    ? sortFunnelData(transformedData, sort)
+    : [];
+  const rectangularTotalValue = sortedRectangularData.reduce(
+    (sum, item) => sum + item.value,
+    0,
+  );
+  const rectangularData: RectangularFunnelDataItem[] =
+    sortedRectangularData.map((datum, index) => ({
+      ...datum,
+      value: [
+        datum.value,
+        index,
+        datum.firstStepPercent,
+        datum.prevStepPercent,
+      ],
+      totalPercent: rectangularTotalValue
+        ? (datum.value / rectangularTotalValue) * 100
+        : 0,
+    }));
+
+  const selectionData = rectangularSegments ? rectangularData : transformedData;
+
   const selectedValues = (filterState.selectedValues || []).reduce(
     (acc: Record<string, number>, selectedValue: string) => {
-      const index = transformedData.findIndex(
+      const index = selectionData.findIndex(
         ({ name }) => name === selectedValue,
       );
       return {
@@ -236,7 +361,7 @@ export default function transformProps(
       const templateValues = {
         '{name}': name,
         '{value}': `${numberFormatter(
-          (params.value as number) / labelValueDivisor,
+          getNumericFunnelValue(params.value) / labelValueDivisor,
         )}${labelValueSuffix}`,
         '{percent}': formattedPercent,
         '\\n': '\n',
@@ -286,30 +411,67 @@ export default function transformProps(
     type: legendType,
   });
 
-  const series: FunnelSeriesOption[] = [
-    {
-      type: VizType.Funnel,
-      ...getChartPadding(showLegend, legendOrientation, effectiveLegendMargin),
-      animation: true,
-      minSize: '0%',
-      maxSize: '100%',
-      sort,
-      orient,
-      gap,
-      funnelAlign: 'center',
-      labelLine: { show: !!labelLine },
-      label: {
-        ...defaultLabel,
-        position: labelLine ? 'outer' : 'inner',
-      },
-      emphasis: {
-        label: {
-          show: true,
-          fontWeight: 'bold',
+  const chartPadding = getChartPadding(
+    showLegend,
+    legendOrientation,
+    effectiveLegendMargin,
+  );
+  const series: Array<FunnelSeriesOption | CustomSeriesOption> = [
+    rectangularSegments
+      ? {
+          type: 'custom',
+          coordinateSystem: 'none',
+          animation: true,
+          progressive: 0,
+          renderItem: createRectangularFunnelRenderItem({
+            orient,
+            gap,
+            itemCount: rectangularData.length,
+            maxValue: Math.max(
+              ...rectangularData.map(item => item.value[0]),
+              0,
+            ),
+            padding: chartPadding,
+          }),
+          label: {
+            ...defaultLabel,
+            position: labelLine
+              ? orient === 'horizontal'
+                ? 'bottom'
+                : 'right'
+              : 'inside',
+          },
+          emphasis: {
+            label: {
+              show: true,
+              fontWeight: 'bold',
+            },
+          },
+          data: rectangularData,
+        }
+      : {
+          type: VizType.Funnel,
+          ...chartPadding,
+          animation: true,
+          minSize: '0%',
+          maxSize: '100%',
+          sort,
+          orient,
+          gap,
+          funnelAlign: 'center',
+          labelLine: { show: !!labelLine },
+          label: {
+            ...defaultLabel,
+            position: labelLine ? 'outer' : 'inner',
+          },
+          emphasis: {
+            label: {
+              show: true,
+              fontWeight: 'bold',
+            },
+          },
+          data: transformedData,
         },
-      },
-      data: transformedData,
-    },
   ];
 
   const echartOptions: EChartsCoreOption = {
@@ -320,7 +482,7 @@ export default function transformProps(
       ...getDefaultTooltip(refs),
       show: !inContextMenu && showTooltipLabels,
       trigger: 'item',
-      formatter: (params: any) => {
+      formatter: (params: CallbackDataParams) => {
         const [name, formattedValue, formattedPercent] = parseParams({
           params,
           numberFormatter,

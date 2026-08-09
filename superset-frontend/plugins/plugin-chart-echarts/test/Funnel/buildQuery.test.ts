@@ -33,4 +33,15 @@ describe('Funnel buildQuery', () => {
     expect(query.metrics).toEqual(['foo']);
     expect(query.columns).toEqual(['bar']);
   });
+
+  test('preserves rectangular segment form data in the query context', () => {
+    const queryContext = buildQuery({
+      ...formData,
+      rectangular_segments: true,
+    });
+
+    expect(queryContext.form_data).toEqual(
+      expect.objectContaining({ rectangular_segments: true }),
+    );
+  });
 });
