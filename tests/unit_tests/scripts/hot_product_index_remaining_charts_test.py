@@ -660,6 +660,45 @@ def test_remaining_leaderboard_contract_and_conditional_formatting(
     )
 
 
+def test_leaderboard_columns_fit_all_business_headers_in_the_primary_grid(
+    tmp_path: Path,
+) -> None:
+    """The seven FineBI leaderboard columns fit the narrow right-hand panel."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    leaderboard = charts["SPU销量排行榜"]
+    config = leaderboard["params"]["column_config"]
+    expected_widths = {
+        "spu": 64,
+        "spu_rating": 80,
+        "final_rating": 80,
+        "previous_month_sales_amount_usd": 112,
+        "current_month_sales_amount_usd": 112,
+        "rating_progress": 104,
+        "time_progress": 104,
+    }
+    assert {name: config[name]["columnWidth"] for name in expected_widths} == (
+        expected_widths
+    )
+    assert sum(expected_widths.values()) <= 660
+
+    dataset = assets_by_key(assets, "datasets", "table_name")["爆品指数-SPU销量排行榜"]
+    labels = {
+        column["column_name"]: column["verbose_name"]
+        for column in dataset["columns"]
+        if column["column_name"] in expected_widths
+    }
+    assert labels == {
+        "spu": "SPU",
+        "spu_rating": "SPU评级",
+        "final_rating": "最终评级",
+        "previous_month_sales_amount_usd": "上月销售额",
+        "current_month_sales_amount_usd": "本月销量额",
+        "rating_progress": "本月评级达标进度",
+        "time_progress": "本月时间达标进度",
+    }
+
+
 def test_remaining_visible_numeric_fields_use_approved_formats(tmp_path: Path) -> None:
     """Every new chart's visible number format stays within the one-decimal contract."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))

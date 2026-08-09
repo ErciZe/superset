@@ -1078,6 +1078,49 @@ def test_main_dashboard_matches_finebi_density_and_shell_contract(
     assert "#MARKDOWN-DOC-LINK a" in css
 
 
+def test_main_dashboard_matches_finebi_title_and_table_readability_contract(
+    tmp_path: Path,
+) -> None:
+    """View mode styles the dynamic title and keeps table headers readable."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    main = assets_by_key(assets, "dashboards", "dashboard_title")[
+        "拉杆箱在售产品爆品指数看板"
+    ]
+    css = " ".join(main["css"].split())
+
+    title_selector = (
+        "body:not(:has(.dashboard--editing)) "
+        ".dashboard-header-container .dynamic-title-input"
+    )
+    assert title_selector in css
+    assert "background: transparent" in css
+    assert "border: 0" in css
+    assert "box-shadow: none" in css
+    assert "color: #ffffff" in css
+    assert "font-size: 26px" in css
+    assert "font-weight: 700" in css
+    assert "line-height: 44px" in css
+    assert "text-align: center" in css
+    assert "body:not(:has(.dashboard--editing))" in css
+    assert "[data-test='dashboard-header-wrapper']" in css
+    assert "position: relative !important" in css
+    assert "top: auto !important" in css
+
+    table_roots = (
+        "#CHART-SPU-DETAIL",
+        "#CHART-SKU-DETAIL",
+        "#CHART-SPU-LEADERBOARD",
+    )
+    for root in table_roots:
+        assert f"{root} .ag-header-cell-menu-button" in css
+        assert f"{root} .ag-header-cell-filter-button" in css
+        assert f"{root} .ag-header-cell-comp-wrapper" in css
+    assert "display: none !important" in css
+    assert "min-width: 0" in css
+    assert "overflow-wrap: anywhere" in css
+    assert "min-height: 44px" in css
+
+
 def test_main_dashboard_hides_decorative_chart_header_controls_only(
     tmp_path: Path,
 ) -> None:

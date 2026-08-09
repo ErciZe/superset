@@ -2396,16 +2396,27 @@ LEADERBOARD_ORDERBY: Final[tuple[tuple[str, bool], ...]] = (
 def _leaderboard_column_config() -> Asset:
     """Build stable widths, null display and formats for leaderboard columns."""
     config: Asset = {}
+    groupby_widths = {
+        "spu": 64,
+        "spu_rating": 80,
+        "final_rating": 80,
+    }
     for name in LEADERBOARD_GROUPBY:
         config[name] = {
-            "columnWidth": 96,
+            "columnWidth": groupby_widths[name],
             "horizontalAlign": "left",
             "nullValue": "-",
             "truncateLongCells": True,
         }
+    metric_widths = {
+        "previous_month_sales_amount_usd": 112,
+        "current_month_sales_amount_usd": 112,
+        "rating_progress": 104,
+        "time_progress": 104,
+    }
     for name in LEADERBOARD_METRICS:
         config[name] = {
-            "columnWidth": 112,
+            "columnWidth": metric_widths[name],
             "d3NumberFormat": ("$,.1~f" if "amount" in name else ".1~%"),
             "horizontalAlign": "right",
             "nullValue": "-",
@@ -3446,6 +3457,26 @@ def _dashboards() -> AssetBundle:
   position: absolute;
   right: 16px;
 }
+body:not(:has(.dashboard--editing))
+  .dashboard-header-container .dynamic-title-input {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+  font-size: 26px !important;
+  font-weight: 700 !important;
+  height: 44px !important;
+  line-height: 44px !important;
+  padding: 0 !important;
+  text-align: center;
+  -webkit-text-fill-color: #ffffff;
+}
+body:not(:has(.dashboard--editing))
+  [data-test='dashboard-header-wrapper'] {
+  position: relative !important;
+  top: auto !important;
+}
 body:has(#main-menu) #main-menu {
   display: none !important;
 }
@@ -3642,6 +3673,37 @@ body:has(#main-menu) #main-menu {
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
+}
+#CHART-SPU-DETAIL .ag-header-cell-menu-button,
+#CHART-SPU-DETAIL .ag-header-cell-filter-button,
+#CHART-SKU-DETAIL .ag-header-cell-menu-button,
+#CHART-SKU-DETAIL .ag-header-cell-filter-button,
+#CHART-SPU-LEADERBOARD .ag-header-cell-menu-button,
+#CHART-SPU-LEADERBOARD .ag-header-cell-filter-button {
+  display: none !important;
+}
+#CHART-SPU-DETAIL .ag-header-cell-comp-wrapper,
+#CHART-SPU-DETAIL .ag-header-cell-label,
+#CHART-SKU-DETAIL .ag-header-cell-comp-wrapper,
+#CHART-SKU-DETAIL .ag-header-cell-label,
+#CHART-SPU-LEADERBOARD .ag-header-cell-comp-wrapper,
+#CHART-SPU-LEADERBOARD .ag-header-cell-label {
+  min-width: 0;
+}
+#CHART-SPU-DETAIL .ag-header-cell-text,
+#CHART-SKU-DETAIL .ag-header-cell-text,
+#CHART-SPU-LEADERBOARD .ag-header-cell-text {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+#CHART-SPU-DETAIL .ag-header-row,
+#CHART-SPU-DETAIL .ag-header-cell,
+#CHART-SKU-DETAIL .ag-header-row,
+#CHART-SKU-DETAIL .ag-header-cell,
+#CHART-SPU-LEADERBOARD .ag-header-row,
+#CHART-SPU-LEADERBOARD .ag-header-cell {
+  min-height: 44px;
 }
 #CHART-SPU-DETAIL .ag-row-even:not(.ag-row-pinned),
 #CHART-SKU-DETAIL .ag-row-even:not(.ag-row-pinned) {
