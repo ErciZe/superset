@@ -680,7 +680,8 @@ def test_leaderboard_columns_fit_all_business_headers_in_the_primary_grid(
     assert {name: config[name]["columnWidth"] for name in expected_widths} == (
         expected_widths
     )
-    assert sum(expected_widths.values()) <= 660
+    assert sum(expected_widths.values()) == 656
+    assert leaderboard["params"]["displayed_columns"] == list(expected_widths)
 
     dataset = assets_by_key(assets, "datasets", "table_name")["爆品指数-SPU销量排行榜"]
     labels = {

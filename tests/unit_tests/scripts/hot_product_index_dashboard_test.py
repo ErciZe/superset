@@ -1115,9 +1115,17 @@ def test_main_dashboard_matches_finebi_title_and_table_readability_contract(
         assert f"{root} .ag-header-cell-menu-button" in css
         assert f"{root} .ag-header-cell-filter-button" in css
         assert f"{root} .ag-header-cell-comp-wrapper" in css
+        assert f"{root} .header-filter" in css
+        assert f"{root} .three-dots-menu" in css
+        assert f"{root} .custom-header" in css
+        assert f"{root} .custom-header > span" in css
     assert "display: none !important" in css
     assert "min-width: 0" in css
     assert "overflow-wrap: anywhere" in css
+    assert "padding: 0 !important" in css
+    assert "white-space: normal !important" in css
+    assert "overflow: visible !important" in css
+    assert "text-overflow: clip !important" in css
     assert "min-height: 44px" in css
 
 

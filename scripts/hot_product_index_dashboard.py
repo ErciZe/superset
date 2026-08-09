@@ -3682,6 +3682,35 @@ body:has(#main-menu) #main-menu {
 #CHART-SPU-LEADERBOARD .ag-header-cell-filter-button {
   display: none !important;
 }
+#CHART-SPU-DETAIL .header-filter,
+#CHART-SPU-DETAIL .three-dots-menu,
+#CHART-SKU-DETAIL .header-filter,
+#CHART-SKU-DETAIL .three-dots-menu,
+#CHART-SPU-LEADERBOARD .header-filter,
+#CHART-SPU-LEADERBOARD .three-dots-menu {
+  display: none !important;
+}
+#CHART-SPU-DETAIL .custom-header,
+#CHART-SKU-DETAIL .custom-header,
+#CHART-SPU-LEADERBOARD .custom-header {
+  min-width: 0;
+  overflow: visible !important;
+  padding: 0 !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+#CHART-SPU-DETAIL .custom-header > span,
+#CHART-SKU-DETAIL .custom-header > span,
+#CHART-SPU-LEADERBOARD .custom-header > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible !important;
+  overflow-wrap: anywhere;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
 #CHART-SPU-DETAIL .ag-header-cell-comp-wrapper,
 #CHART-SPU-DETAIL .ag-header-cell-label,
 #CHART-SKU-DETAIL .ag-header-cell-comp-wrapper,
