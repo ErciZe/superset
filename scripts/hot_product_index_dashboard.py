@@ -3511,23 +3511,33 @@ body:has(#main-menu) #main-menu {
   text-align: center;
   text-decoration: none;
 }
-.dashboard:not(.dashboard--editing) #CHART-STATUS + .chart-slice [data-test='slice-header'],
-.dashboard:not(.dashboard--editing) [id^='CHART-KPI-'] + .chart-slice [data-test='slice-header'] {
+.dashboard:not(.dashboard--editing) #CHART-STATUS + .chart-slice
+  [data-test='slice-header'],
+.dashboard:not(.dashboard--editing) [id^='CHART-KPI-'] + .chart-slice
+  [data-test='slice-header'] {
   display: none;
 }
-.dashboard:not(.dashboard--editing) [id^='CHART-'] + .chart-slice [data-test='slice-header'] {
+.dashboard:not(.dashboard--editing) [id^='CHART-'] + .chart-slice
+  [data-test='slice-header'] {
   min-height: 0;
   padding: 0;
 }
-.dashboard:not(.dashboard--editing) #CHART-TREND-DAY + .chart-slice [data-test='slice-header'] .header-title,
-.dashboard:not(.dashboard--editing) #CHART-TREND-WEEK + .chart-slice [data-test='slice-header'] .header-title,
-.dashboard:not(.dashboard--editing) #CHART-TREND-MONTH + .chart-slice [data-test='slice-header'] .header-title,
-.dashboard:not(.dashboard--editing) #CHART-COLOR-WEEK + .chart-slice [data-test='slice-header'] .header-title,
-.dashboard:not(.dashboard--editing) #CHART-COLOR-MONTH + .chart-slice [data-test='slice-header'] .header-title {
+.dashboard:not(.dashboard--editing) #CHART-TREND-DAY + .chart-slice
+  [data-test='slice-header'] .header-title,
+.dashboard:not(.dashboard--editing) #CHART-TREND-WEEK + .chart-slice
+  [data-test='slice-header'] .header-title,
+.dashboard:not(.dashboard--editing) #CHART-TREND-MONTH + .chart-slice
+  [data-test='slice-header'] .header-title,
+.dashboard:not(.dashboard--editing) #CHART-COLOR-WEEK + .chart-slice
+  [data-test='slice-header'] .header-title,
+.dashboard:not(.dashboard--editing) #CHART-COLOR-MONTH + .chart-slice
+  [data-test='slice-header'] .header-title {
   display: none;
 }
-.dashboard:not(.dashboard--editing) [id^='CHART-'] + .chart-slice [data-test='slice-header'] .filter-counts,
-.dashboard:not(.dashboard--editing) [id^='CHART-'] + .chart-slice [data-test='slice-header']
+.dashboard:not(.dashboard--editing) [id^='CHART-'] + .chart-slice
+  [data-test='slice-header'] .filter-counts,
+.dashboard:not(.dashboard--editing) [id^='CHART-'] + .chart-slice
+  [data-test='slice-header']
   [aria-label='More Options'] {
   display: none;
 }

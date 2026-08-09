@@ -473,11 +473,14 @@ def test_remaining_chart_identities_and_parameter_contract(tmp_path: Path) -> No
         assert params["yAxisIndex"] == 0
         assert params["yAxisIndexB"] == 1
         assert params["yAxisTitleSecondary"] == "金额（万美元）"
-        assert params["x_axis_time_format"] == {
-            "sales_date": "%Y-%m-%d",
-            "yw": "%YW%V",
-            "ym": "%Y-%m",
-        }[x_axis]
+        assert (
+            params["x_axis_time_format"]
+            == {
+                "sales_date": "%Y-%m-%d",
+                "yw": "%YW%V",
+                "ym": "%Y-%m",
+            }[x_axis]
+        )
         assert json.loads(params["echart_options"]) == {
             "legend": {"selected": selected}
         }

@@ -1086,7 +1086,8 @@ def test_main_dashboard_hides_decorative_chart_header_controls_only(
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
         "拉杆箱在售产品爆品指数看板"
     ]
-    css = main["css"]
+    raw_css = main["css"]
+    css = " ".join(raw_css.split())
 
     view_scope = ".dashboard:not(.dashboard--editing)"
     assert view_scope in css
@@ -1096,15 +1097,14 @@ def test_main_dashboard_hides_decorative_chart_header_controls_only(
     ) in css
     assert (
         f"{view_scope} [id^='CHART-'] + .chart-slice"
-        " [data-test='slice-header']\n  [aria-label='More Options']"
+        " [data-test='slice-header'] [aria-label='More Options']"
     ) in css
     assert ".header-controls" in css
     assert "display: none" in css
     assert "pointer-events: auto" in css
     assert (
-        "\n[id^='CHART-'] + .chart-slice"
-        " [data-test='slice-header'] .header-title"
-    ) not in css
+        "\n[id^='CHART-'] + .chart-slice [data-test='slice-header'] .header-title"
+    ) not in raw_css
 
     hidden_chart_titles = (
         "CHART-TREND-DAY",
@@ -1126,8 +1126,7 @@ def test_main_dashboard_hides_decorative_chart_header_controls_only(
     )
     for chart_id in visible_chart_titles:
         assert (
-            f"{chart_id} + .chart-slice"
-            " [data-test='slice-header'] .header-title"
+            f"{chart_id} + .chart-slice [data-test='slice-header'] .header-title"
         ) not in css
 
 
@@ -1416,7 +1415,7 @@ def test_status_banner_renders_without_sanitized_css_or_row_limit_warning(
     assert "\n" not in params["handlebarsTemplate"]
 
     assert main["position"]["CHART-STATUS"]["meta"]["height"] == 8
-    css = main["css"]
+    css = " ".join(main["css"].split())
     assert "#CHART-STATUS + .chart-slice [data-test='slice-header']" in css
     assert "[id^='CHART-KPI-'] + .chart-slice [data-test='slice-header']" in css
     assert ".dashboard-component-chart-holder:has(> #CHART-STATUS)" in css
