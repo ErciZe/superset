@@ -66,6 +66,38 @@ jest.mock('echarts/core', () => ({
   use: jest.fn(),
 }));
 
+const mockZhLocale = {
+  time: {
+    month: Array.from({ length: 12 }, (_, index) => `月${index + 1}`),
+    monthAbbr: Array.from({ length: 12 }, (_, index) => `M${index + 1}`),
+    dayOfWeek: Array.from({ length: 7 }, (_, index) => `日${index + 1}`),
+    dayOfWeekAbbr: Array.from({ length: 7 }, (_, index) => `D${index + 1}`),
+  },
+};
+
+const mockPtLocale = { time: { month: ['Janeiro'] } };
+const mockNbLocale = { time: { month: ['Januar'] } };
+
+jest.mock('echarts/i18n/langEN-obj.js', () => ({
+  __esModule: true,
+  default: {},
+}));
+
+jest.mock('echarts/i18n/langZH-obj.js', () => ({
+  __esModule: true,
+  default: mockZhLocale,
+}));
+
+jest.mock('echarts/i18n/langPT-br-obj.js', () => ({
+  __esModule: true,
+  default: mockPtLocale,
+}));
+
+jest.mock('echarts/i18n/langnb-NO-obj.js', () => ({
+  __esModule: true,
+  default: mockNbLocale,
+}));
+
 jest.mock('echarts/charts', () => ({
   BarChart: 'BarChart',
   BoxplotChart: 'BoxplotChart',
@@ -126,6 +158,14 @@ const renderEchart = (props: Partial<EchartsProps> = {}) => (
   <Echart {...defaultProps} {...props} />
 );
 
+type EchartsCoreMock = {
+  init: jest.Mock;
+  registerLocale: jest.Mock;
+};
+
+const getEchartsCoreMock = () =>
+  jest.requireMock('echarts/core') as EchartsCoreMock;
+
 const trigger = (name: string) => {
   (listeners[name] || []).forEach(listener => listener.handler({}));
 };
@@ -139,6 +179,58 @@ beforeEach(() => {
       value.mockClear();
     }
   });
+  const echartsCore = getEchartsCoreMock();
+  echartsCore.init.mockClear();
+  echartsCore.registerLocale.mockClear();
+  echartsCore.init.mockImplementation(() => mockChart);
+  echartsCore.registerLocale.mockImplementation(() => undefined);
+});
+
+test('registers locale data from locale object modules before chart init', async () => {
+  const { init, registerLocale } = getEchartsCoreMock();
+  const calls: string[] = [];
+  registerLocale.mockImplementation(() => calls.push('registerLocale'));
+  init.mockImplementation(() => {
+    calls.push('init');
+    return mockChart;
+  });
+
+  render(renderEchart(), {
+    initialState: { ...initialState, common: { locale: 'zh' } },
+    useRedux: true,
+  });
+
+  await waitFor(() => expect(init).toHaveBeenCalled());
+
+  expect(registerLocale).toHaveBeenCalledWith('ZH', mockZhLocale);
+  expect(calls).toEqual(['registerLocale', 'init']);
+});
+
+test('normalizes regional locales before loading locale object modules', async () => {
+  const cases = [
+    ['pt_BR', 'PT-BR', mockPtLocale],
+    ['nb_NO', 'NB-NO', mockNbLocale],
+  ] as const;
+
+  for (const [sourceLocale, echartsLocale, localeObject] of cases) {
+    const { init, registerLocale } = getEchartsCoreMock();
+    const { unmount } = render(renderEchart(), {
+      initialState: { ...initialState, common: { locale: sourceLocale } },
+      useRedux: true,
+    });
+
+    await waitFor(() =>
+      expect(registerLocale).toHaveBeenCalledWith(echartsLocale, localeObject),
+    );
+    expect(init).toHaveBeenCalledWith(
+      expect.any(HTMLDivElement),
+      null,
+      expect.objectContaining({ locale: echartsLocale }),
+    );
+    unmount();
+    registerLocale.mockClear();
+    init.mockClear();
+  }
 });
 
 test('replaces stale query event handlers without clearing regular event handlers', async () => {
