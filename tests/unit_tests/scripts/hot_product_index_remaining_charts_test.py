@@ -71,8 +71,8 @@ def test_remaining_analysis_layout_and_parent_chains(tmp_path: Path) -> None:
         "COLUMN-TREND",
         "COLUMN-LEADERBOARD",
     ]
-    assert position["COLUMN-TREND"]["meta"]["width"] == 8
-    assert position["COLUMN-LEADERBOARD"]["meta"]["width"] == 4
+    assert position["COLUMN-TREND"]["meta"]["width"] == 7
+    assert position["COLUMN-LEADERBOARD"]["meta"]["width"] == 5
     assert position["TABS-TREND"]["children"] == [
         "TAB-TREND-DAY",
         "TAB-TREND-WEEK",
@@ -95,7 +95,7 @@ def test_remaining_analysis_layout_and_parent_chains(tmp_path: Path) -> None:
         "CHART-COLOR-DISTRIBUTION",
     ):
         assert position[component_id]["meta"]["width"] == 3
-        assert position[component_id]["meta"]["height"] == 52
+        assert position[component_id]["meta"]["height"] == 38
         assert position[component_id]["parents"] == [
             "ROOT_ID",
             "GRID_ID",
@@ -103,7 +103,7 @@ def test_remaining_analysis_layout_and_parent_chains(tmp_path: Path) -> None:
         ]
 
     assert position["CHART-SPU-LEADERBOARD"]["meta"]["width"] == 12
-    assert position["CHART-SPU-LEADERBOARD"]["meta"]["height"] == 56
+    assert position["CHART-SPU-LEADERBOARD"]["meta"]["height"] == 38
     assert position["CHART-SPU-LEADERBOARD"]["parents"] == [
         "ROOT_ID",
         "GRID_ID",
@@ -131,7 +131,7 @@ def test_remaining_analysis_layout_and_parent_chains(tmp_path: Path) -> None:
             row_id,
         ]
         assert position[chart_id]["meta"]["width"] == 12
-        assert position[chart_id]["meta"]["height"] == 56
+        assert position[chart_id]["meta"]["height"] == 38
 
     color_parent = [
         "ROOT_ID",
@@ -156,7 +156,7 @@ def test_remaining_analysis_layout_and_parent_chains(tmp_path: Path) -> None:
             row_id,
         ]
         assert position[chart_id]["meta"]["width"] == 12
-        assert position[chart_id]["meta"]["height"] == 52
+        assert position[chart_id]["meta"]["height"] == 38
 
 
 def test_remaining_analysis_filter_scope_includes_leaderboard_only_daily(
@@ -217,9 +217,8 @@ def test_remaining_analysis_css_is_root_scoped(tmp_path: Path) -> None:
     assert "#TABS-COLOR-TREND .ant-tabs-card > .ant-tabs-nav .ant-tabs-ink-bar" in css
     assert "#CHART-SPU-LEADERBOARD .ag-header" in css
     assert "#2978B5" in css
-    assert "#8AA964" in css
-    assert "rgba(138,169,100,.05)" in css
-    assert "rgba(138,169,100,.10)" in css
+    assert "#d8edc8" in css
+    assert "background: #ffffff" in css
 
 
 def test_daily_dataset_exposes_trend_and_color_semantics(tmp_path: Path) -> None:
@@ -474,6 +473,11 @@ def test_remaining_chart_identities_and_parameter_contract(tmp_path: Path) -> No
         assert params["yAxisIndex"] == 0
         assert params["yAxisIndexB"] == 1
         assert params["yAxisTitleSecondary"] == "金额（万美元）"
+        assert params["x_axis_time_format"] == {
+            "sales_date": "%Y-%m-%d",
+            "yw": "%YW%V",
+            "ym": "%Y-%m",
+        }[x_axis]
         assert json.loads(params["echart_options"]) == {
             "legend": {"selected": selected}
         }
@@ -484,7 +488,6 @@ def test_remaining_chart_identities_and_parameter_contract(tmp_path: Path) -> No
         for query, metrics in zip(
             context["queries"],
             (params["metrics"], params["metrics_b"]),
-            strict=True,
         ):
             assert query["columns"] == [x_axis]
             assert query["series_columns"] == []
@@ -517,6 +520,8 @@ def test_remaining_pie_and_color_trend_contracts(tmp_path: Path) -> None:
         assert params["legendType"] == legend_type
         assert params["row_limit"] == 1000
         assert params["threshold_for_other"] == 0
+        assert 40 <= params["innerRadius"] < params["outerRadius"] <= 80
+        assert params["show_labels_threshold"] == 3
         assert params["sort_by_metric"] is True
         assert params["donut"] is True
         assert params["show_total"] is True

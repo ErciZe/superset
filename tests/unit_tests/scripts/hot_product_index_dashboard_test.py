@@ -1015,9 +1015,13 @@ def test_detail_css_is_scoped_to_table_components_and_tabs(tmp_path: Path) -> No
     css = main["css"]
     assert "#CHART-SPU-DETAIL .ag-header" in css
     assert "#CHART-SKU-DETAIL .ag-header" in css
-    assert "#8AA964" in css
-    assert "rgba(138,169,100,.05)" in css
-    assert "rgba(138,169,100,.10)" in css
+    assert "background: #d8edc8" in css
+    assert "background: #ffffff" in css
+    assert "background: #eaf3e4" in css
+    assert "#8AA964" not in css
+    assert "white-space: normal" in css
+    assert ".ag-header-cell-text" in css
+    assert "min-height: 44px" in css
     assert ".ag-row-even:not(.ag-row-pinned)" in css
     assert ".ag-row-odd:not(.ag-row-pinned)" in css
     assert ".ag-row-pinned" in css
@@ -1027,6 +1031,63 @@ def test_detail_css_is_scoped_to_table_components_and_tabs(tmp_path: Path) -> No
     assert ".ant-tabs-tab-active .ant-tabs-tab-btn" in css
     assert "#CHART-SPU-DETAIL .ag-header" in css
     assert "#CHART-SKU-DETAIL .ag-header" in css
+
+
+def test_main_dashboard_matches_finebi_density_and_shell_contract(
+    tmp_path: Path,
+) -> None:
+    """The generated canvas reserves the FineBI-like shell and compact grid."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    main = assets_by_key(assets, "dashboards", "dashboard_title")[
+        "拉杆箱在售产品爆品指数看板"
+    ]
+    position = main["position"]
+
+    assert position["HEADER_ID"]["meta"]["height"] == 44
+    assert main["metadata"]["horizontal_filter_bar_two_rows"] is True
+    assert position["COLUMN-TREND"]["meta"]["width"] == 7
+    assert position["COLUMN-LEADERBOARD"]["meta"]["width"] == 5
+    assert position["CHART-SPU-LEADERBOARD"]["meta"]["height"] == 38
+    assert all(
+        position[component_id]["meta"]["height"] == 38
+        for component_id in (
+            "CHART-TREND-DAY",
+            "CHART-TREND-WEEK",
+            "CHART-TREND-MONTH",
+            "CHART-SPU-SHARE",
+            "CHART-SKU-SHARE",
+            "CHART-COLOR-WEEK",
+            "CHART-COLOR-MONTH",
+            "CHART-COLOR-DISTRIBUTION",
+        )
+    )
+
+    css = main["css"]
+    assert "body:has(#main-menu) #main-menu" in css
+    assert "background: #0f5132" in css
+    assert "height: 44px" in css
+    assert "font-size: 26px" in css
+    assert "font-style: italic" in css
+    assert "font-weight: 700" in css
+    assert "border-radius: 0" in css
+    assert "#MARKDOWN-DOC-LINK a" in css
+
+
+def test_main_dashboard_hides_decorative_chart_header_controls_only(
+    tmp_path: Path,
+) -> None:
+    """Chart titles and badges are visually quiet while chart controls remain usable."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    main = assets_by_key(assets, "dashboards", "dashboard_title")[
+        "拉杆箱在售产品爆品指数看板"
+    ]
+    css = main["css"]
+
+    assert ".header-title" in css
+    assert ".filter-counts" in css
+    assert ".header-controls" in css
+    assert "display: none" in css
+    assert "pointer-events: auto" in css
 
 
 def test_main_dashboard_rejects_missing_detail_chart_uuid(tmp_path: Path) -> None:
@@ -1310,7 +1371,7 @@ def test_status_banner_renders_without_sanitized_css_or_row_limit_warning(
     assert "#CHART-STATUS + .chart-slice [data-test='slice-header']" in css
     assert "[id^='CHART-KPI-'] + .chart-slice [data-test='slice-header']" in css
     assert ".dashboard-component-chart-holder:has(> #CHART-STATUS)" in css
-    assert "right: 250px" in css
+    assert "right: 20px" in css
 
 
 def test_guide_chart_keeps_styles_outside_sanitized_handlebars(
