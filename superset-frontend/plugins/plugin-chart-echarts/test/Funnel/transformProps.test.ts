@@ -18,11 +18,6 @@
  */
 import { ChartProps, getNumberFormatter } from '@superset-ui/core';
 import { supersetTheme } from '@apache-superset/core/theme';
-import type {
-  CustomSeriesRenderItem,
-  CustomSeriesRenderItemAPI,
-  CustomSeriesRenderItemParams,
-} from 'echarts';
 import type { FunnelSeriesOption } from 'echarts/charts';
 import type {
   CallbackDataParams,
@@ -31,7 +26,6 @@ import type {
 import transformProps, { parseParams } from '../../src/Funnel/transformProps';
 import {
   EchartsFunnelChartProps,
-  EchartsFunnelLabelType,
   PercentCalcType,
 } from '../../src/Funnel/types';
 
@@ -85,147 +79,6 @@ const callbackParams = (
 });
 
 describe('Funnel transformProps', () => {
-  test('keeps the funnel series when rectangular segments are disabled', () => {
-    const result = transformProps(chartProps as EchartsFunnelChartProps);
-    const [series] = result.echartOptions.series as Array<{ type?: string }>;
-
-    expect(series.type).toBe('funnel');
-  });
-
-  test('renders rectangular segments when enabled', () => {
-    const props = new ChartProps({
-      ...chartProps,
-      formData: {
-        ...formData,
-        groupby: ['foo'],
-        rectangular_segments: true,
-        gap: 8,
-      },
-      queriesData: [
-        {
-          data: [
-            { foo: 'S', sum__num: 10 },
-            { foo: 'A', sum__num: 5 },
-          ],
-        },
-      ],
-    });
-    const result = transformProps(props as unknown as EchartsFunnelChartProps);
-    const [series] = result.echartOptions.series as Array<{
-      type?: string;
-      renderItem?: unknown;
-      data?: unknown[];
-    }>;
-
-    expect(series).toEqual(
-      expect.objectContaining({
-        type: 'custom',
-        coordinateSystem: 'none',
-        renderItem: expect.any(Function),
-      }),
-    );
-    expect(series.data).toEqual([
-      expect.objectContaining({ name: 'S', value: [10, 0, 1, 1] }),
-      expect.objectContaining({ name: 'A', value: [5, 1, 0.5, 0.5] }),
-    ]);
-
-    const renderItem = series.renderItem as CustomSeriesRenderItem;
-    const renderApi = {
-      getWidth: () => 800,
-      getHeight: () => 600,
-      value: () => 10,
-      style: () => ({ fill: '#123456' }),
-    } as unknown as CustomSeriesRenderItemAPI;
-    const firstSegment = renderItem(
-      { dataIndex: 0 } as CustomSeriesRenderItemParams,
-      renderApi,
-    );
-    const secondSegment = renderItem(
-      { dataIndex: 1 } as CustomSeriesRenderItemParams,
-      { ...renderApi, value: () => 5 },
-    );
-
-    expect(firstSegment).toEqual(
-      expect.objectContaining({
-        type: 'rect',
-        shape: { x: 0, y: 20, width: 800, height: 286 },
-      }),
-    );
-    expect(secondSegment).toEqual(
-      expect.objectContaining({
-        type: 'rect',
-        shape: { x: 200, y: 314, width: 400, height: 286 },
-      }),
-    );
-  });
-
-  test('keeps total-percent tooltip values for rectangular segments', () => {
-    const props = new ChartProps({
-      ...chartProps,
-      formData: {
-        ...formData,
-        groupby: ['foo'],
-        rectangular_segments: true,
-        percent_calculation_type: PercentCalcType.Total,
-        tooltip_label_type: EchartsFunnelLabelType.KeyValuePercent,
-      },
-      queriesData: [
-        {
-          data: [
-            { foo: 'S', sum__num: 10 },
-            { foo: 'A', sum__num: 5 },
-          ],
-        },
-      ],
-    });
-    const result = transformProps(props as unknown as EchartsFunnelChartProps);
-    const [series] = result.echartOptions.series as Array<{
-      data?: CallbackDataParams['data'][];
-    }>;
-    const tooltipFormatter = (
-      result.echartOptions.tooltip as unknown as {
-        formatter: (params: CallbackDataParams) => string;
-      }
-    ).formatter;
-
-    const tooltip = tooltipFormatter(
-      callbackParams({
-        name: 'A',
-        value: [5, 1, 0.5, 0.5],
-        data: series.data?.[1],
-        percent: undefined,
-      }),
-    );
-
-    expect(tooltip).toContain('33.33%');
-  });
-
-  test('applies funnel sort order to rectangular segments', () => {
-    const props = new ChartProps({
-      ...chartProps,
-      formData: {
-        ...formData,
-        groupby: ['foo'],
-        rectangular_segments: true,
-        sort: 'descending',
-      },
-      queriesData: [
-        {
-          data: [
-            { foo: 'A', sum__num: 5 },
-            { foo: 'S', sum__num: 10 },
-          ],
-        },
-      ],
-    });
-    const result = transformProps(props as unknown as EchartsFunnelChartProps);
-    const [series] = result.echartOptions.series as Array<{
-      data?: Array<{ name: string }>;
-    }>;
-
-    expect(series.data?.map(({ name }) => name)).toEqual(['S', 'A']);
-  });
-
   test('should transform chart props for viz', () => {
     expect(transformProps(chartProps as EchartsFunnelChartProps)).toEqual(
       expect.objectContaining({

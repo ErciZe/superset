@@ -189,7 +189,6 @@ export type DashboardInfo = {
     chart_customization_config?: (
       ChartCustomization | ChartCustomizationDivider
     )[];
-    horizontal_filter_bar_two_rows?: boolean;
     timed_refresh_immune_slices?: number[];
     refresh_frequency?: number;
     positions?: JsonObject;

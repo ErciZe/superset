@@ -23,13 +23,3 @@ declare module '*.png' {
 }
 
 declare module '*.jpg';
-
-declare module 'echarts/i18n/lang*.js' {
-  const locale: import('echarts/types/src/core/locale').LocaleOption;
-  export default locale;
-}
-
-declare module 'echarts/i18n/lang*-obj.js' {
-  const locale: import('echarts/types/src/core/locale').LocaleOption;
-  export default locale;
-}

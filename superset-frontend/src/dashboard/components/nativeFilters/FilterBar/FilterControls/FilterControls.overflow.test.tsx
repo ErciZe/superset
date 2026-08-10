@@ -24,13 +24,7 @@ import type {
 } from '@superset-ui/core/components/DropdownContainer';
 import { SelectFilterPlugin } from 'src/filters/components';
 import { FilterBarOrientation } from 'src/dashboard/types';
-import {
-  act,
-  render,
-  screen,
-  waitFor,
-  within,
-} from 'spec/helpers/testing-library';
+import { act, render, waitFor, within } from 'spec/helpers/testing-library';
 import { createSelectNativeFilter } from 'spec/fixtures/mockNativeFilters';
 import FilterControls from './FilterControls';
 
@@ -45,21 +39,6 @@ const callbackRef: {
   current:
     ((s: { overflowed: string[]; notOverflowed: string[] }) => void) | null;
 } = { current: null };
-
-const createMatchMediaResult = (
-  query: string,
-  matches: boolean,
-): MediaQueryList =>
-  ({
-    matches,
-    media: query,
-    onchange: null,
-    addListener: jest.fn(),
-    removeListener: jest.fn(),
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    dispatchEvent: jest.fn(),
-  }) as unknown as MediaQueryList;
 
 // Mock the DropdownContainer subpath rather than the barrel
 // `@superset-ui/core/components` — mocking the barrel triggers a
@@ -118,7 +97,6 @@ new OverflowTestPreset().register();
 // scope without needing to model tab parentage.
 const buildHorizontalState = (
   filters: ReturnType<typeof createSelectNativeFilter>[],
-  horizontalFilterBarTwoRows = false,
 ) => ({
   dashboardInfo: {
     id: 1,
@@ -126,7 +104,6 @@ const buildHorizontalState = (
     filterBarOrientation: FilterBarOrientation.Horizontal,
     metadata: {
       native_filter_configuration: filters,
-      horizontal_filter_bar_two_rows: horizontalFilterBarTwoRows,
     },
   },
   dashboardLayout: {
@@ -174,7 +151,6 @@ const buildDataMaskSelected = (
 const renderHorizontal = (
   filters: ReturnType<typeof createSelectNativeFilter>[],
   dataMaskSelected: DataMaskStateWithId,
-  horizontalFilterBarTwoRows = false,
 ) =>
   render(
     <FilterControls
@@ -186,7 +162,7 @@ const renderHorizontal = (
     {
       useRedux: true,
       useRouter: true,
-      initialState: buildHorizontalState(filters, horizontalFilterBarTwoRows),
+      initialState: buildHorizontalState(filters),
     },
   );
 
@@ -205,9 +181,6 @@ const fireOverflow = (overflowed: string[], notOverflowed: string[]) => {
 beforeEach(() => {
   dropdownContainerProps.length = 0;
   callbackRef.current = null;
-  (
-    window.matchMedia as jest.MockedFunction<typeof window.matchMedia>
-  ).mockImplementation(query => createMatchMediaResult(query, false));
 });
 
 test('horizontal FilterControls hands every filter to DropdownContainer as an item', async () => {
@@ -230,87 +203,6 @@ test('horizontal FilterControls hands every filter to DropdownContainer as an it
   ]);
   // dropdownTriggerText is the production string FilterControls passes in.
   expect(latestProps().dropdownTriggerText).toBe('More filters');
-});
-
-test('opt-in wide horizontal filter layout renders two rows without overflow trigger', async () => {
-  const filters = Array.from({ length: 13 }, (_, i) =>
-    createSelectNativeFilter(`NATIVE_FILTER-${i + 1}`, `filter_${i + 1}`),
-  );
-  const matchMedia = window.matchMedia as jest.MockedFunction<
-    typeof window.matchMedia
-  >;
-  matchMedia.mockImplementation(query => createMatchMediaResult(query, true));
-
-  try {
-    renderHorizontal(filters, buildDataMaskSelected(filters), true);
-
-    const grid = await screen.findByTestId('horizontal-filter-grid');
-    expect(window.getComputedStyle(grid).gridAutoFlow).toBe('row');
-    expect(window.getComputedStyle(grid).gridTemplateColumns).toMatch(
-      /repeat\(\s*7,\s*max-content\s*\)/,
-    );
-    expect(
-      screen.queryByTestId('dropdown-container-mock'),
-    ).not.toBeInTheDocument();
-    expect(screen.getAllByTestId('filter-control-name')).toHaveLength(13);
-  } finally {
-    matchMedia.mockImplementation(query =>
-      createMatchMediaResult(query, false),
-    );
-  }
-});
-
-test('switching from overflow to the wide layout clears overflow control styling', async () => {
-  const filters = [
-    createSelectNativeFilter('NATIVE_FILTER-1', 'country'),
-    createSelectNativeFilter('NATIVE_FILTER-2', 'region'),
-  ];
-  const mediaQuery = createMatchMediaResult('(min-width: 1440px)', false);
-  const matchMedia = window.matchMedia as jest.MockedFunction<
-    typeof window.matchMedia
-  >;
-  matchMedia.mockImplementation(query =>
-    query === '(min-width: 1440px)'
-      ? mediaQuery
-      : createMatchMediaResult(query, false),
-  );
-
-  renderHorizontal(filters, buildDataMaskSelected(filters), true);
-  await waitFor(() => expect(callbackRef.current).toBeTruthy());
-  fireOverflow(
-    filters.map(filter => filter.id),
-    [],
-  );
-
-  const changeListener = (
-    mediaQuery.addEventListener as jest.Mock
-  ).mock.calls.at(-1)?.[1] as (event: MediaQueryListEvent) => void;
-  Object.defineProperty(mediaQuery, 'matches', { value: true });
-  act(() => {
-    changeListener({ matches: true } as MediaQueryListEvent);
-  });
-
-  const grid = await screen.findByTestId('horizontal-filter-grid');
-  expect(grid).toBeInTheDocument();
-  expect(document.querySelectorAll('.ant-form-item-horizontal')).toHaveLength(
-    filters.length,
-  );
-});
-
-test('opt-in layout keeps the overflow dropdown below the wide viewport breakpoint', async () => {
-  const filters = [
-    createSelectNativeFilter('NATIVE_FILTER-1', 'country'),
-    createSelectNativeFilter('NATIVE_FILTER-2', 'region'),
-  ];
-
-  renderHorizontal(filters, buildDataMaskSelected(filters), true);
-
-  await waitFor(() =>
-    expect(screen.getByTestId('dropdown-container-mock')).toBeInTheDocument(),
-  );
-  expect(
-    screen.queryByTestId('horizontal-filter-grid'),
-  ).not.toBeInTheDocument();
 });
 
 test('with no overflow callback fired, dropdown trigger count is 0 and content is empty', async () => {

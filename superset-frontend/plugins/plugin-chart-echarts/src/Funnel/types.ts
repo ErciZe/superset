@@ -44,7 +44,6 @@ export type EchartsFunnelFormData = QueryFormData &
     numberFormat: string;
     percentFormat: string;
     gap: number;
-    rectangularSegments?: boolean;
     sort: 'descending' | 'ascending' | 'none' | undefined;
     orient: 'vertical' | 'horizontal' | undefined;
     percentCalculationType: PercentCalcType;
@@ -82,7 +81,6 @@ export const DEFAULT_FORM_DATA: EchartsFunnelFormData = {
   sort: 'descending',
   orient: 'vertical',
   gap: 0,
-  rectangularSegments: false,
 };
 
 export type FunnelChartTransformedProps =

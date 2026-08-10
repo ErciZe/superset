@@ -125,44 +125,38 @@ type EchartsLocale = Parameters<typeof registerLocale>[1];
 type EchartsLocaleModule = { default: EchartsLocale };
 
 const localeLoaders: Record<string, () => Promise<EchartsLocaleModule>> = {
-  AR: () => import('echarts/i18n/langAR-obj.js'),
-  CS: () => import('echarts/i18n/langCS-obj.js'),
-  DE: () => import('echarts/i18n/langDE-obj.js'),
-  EL: () => import('echarts/i18n/langEL-obj.js'),
-  EN: () => import('echarts/i18n/langEN-obj.js'),
-  ES: () => import('echarts/i18n/langES-obj.js'),
-  FA: () => import('echarts/i18n/langFA-obj.js'),
-  FI: () => import('echarts/i18n/langFI-obj.js'),
-  FR: () => import('echarts/i18n/langFR-obj.js'),
-  HU: () => import('echarts/i18n/langHU-obj.js'),
-  IT: () => import('echarts/i18n/langIT-obj.js'),
-  JA: () => import('echarts/i18n/langJA-obj.js'),
-  KO: () => import('echarts/i18n/langKO-obj.js'),
-  LV: () => import('echarts/i18n/langLV-obj.js'),
-  NL: () => import('echarts/i18n/langNL-obj.js'),
-  'NB-NO': () => import('echarts/i18n/langnb-NO-obj.js'),
-  PL: () => import('echarts/i18n/langPL-obj.js'),
-  'PT-BR': () => import('echarts/i18n/langPT-br-obj.js'),
-  RO: () => import('echarts/i18n/langRO-obj.js'),
-  RU: () => import('echarts/i18n/langRU-obj.js'),
-  SI: () => import('echarts/i18n/langSI-obj.js'),
-  SV: () => import('echarts/i18n/langSV-obj.js'),
-  TH: () => import('echarts/i18n/langTH-obj.js'),
-  TR: () => import('echarts/i18n/langTR-obj.js'),
-  UK: () => import('echarts/i18n/langUK-obj.js'),
-  VI: () => import('echarts/i18n/langVI-obj.js'),
-  ZH: () => import('echarts/i18n/langZH-obj.js'),
+  AR: () => import('echarts/i18n/langAR.js'),
+  CS: () => import('echarts/i18n/langCS.js'),
+  DE: () => import('echarts/i18n/langDE.js'),
+  EL: () => import('echarts/i18n/langEL.js'),
+  EN: () => import('echarts/i18n/langEN.js'),
+  ES: () => import('echarts/i18n/langES.js'),
+  FA: () => import('echarts/i18n/langFA.js'),
+  FI: () => import('echarts/i18n/langFI.js'),
+  FR: () => import('echarts/i18n/langFR.js'),
+  HU: () => import('echarts/i18n/langHU.js'),
+  IT: () => import('echarts/i18n/langIT.js'),
+  JA: () => import('echarts/i18n/langJA.js'),
+  KO: () => import('echarts/i18n/langKO.js'),
+  LV: () => import('echarts/i18n/langLV.js'),
+  NL: () => import('echarts/i18n/langNL.js'),
+  'NB-NO': () => import('echarts/i18n/langnb-NO.js'),
+  PL: () => import('echarts/i18n/langPL.js'),
+  'PT-BR': () => import('echarts/i18n/langPT-br.js'),
+  RO: () => import('echarts/i18n/langRO.js'),
+  RU: () => import('echarts/i18n/langRU.js'),
+  SI: () => import('echarts/i18n/langSI.js'),
+  SV: () => import('echarts/i18n/langSV.js'),
+  TH: () => import('echarts/i18n/langTH.js'),
+  TR: () => import('echarts/i18n/langTR.js'),
+  UK: () => import('echarts/i18n/langUK.js'),
+  VI: () => import('echarts/i18n/langVI.js'),
+  ZH: () => import('echarts/i18n/langZH.js'),
 };
-
-const normalizeLocale = (locale: string) =>
-  locale.replace(/_/g, '-').toUpperCase();
 
 const loadLocale = async (locale: string) => {
   const localeLoader = localeLoaders[locale];
-  if (localeLoader) {
-    return (await localeLoader()).default;
-  }
-  return undefined;
+  return localeLoader ? (await localeLoader()).default : undefined;
 };
 
 function Echart(
@@ -187,7 +181,6 @@ function Echart(
   }
   const [didMount, setDidMount] = useState(false);
   const chartRef = useRef<EChartsType>();
-  const localeLoadGeneration = useRef(0);
   const previousQueryEventHandlers = useRef<QueryEventHandlers>([]);
   const currentSelection = useMemo(
     () => Object.keys(selectedValues) || [],
@@ -199,11 +192,9 @@ function Echart(
     getEchartInstance: () => chartRef.current,
   }));
 
-  const locale = normalizeLocale(
-    useSelector(
-      (state: ExplorePageState) => state?.common?.locale ?? DEFAULT_LOCALE,
-    ),
-  );
+  const locale = useSelector(
+    (state: ExplorePageState) => state?.common?.locale ?? DEFAULT_LOCALE,
+  ).toUpperCase();
   const isDashboardRefreshing = useSelector((state: ExplorePageState) =>
     Boolean(state?.dashboardState?.isRefreshing),
   );
@@ -218,16 +209,10 @@ function Echart(
   );
 
   useEffect(() => {
-    localeLoadGeneration.current += 1;
-    const generation = localeLoadGeneration.current;
-    let cancelled = false;
-
     loadLocale(locale).then(localeObj => {
-      if (cancelled || generation !== localeLoadGeneration.current) return;
       if (localeObj) {
         registerLocale(locale, localeObj);
       }
-      if (cancelled || generation !== localeLoadGeneration.current) return;
       if (!divRef.current) return;
       if (!chartRef.current) {
         // Pass width and height to init to avoid "Can't get DOM width or height" warning
@@ -238,15 +223,10 @@ function Echart(
           height,
         });
       }
-      if (cancelled || generation !== localeLoadGeneration.current) return;
       // did mount
       handleSizeChange({ width, height });
       setDidMount(true);
     });
-
-    return () => {
-      cancelled = true;
-    };
   }, [locale, width, height, handleSizeChange]);
 
   useEffect(() => {

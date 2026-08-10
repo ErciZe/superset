@@ -40,7 +40,6 @@ const {
   percentFormat,
   showLabels,
   defaultTooltipLabel,
-  rectangularSegments,
 } = DEFAULT_FORM_DATA;
 
 const funnelLegendSection = [...legendSection];
@@ -102,20 +101,6 @@ const config: ControlPanelConfig = {
       expanded: true,
       controlSetRows: [
         ['color_scheme'],
-        [
-          {
-            name: 'rectangular_segments',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Rectangular segments'),
-              renderTrigger: true,
-              default: rectangularSegments ?? false,
-              description: t(
-                'Render each funnel stage as a centered rectangle while keeping value-based widths.',
-              ),
-            },
-          },
-        ],
         ...funnelLegendSection,
         // eslint-disable-next-line react/jsx-key
         [<ControlSubSectionHeader>{t('Labels')}</ControlSubSectionHeader>],

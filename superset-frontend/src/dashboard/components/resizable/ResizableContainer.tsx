@@ -276,8 +276,6 @@ export default function ResizableContainer({
 
   return (
     <StyledResizable
-      // @ts-expect-error -- re-resizable does not declare forwarded DOM attributes.
-      id={id}
       enable={enableConfig}
       grid={SNAP_TO_GRID}
       gridGap={undefined}

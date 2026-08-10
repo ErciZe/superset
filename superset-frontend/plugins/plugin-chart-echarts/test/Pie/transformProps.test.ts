@@ -369,16 +369,6 @@ describe('Total value positioning with legends', () => {
     expect(leftValue).toBeGreaterThan(30); // Should be reasonable positioning
   });
 
-  test('uses a custom total label without changing the formatted value', () => {
-    const props = getChartPropsWithLegend(true, true, 'right', true);
-    props.formData.totalLabel = '总销量';
-
-    const graphic = transformProps(props).echartOptions.graphic as {
-      style: { text: string };
-    };
-    expect(graphic.style.text).toBe('总销量\n25');
-  });
-
   test('should center total text when legend is on the left', () => {
     const props = getChartPropsWithLegend(true, true, 'left', true);
     const transformed = transformProps(props);

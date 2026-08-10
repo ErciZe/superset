@@ -18,7 +18,7 @@
  * under the License.
  */
 import { ColDef } from '@superset-ui/core/components/ThemedAgGridReact';
-import { createElement, useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { GenericDataType } from '@apache-superset/core/common';
 import { DataRecord } from '@superset-ui/core';
 import { ColorFormatters } from '@superset-ui/chart-controls';
@@ -30,7 +30,6 @@ import {
   AdditionalCellFormatterResult,
   BasicColorFormatterType,
   CellRendererProps,
-  HIERARCHY_META_KEY,
   InputColumn,
 } from '../types';
 import getCellClass from './getCellClass';
@@ -39,7 +38,6 @@ import dateFilterComparator from './dateFilterComparator';
 import { getAggFunc } from './getAggFunc';
 import { TextCellRenderer } from '../renderers/TextCellRenderer';
 import { NumericCellRenderer } from '../renderers/NumericCellRenderer';
-import HierarchyCellRenderer from '../renderers/HierarchyCellRenderer';
 import CustomHeader from '../AgGridTable/components/CustomHeader';
 import { valueFormatter, valueGetter } from './formatValue';
 import getCellStyle from './getCellStyle';
@@ -66,8 +64,6 @@ type UseColDefsProps = {
   emitCrossFilters?: boolean;
   alignPositiveNegative: boolean;
   slice_id: number;
-  rowHierarchyFields?: string[];
-  onToggleHierarchyPath: (path: string) => void;
 };
 
 type ValueRange = [number, number];
@@ -225,8 +221,6 @@ export const useColDefs = ({
   emitCrossFilters,
   alignPositiveNegative,
   slice_id,
-  rowHierarchyFields = [],
-  onToggleHierarchyPath,
 }: UseColDefsProps) => {
   const getCommonColProps = useCallback(
     (
@@ -266,7 +260,6 @@ export const useColDefs = ({
       const isTextColumn =
         dataType === GenericDataType.String ||
         dataType === GenericDataType.Temporal;
-      const isHierarchyField = rowHierarchyFields.includes(originalKey);
       const cachedAdditionalCellFormatter = createCachedAdditionalCellFormatter(
         additionalCellFormatter,
         col,
@@ -331,17 +324,8 @@ export const useColDefs = ({
             'last',
           ],
         }),
-        cellRenderer: (p: CellRendererProps) => {
-          if (isHierarchyField) {
-            return createElement(HierarchyCellRenderer, {
-              value: p.value,
-              valueFormatted: p.valueFormatted,
-              meta: p.data?.[HIERARCHY_META_KEY]?.[originalKey],
-              onToggle: onToggleHierarchyPath,
-            });
-          }
-          return isTextColumn ? TextCellRenderer(p) : NumericCellRenderer(p);
-        },
+        cellRenderer: (p: CellRendererProps) =>
+          isTextColumn ? TextCellRenderer(p) : NumericCellRenderer(p),
         cellRendererParams: {
           allowRenderHtml: true,
           columns,
@@ -359,7 +343,6 @@ export const useColDefs = ({
           isNumeric,
         },
         lockPinned: !allowRearrangeColumns,
-        pinned: config?.pinned ?? undefined,
         sortable: !serverPagination || !isPercentMetric,
         ...(serverPagination && {
           headerComponent: CustomHeader,
@@ -396,8 +379,6 @@ export const useColDefs = ({
       allowRearrangeColumns,
       serverPagination,
       alignPositiveNegative,
-      rowHierarchyFields,
-      onToggleHierarchyPath,
     ],
   );
 

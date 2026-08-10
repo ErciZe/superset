@@ -100,8 +100,6 @@ type FilterControlsProps = {
   hideHeader?: boolean;
 };
 
-const WIDE_FILTER_BAR_MEDIA_QUERY = '(min-width: 1440px)';
-
 const SectionContainer = styled.div`
   margin-bottom: ${({ theme }) => theme.sizeUnit * 3}px;
 `;
@@ -146,43 +144,6 @@ const ChartCustomizationContent = styled.div`
   gap: ${({ theme }) => theme.sizeUnit * 2}px;
 `;
 
-const HorizontalFilterGrid = styled.div<{ columnCount: number }>`
-  display: grid;
-  grid-auto-flow: row;
-  grid-auto-columns: max-content;
-  grid-template-columns: repeat(
-    ${({ columnCount }) => columnCount},
-    max-content
-  );
-  grid-template-rows: repeat(2, max-content);
-  align-items: center;
-  gap: ${({ theme }) => `${theme.sizeUnit * 2}px ${theme.sizeUnit * 4}px`};
-  min-width: 0;
-  max-width: 100%;
-  overflow-x: auto;
-`;
-
-const useIsWideFilterBarViewport = (): boolean => {
-  const [isWide, setIsWide] = useState(() =>
-    typeof window !== 'undefined'
-      ? window.matchMedia(WIDE_FILTER_BAR_MEDIA_QUERY).matches
-      : false,
-  );
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia(WIDE_FILTER_BAR_MEDIA_QUERY);
-    const updateIsWide = (event: MediaQueryListEvent) => {
-      setIsWide(event.matches);
-    };
-
-    setIsWide(mediaQuery.matches);
-    mediaQuery.addEventListener('change', updateIsWide);
-    return () => mediaQuery.removeEventListener('change', updateIsWide);
-  }, []);
-
-  return isWide;
-};
-
 const FilterControls: FC<FilterControlsProps> = ({
   dataMaskSelected,
   onFilterSelectionChange,
@@ -197,11 +158,6 @@ const FilterControls: FC<FilterControlsProps> = ({
   const filterBarOrientation = useSelector<RootState, FilterBarOrientation>(
     ({ dashboardInfo }) => dashboardInfo.filterBarOrientation,
   );
-  const twoRowsConfigured = useSelector<RootState, boolean>(
-    ({ dashboardInfo }) =>
-      dashboardInfo.metadata?.horizontal_filter_bar_two_rows === true,
-  );
-  const isWideFilterBarViewport = useIsWideFilterBarViewport();
 
   const { outlinedFilterId, lastUpdated } = useFilterOutlined();
 
@@ -251,12 +207,6 @@ const FilterControls: FC<FilterControlsProps> = ({
 
   const [customizationsInScope, customizationsOutOfScope] =
     useSelectCustomizationsInScope(filteredChartCustomizationValues);
-
-  const showTwoRowLayout =
-    twoRowsConfigured &&
-    isWideFilterBarViewport &&
-    filtersOutOfScope.length === 0 &&
-    customizationsOutOfScope.length === 0;
 
   const hasRequiredFirst = useMemo(
     () => filtersWithValues.some(filter => filter.requiredFirst),
@@ -639,83 +589,71 @@ const FilterControls: FC<FilterControlsProps> = ({
           flex: 1;
         `}
       >
-        {showTwoRowLayout ? (
-          <HorizontalFilterGrid
-            columnCount={Math.max(1, Math.ceil(items.length / 2))}
-            data-test="horizontal-filter-grid"
-          >
-            {items.map(item => (
-              <Fragment key={item.id}>{item.element}</Fragment>
-            ))}
-          </HorizontalFilterGrid>
-        ) : (
-          <DropdownContainer
-            items={items}
-            dropdownTriggerIcon={
-              <Icons.FilterOutlined
-                css={css`
-                  && {
-                    margin-right: -4px;
-                    display: flex;
-                  }
-                `}
-              />
-            }
-            dropdownTriggerText={t('More filters')}
-            dropdownTriggerCount={activeOverflowedFiltersInScope.length}
-            dropdownTriggerTooltip={
-              activeOverflowedFiltersInScope.length === 0
-                ? t('No applied filters')
-                : t(
-                    'Applied filters: %s',
-                    activeOverflowedFiltersInScope
-                      .map(filter => filter.name)
-                      .join(', '),
-                  )
-            }
-            dropdownContent={
-              overflowedFiltersInScope.length ||
-              overflowedCrossFilters.length ||
-              (filtersOutOfScope.length && showCollapsePanel) ||
-              (customizationsOutOfScope.length &&
-                showCustomizationCollapsePanel)
-                ? () => (
-                    <>
-                      <FiltersDropdownContent
-                        overflowedCrossFilters={overflowedCrossFilters}
-                        filtersInScope={overflowedFiltersInScope}
-                        filtersOutOfScope={filtersOutOfScope}
-                        renderer={renderer}
-                        rendererCrossFilter={rendererCrossFilter}
-                        showCollapsePanel={showCollapsePanel}
-                        forceRenderOutOfScope={hasRequiredFirst}
-                      />
-                      {showCustomizationCollapsePanel && (
-                        <CustomizationsOutOfScopeCollapsible
-                          customizationsOutOfScope={customizationsOutOfScope}
-                          renderer={customizationRenderer}
-                          forceRender={false}
-                        />
-                      )}
-                    </>
-                  )
-                : undefined
-            }
-            forceRender={hasRequiredFirst}
-            ref={popoverRef}
-            onOverflowingStateChange={({ overflowed: nextOverflowedIds }) => {
-              if (
-                nextOverflowedIds.length !== overflowedIds.length ||
-                overflowedIds.reduce(
-                  (a, b, i) => a || b !== nextOverflowedIds[i],
-                  false,
+        <DropdownContainer
+          items={items}
+          dropdownTriggerIcon={
+            <Icons.FilterOutlined
+              css={css`
+                && {
+                  margin-right: -4px;
+                  display: flex;
+                }
+              `}
+            />
+          }
+          dropdownTriggerText={t('More filters')}
+          dropdownTriggerCount={activeOverflowedFiltersInScope.length}
+          dropdownTriggerTooltip={
+            activeOverflowedFiltersInScope.length === 0
+              ? t('No applied filters')
+              : t(
+                  'Applied filters: %s',
+                  activeOverflowedFiltersInScope
+                    .map(filter => filter.name)
+                    .join(', '),
                 )
-              ) {
-                setOverflowedIds(nextOverflowedIds);
-              }
-            }}
-          />
-        )}
+          }
+          dropdownContent={
+            overflowedFiltersInScope.length ||
+            overflowedCrossFilters.length ||
+            (filtersOutOfScope.length && showCollapsePanel) ||
+            (customizationsOutOfScope.length && showCustomizationCollapsePanel)
+              ? () => (
+                  <>
+                    <FiltersDropdownContent
+                      overflowedCrossFilters={overflowedCrossFilters}
+                      filtersInScope={overflowedFiltersInScope}
+                      filtersOutOfScope={filtersOutOfScope}
+                      renderer={renderer}
+                      rendererCrossFilter={rendererCrossFilter}
+                      showCollapsePanel={showCollapsePanel}
+                      forceRenderOutOfScope={hasRequiredFirst}
+                    />
+                    {showCustomizationCollapsePanel && (
+                      <CustomizationsOutOfScopeCollapsible
+                        customizationsOutOfScope={customizationsOutOfScope}
+                        renderer={customizationRenderer}
+                        forceRender={false}
+                      />
+                    )}
+                  </>
+                )
+              : undefined
+          }
+          forceRender={hasRequiredFirst}
+          ref={popoverRef}
+          onOverflowingStateChange={({ overflowed: nextOverflowedIds }) => {
+            if (
+              nextOverflowedIds.length !== overflowedIds.length ||
+              overflowedIds.reduce(
+                (a, b, i) => a || b !== nextOverflowedIds[i],
+                false,
+              )
+            ) {
+              setOverflowedIds(nextOverflowedIds);
+            }
+          }}
+        />
       </div>
     ),
     [
@@ -732,15 +670,10 @@ const FilterControls: FC<FilterControlsProps> = ({
       rendererCrossFilter,
       hasRequiredFirst,
       overflowedIds,
-      showTwoRowLayout,
     ],
   );
 
   const overflowedByIndex = useMemo(() => {
-    if (showTwoRowLayout) {
-      return filtersWithValues.map(() => false);
-    }
-
     const filtersOutOfScopeIds = new Set(filtersOutOfScope.map(({ id }) => id));
     const overflowedFiltersInScopeIds = new Set(
       overflowedFiltersInScope.map(({ id }) => id),
@@ -758,24 +691,13 @@ const FilterControls: FC<FilterControlsProps> = ({
     filtersWithValues,
     overflowedFiltersInScope,
     filterBarOrientation,
-    showTwoRowLayout,
   ]);
 
   useEffect(() => {
-    if (showTwoRowLayout) {
-      if (overflowedIds.length > 0) setOverflowedIds([]);
-      return;
-    }
     if (outlinedFilterId && overflowedIds.includes(outlinedFilterId)) {
       popoverRef?.current?.open();
     }
-  }, [
-    outlinedFilterId,
-    lastUpdated,
-    popoverRef,
-    overflowedIds,
-    showTwoRowLayout,
-  ]);
+  }, [outlinedFilterId, lastUpdated, popoverRef, overflowedIds]);
 
   return (
     <>

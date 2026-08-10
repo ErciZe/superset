@@ -52,7 +52,6 @@ import {
   SMART_DATE_ID,
   validateMaxValue,
   validateServerPagination,
-  getColumnLabel,
 } from '@superset-ui/core';
 import { GenericDataType } from '@apache-superset/core/common';
 import { t } from '@apache-superset/core/translation';
@@ -132,68 +131,6 @@ const validateAggControlValues = (
   return areControlsEmpty && isAggMode({ controls })
     ? [t('Group By, Metrics or Percentage Metrics must have a value')]
     : [];
-};
-
-type RowHierarchyFieldsValue = string | string[] | null | undefined;
-
-const getGroupByColumns = (value: unknown): QueryFormColumn[] =>
-  ensureIsArray(
-    value as QueryFormColumn | QueryFormColumn[] | null | undefined,
-  );
-
-const getRowHierarchyFields = (value: unknown): string[] =>
-  ensureIsArray(value as RowHierarchyFieldsValue);
-
-export const validateRowHierarchyFields = (
-  rowHierarchyFields: readonly string[] | null | undefined,
-  groupByColumns: readonly QueryFormColumn[] | null | undefined,
-): string | false => {
-  const fields = rowHierarchyFields ?? [];
-  if (fields.length === 0) {
-    return false;
-  }
-
-  if (new Set(fields).size !== fields.length) {
-    return t('Row hierarchy fields must not contain duplicates');
-  }
-
-  const groupBy = groupByColumns ?? [];
-  const groupByLabels = groupBy.map(getColumnLabel);
-  const isPrefix = fields.every(
-    (field, index) => field === groupByLabels[index],
-  );
-
-  return isPrefix
-    ? false
-    : t('Row hierarchy fields must be an exact prefix of Group By');
-};
-
-const rowHierarchyControl: ControlConfig<'SelectControl'> = {
-  type: 'SelectControl',
-  label: t('Row hierarchy'),
-  multi: true,
-  default: [],
-  resetOnHide: false,
-  description: t(
-    'Ordered leading group-by fields shown as a collapsible hierarchy.',
-  ),
-  mapStateToProps: ({ controls }, controlState) => {
-    const groupByColumns = getGroupByColumns(controls.groupby?.value);
-    const validationError = validateRowHierarchyFields(
-      getRowHierarchyFields(controlState?.value),
-      groupByColumns,
-    );
-
-    return {
-      choices: groupByColumns.map(column => {
-        const value = getColumnLabel(column);
-        return [value, value];
-      }),
-      externalValidationErrors: validationError ? [validationError] : [],
-    };
-  },
-  visibility: isAggMode,
-  rerender: ['groupby'],
 };
 
 const queryMode: ControlConfig<'RadioButtonControl'> = {
@@ -303,12 +240,6 @@ const config: ControlPanelConfig = {
               },
               rerender: ['metrics', 'percent_metrics'],
             },
-          },
-        ],
-        [
-          {
-            name: 'row_hierarchy_fields',
-            config: rowHierarchyControl,
           },
         ],
         [

@@ -16,12 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import {
-  act,
-  createStore,
-  render,
-  waitFor,
-} from '../../../../spec/helpers/testing-library';
+import { render, waitFor } from '../../../../spec/helpers/testing-library';
 import type { EChartsCoreOption } from 'echarts/core';
 import Echart from './Echart';
 import type { EchartsProps } from '../types';
@@ -69,69 +64,6 @@ jest.mock('echarts/core', () => ({
   init: jest.fn(() => mockChart),
   registerLocale: jest.fn(),
   use: jest.fn(),
-}));
-
-const mockZhLocale = {
-  time: {
-    month: Array.from({ length: 12 }, (_, index) => `月${index + 1}`),
-    monthAbbr: Array.from({ length: 12 }, (_, index) => `M${index + 1}`),
-    dayOfWeek: Array.from({ length: 7 }, (_, index) => `日${index + 1}`),
-    dayOfWeekAbbr: Array.from({ length: 7 }, (_, index) => `D${index + 1}`),
-  },
-};
-
-const mockPtLocale = { time: { month: ['Janeiro'] } };
-const mockNbLocale = { time: { month: ['Januar'] } };
-const mockArLocale = { time: { month: ['Ar'] } };
-const mockCsLocale = { time: { month: ['Cs'] } };
-const mockDeLocale = { time: { month: ['De'] } };
-
-let mockArLocalePromise: Promise<typeof mockArLocale> =
-  Promise.resolve(mockArLocale);
-let mockCsLocalePromise: Promise<typeof mockCsLocale> =
-  Promise.resolve(mockCsLocale);
-let mockDeLocalePromise: Promise<typeof mockDeLocale> =
-  Promise.resolve(mockDeLocale);
-
-jest.mock('echarts/i18n/langEN-obj.js', () => ({
-  __esModule: true,
-  default: {},
-}));
-
-jest.mock('echarts/i18n/langZH-obj.js', () => ({
-  __esModule: true,
-  default: mockZhLocale,
-}));
-
-jest.mock('echarts/i18n/langPT-br-obj.js', () => ({
-  __esModule: true,
-  default: mockPtLocale,
-}));
-
-jest.mock('echarts/i18n/langnb-NO-obj.js', () => ({
-  __esModule: true,
-  default: mockNbLocale,
-}));
-
-jest.mock('echarts/i18n/langAR-obj.js', () => ({
-  __esModule: true,
-  get default() {
-    return mockArLocalePromise;
-  },
-}));
-
-jest.mock('echarts/i18n/langCS-obj.js', () => ({
-  __esModule: true,
-  get default() {
-    return mockCsLocalePromise;
-  },
-}));
-
-jest.mock('echarts/i18n/langDE-obj.js', () => ({
-  __esModule: true,
-  get default() {
-    return mockDeLocalePromise;
-  },
 }));
 
 jest.mock('echarts/charts', () => ({
@@ -194,27 +126,6 @@ const renderEchart = (props: Partial<EchartsProps> = {}) => (
   <Echart {...defaultProps} {...props} />
 );
 
-type EchartsCoreMock = {
-  init: jest.Mock;
-  registerLocale: jest.Mock;
-};
-
-const getEchartsCoreMock = () =>
-  jest.requireMock('echarts/core') as EchartsCoreMock;
-
-type Deferred<T> = {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-};
-
-const createDeferred = <T,>(): Deferred<T> => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>(value => {
-    resolve = value;
-  });
-  return { promise, resolve };
-};
-
 const trigger = (name: string) => {
   (listeners[name] || []).forEach(listener => listener.handler({}));
 };
@@ -228,154 +139,6 @@ beforeEach(() => {
       value.mockClear();
     }
   });
-  const echartsCore = getEchartsCoreMock();
-  echartsCore.init.mockClear();
-  echartsCore.registerLocale.mockClear();
-  echartsCore.init.mockImplementation(() => mockChart);
-  echartsCore.registerLocale.mockImplementation(() => undefined);
-});
-
-test('registers locale data from locale object modules before chart init', async () => {
-  const { init, registerLocale } = getEchartsCoreMock();
-  const calls: string[] = [];
-  registerLocale.mockImplementation(() => calls.push('registerLocale'));
-  init.mockImplementation(() => {
-    calls.push('init');
-    return mockChart;
-  });
-
-  render(renderEchart(), {
-    initialState: { ...initialState, common: { locale: 'zh' } },
-    useRedux: true,
-  });
-
-  await waitFor(() => expect(init).toHaveBeenCalled());
-
-  expect(registerLocale).toHaveBeenCalledWith('ZH', mockZhLocale);
-  expect(calls).toEqual(['registerLocale', 'init']);
-});
-
-test('normalizes regional locales before loading locale object modules', async () => {
-  const cases = [
-    ['pt_BR', 'PT-BR', mockPtLocale],
-    ['nb_NO', 'NB-NO', mockNbLocale],
-  ] as const;
-
-  for (const [sourceLocale, echartsLocale, localeObject] of cases) {
-    const { init, registerLocale } = getEchartsCoreMock();
-    const { unmount } = render(renderEchart(), {
-      initialState: { ...initialState, common: { locale: sourceLocale } },
-      useRedux: true,
-    });
-
-    await waitFor(() =>
-      expect(registerLocale).toHaveBeenCalledWith(echartsLocale, localeObject),
-    );
-    expect(init).toHaveBeenCalledWith(
-      expect.any(HTMLDivElement),
-      null,
-      expect.objectContaining({ locale: echartsLocale }),
-    );
-    unmount();
-    registerLocale.mockClear();
-    init.mockClear();
-  }
-});
-
-test('ignores stale locale and size loads after a newer render', async () => {
-  const ar = createDeferred<typeof mockArLocale>();
-  const cs = createDeferred<typeof mockCsLocale>();
-  mockArLocalePromise = ar.promise;
-  mockCsLocalePromise = cs.promise;
-
-  const localeReducer = (
-    state = initialState.common,
-    action: { type: string; payload?: string },
-  ) =>
-    action.type === 'SET_LOCALE' && action.payload
-      ? { locale: action.payload }
-      : state;
-  const store = createStore(
-    { ...initialState, common: { locale: 'ar' } },
-    {
-      common: localeReducer,
-      dashboardState: (state = initialState.dashboardState) => state,
-    },
-  );
-  const view = render(renderEchart(), {
-    store,
-  });
-
-  act(() => {
-    store.dispatch({ type: 'SET_LOCALE', payload: 'cs' });
-  });
-  view.rerender(renderEchart({ width: 200, height: 200 }));
-
-  await act(async () => {
-    cs.resolve(mockCsLocale);
-    await new Promise(resolve => setTimeout(resolve, 0));
-  });
-
-  await waitFor(() =>
-    expect(getEchartsCoreMock().init).toHaveBeenCalledWith(
-      expect.any(HTMLDivElement),
-      null,
-      expect.objectContaining({ locale: 'CS', width: 200, height: 200 }),
-    ),
-  );
-  expect(getEchartsCoreMock().registerLocale).toHaveBeenCalledTimes(1);
-  expect(getEchartsCoreMock().registerLocale).toHaveBeenCalledWith(
-    'CS',
-    mockCsLocale,
-  );
-
-  await act(async () => {
-    ar.resolve(mockArLocale);
-    await new Promise(resolve => setTimeout(resolve, 0));
-  });
-
-  expect(getEchartsCoreMock().registerLocale).toHaveBeenCalledTimes(1);
-  expect(getEchartsCoreMock().init).toHaveBeenCalledTimes(1);
-  expect(mockChart.resize).toHaveBeenCalledTimes(1);
-  expect(mockChart.resize).toHaveBeenCalledWith({ width: 200, height: 200 });
-  expect(mockChart.setOption).toHaveBeenCalledTimes(1);
-  view.unmount();
-});
-
-test('does not register or initialize a locale after unmount', async () => {
-  const de = createDeferred<typeof mockDeLocale>();
-  mockDeLocalePromise = de.promise;
-
-  const { unmount } = render(renderEchart(), {
-    initialState: { ...initialState, common: { locale: 'de' } },
-    useRedux: true,
-  });
-  unmount();
-
-  await act(async () => {
-    de.resolve(mockDeLocale);
-    await new Promise(resolve => setTimeout(resolve, 0));
-  });
-
-  expect(getEchartsCoreMock().registerLocale).not.toHaveBeenCalled();
-  expect(getEchartsCoreMock().init).not.toHaveBeenCalled();
-  expect(mockChart.resize).not.toHaveBeenCalled();
-});
-
-test('initializes unknown locales without registering a locale object', async () => {
-  render(renderEchart(), {
-    initialState: { ...initialState, common: { locale: 'xx_YY' } },
-    useRedux: true,
-  });
-
-  await waitFor(() =>
-    expect(getEchartsCoreMock().init).toHaveBeenCalledWith(
-      expect.any(HTMLDivElement),
-      null,
-      expect.objectContaining({ locale: 'XX-YY' }),
-    ),
-  );
-  expect(getEchartsCoreMock().registerLocale).not.toHaveBeenCalled();
 });
 
 test('replaces stale query event handlers without clearing regular event handlers', async () => {

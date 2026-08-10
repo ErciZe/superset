@@ -33,12 +33,6 @@ import {
 import { DEFAULT_FORM_DATA } from './types';
 import { legendSection } from '../controls';
 
-export const PIE_DEFAULT_ROW_LIMIT = 100;
-export const PIE_MAX_ROW_LIMIT = 1000;
-
-export const normalizePieRowLimit = (value: unknown): number =>
-  Math.min(ensureIsInt(value, PIE_DEFAULT_ROW_LIMIT), PIE_MAX_ROW_LIMIT);
-
 const {
   donut,
   innerRadius,
@@ -254,19 +248,6 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        [
-          {
-            name: 'total_label',
-            config: {
-              type: 'TextControl',
-              label: t('Total label'),
-              default: '',
-              renderTrigger: true,
-              visibility: ({ controls }: ControlPanelsContainerProps) =>
-                Boolean(controls?.show_total?.value),
-            },
-          },
-        ],
         // eslint-disable-next-line react/jsx-key
         [<ControlSubSectionHeader>{t('Pie shape')}</ControlSubSectionHeader>],
         [
@@ -322,14 +303,15 @@ const config: ControlPanelConfig = {
       clearable: false,
     },
     row_limit: {
-      default: PIE_DEFAULT_ROW_LIMIT,
+      default: 100,
     },
   },
   formDataOverrides: formData => ({
     ...formData,
     metric: getStandardizedControls().shiftMetric(),
     groupby: getStandardizedControls().popAllColumns(),
-    row_limit: normalizePieRowLimit(formData.row_limit),
+    row_limit:
+      ensureIsInt(formData.row_limit, 100) >= 100 ? 100 : formData.row_limit,
   }),
 };
 

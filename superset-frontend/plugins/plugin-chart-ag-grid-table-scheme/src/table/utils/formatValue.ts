@@ -38,20 +38,19 @@ import DateWithFormatter from './DateWithFormatter';
 function formatValue(
   formatter: DataColumnMeta['formatter'],
   value: DataRecordValue,
-  nullValue = 'N/A',
 ): [boolean, string] {
   // render undefined as empty string
   if (value === undefined) {
     return [false, ''];
   }
-  // Render null with the configured per-column placeholder.
+  // render null as `N/A`
   if (
     value === null ||
     // null values in temporal columns are wrapped in a Date object, so make sure we
     // handle them here too
     (value instanceof DateWithFormatter && value.input === null)
   ) {
-    return [false, nullValue];
+    return [false, 'N/A'];
   }
   if (formatter) {
     return [false, formatter(value as number)];
@@ -82,7 +81,6 @@ export function formatColumnValue(
       ? smallNumberFormatter
       : formatter,
     value,
-    config.nullValue,
   );
 }
 
@@ -91,16 +89,11 @@ export const valueFormatter = (
   col: InputColumn,
 ): string => {
   const { value, node } = params;
-  const isNull =
-    value === null ||
-    (value instanceof DateWithFormatter && value.input === null);
-  if (isNull) {
-    if (node?.level === -1) {
-      return '';
-    }
-    return col.config?.nullValue ?? 'N/A';
-  }
-  if (isDefined(value) && value !== '' && !isNull) {
+  if (
+    isDefined(value) &&
+    value !== '' &&
+    !(value instanceof DateWithFormatter && value.input === null)
+  ) {
     return col.formatter?.(value) || value;
   }
   if (node?.level === -1) {
@@ -115,10 +108,8 @@ export const valueGetter = (params: ValueGetterParams, col: InputColumn) => {
     const modifiedColId = `Main ${params.column.getColId()}`;
     return params.data[modifiedColId];
   }
-  const columnId = params.column.getColId();
-  const value = params.data?.[columnId];
-  if (value === null || isDefined(value)) {
-    return value;
+  if (isDefined(params.data?.[params.column.getColId()])) {
+    return params.data[params.column.getColId()];
   }
   if (col.isNumeric) {
     return undefined;
