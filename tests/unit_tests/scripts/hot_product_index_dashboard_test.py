@@ -860,6 +860,12 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
         for chart in main_charts
         if chart["viz_type"] == "big_number_total"
     )
+    assert all(
+        chart["params"].get("metric_name_font_size") == 0.15
+        and chart["params"].get("header_font_size") == 0.5
+        for chart in main_charts
+        if chart["viz_type"] == "big_number_total"
+    )
     assert (
         not {
             "国家维度",

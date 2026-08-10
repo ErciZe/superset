@@ -2089,8 +2089,9 @@ def _big_number_params(metric: str, number_format: str) -> Asset:
     """Return the shared configuration for a KPI tile."""
     return {
         "adhoc_filters": [],
-        "header_font_size": 0.35,
+        "header_font_size": 0.5,
         "metric": metric,
+        "metric_name_font_size": 0.15,
         "show_metric_name": True,
         "show_trend_line": False,
         "start_y_axis_at_zero": True,
