@@ -780,6 +780,15 @@ def _detail_sql(*, grain: str) -> str:
 
     dimension_list = ", ".join(dimensions)
     dimension_select = ",\n      ".join(dimensions)
+    output_dimensions = [
+        "COALESCE(spu_final_rating, '') AS final_rating"
+        if grain == "spu" and dimension == "spu_final_rating"
+        else dimension
+        for dimension in dimensions
+    ]
+    if grain == "spu":
+        output_dimensions.append("spu_final_rating")
+    display_dimension_select = ",\n    ".join(output_dimensions)
     stock_dimension_join = " AND ".join(
         f"a.{column} <=> stock_leaf.{column}" for column in dimensions
     )
@@ -1011,7 +1020,7 @@ leaf_rows AS (
   CROSS JOIN quality b
 )
 SELECT
-    {dimension_select},
+    {display_dimension_select},
     hot_product_index,
     score,
     sales_amount_usd,
@@ -1504,6 +1513,7 @@ DETAIL_LABELS: Final[dict[str, str]] = {
     "sku": "SKU",
     "ym": "年月",
     "spu_previous_month_sales_level": "SPU评级",
+    "final_rating": "最终评级",
     "spu_final_rating": "SPU最终评级",
     "sku_level": "SKU等级",
     "product_level": "产品等级",
@@ -1531,7 +1541,7 @@ DETAIL_DISPLAYED_COLUMNS: Final[dict[str, tuple[str, ...]]] = {
         "spu",
         "ym",
         "spu_previous_month_sales_level",
-        "spu_final_rating",
+        "final_rating",
         "hot_product_index",
         "score",
         "sales_amount_usd",
@@ -1577,6 +1587,7 @@ DETAIL_COLUMN_TYPES: Final[dict[str, str]] = {
     "sku": "STRING",
     "ym": "STRING",
     "spu_previous_month_sales_level": "STRING",
+    "final_rating": "STRING",
     "spu_final_rating": "STRING",
     "sku_level": "STRING",
     "product_level": "STRING",
@@ -1768,11 +1779,11 @@ DETAIL_MONEY_COLUMNS: Final[frozenset[str]] = frozenset(
     {"sales_amount_usd", "gross_profit_usd"}
 )
 DETAIL_IDENTIFIER_COLUMNS: Final[dict[str, tuple[str, ...]]] = {
-    "spu": ("spu", "ym", "spu_previous_month_sales_level", "spu_final_rating"),
+    "spu": ("spu", "ym", "spu_previous_month_sales_level", "final_rating"),
     "sku": ("company_sku", "sku"),
 }
 DETAIL_GROUPBY: Final[dict[str, tuple[str, ...]]] = {
-    "spu": ("spu", "ym", "spu_previous_month_sales_level", "spu_final_rating"),
+    "spu": ("spu", "ym", "spu_previous_month_sales_level", "final_rating"),
     "sku": ("company_sku", "sku", "ym", "product_level", "size", "color"),
 }
 DETAIL_SORT: Final[dict[str, tuple[tuple[str, bool], ...]]] = {

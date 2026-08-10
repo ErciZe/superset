@@ -191,8 +191,14 @@ def test_spu_final_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> 
         assert columns["spu_final_rating"]["verbose_name"] == "SPU最终评级"
         assert columns["spu_final_rating"]["type"] == "STRING"
         assert "spu_final_rating" in dataset["sql"]
+    assert "COALESCE(d.spu_final_rating" not in datasets["爆品指数-日明细"]["sql"]
+    assert "COALESCE(m.spu_final_rating" not in datasets["爆品指数-月末在售"]["sql"]
 
     spu = datasets["爆品指数-SPU月度经营明细"]
+    assert (
+        "COALESCE(spu_final_rating, '') AS final_rating,\n    spu_final_rating,"
+        in (spu["sql"])
+    )
     assert (
         "GROUP BY ym, spu, spu_previous_month_sales_level, spu_final_rating"
         in (spu["sql"])
@@ -203,7 +209,10 @@ def test_spu_final_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> 
     )
     spu_columns = {item["column_name"]: item for item in spu["columns"]}
     assert spu_columns["spu_previous_month_sales_level"]["verbose_name"] == "SPU评级"
+    assert spu_columns["final_rating"]["verbose_name"] == "最终评级"
+    assert spu_columns["final_rating"]["groupby"] is True
     assert spu_columns["spu_final_rating"]["verbose_name"] == "SPU最终评级"
+    assert spu_columns["spu_final_rating"]["groupby"] is False
     assert spu_columns["sku_level"]["verbose_name"] == "SKU等级"
 
     leaderboard_sql = datasets["爆品指数-SPU销量排行榜"]["sql"]
@@ -277,6 +286,7 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
             "spu",
             "ym",
             "spu_previous_month_sales_level",
+            "final_rating",
             "spu_final_rating",
             "sku_level",
             "hot_product_index",
@@ -298,6 +308,7 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
         "spu": "SPU",
         "ym": "年月",
         "spu_previous_month_sales_level": "SPU评级",
+        "final_rating": "最终评级",
         "spu_final_rating": "SPU最终评级",
         "sku_level": "SKU等级",
         "hot_product_index": "爆品指数",
@@ -423,7 +434,7 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
             "spu",
             "ym",
             "spu_previous_month_sales_level",
-            "spu_final_rating",
+            "final_rating",
         }
         if dataset["table_name"] == "爆品指数-SKU月度经营明细":
             visible_filter_columns = {
@@ -560,7 +571,7 @@ def test_detail_charts_preserve_approved_fields_pagination_and_sorting(
         "spu",
         "ym",
         "spu_previous_month_sales_level",
-        "spu_final_rating",
+        "final_rating",
     ]
     assert sku["params"]["groupby"] == [
         "company_sku",
