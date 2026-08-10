@@ -358,7 +358,8 @@ def test_spu_leaderboard_uses_watermark_anchored_two_period_contract(
         assert sql.count(f"get_filters('{column}', remove_filter=True)") == 2
     assert "spu_previous_month_sales_amount_cny" not in sql
     assert "SUM(m.sales_amount_usd)" in sql
-    assert "GROUP BY m.spu, m.spu_previous_month_sales_level, m.sku_level" in sql
+    assert "GROUP BY m.spu, m.spu_previous_month_sales_level, m.spu_final_rating" in sql
+    assert "COALESCE(c.spu_final_rating, '') AS final_rating" in sql
     assert "watermark_time_progress" not in sql
     assert (
         "NULLIF(DAY(q.data_through_date) / DAY(LAST_DAY(q.data_through_date)), 0)"
@@ -371,6 +372,7 @@ def test_spu_leaderboard_uses_watermark_anchored_two_period_contract(
         for name in (
             "spu",
             "spu_rating",
+            "spu_final_rating",
             "final_rating",
             "previous_month_sales_amount_usd",
             "current_month_sales_amount_usd",
@@ -380,6 +382,7 @@ def test_spu_leaderboard_uses_watermark_anchored_two_period_contract(
     } == {
         "SPU",
         "SPU评级",
+        "SPU最终评级",
         "最终评级",
         "上月销售额",
         "本月销量额",

@@ -147,6 +147,11 @@ MONTHLY_SOURCE_COLUMNS: Final[tuple[tuple[str, str], ...]] = (
     ("etl_loaded_at", "DATETIME"),
 )
 
+SPU_FINAL_RATING_COLUMN: Final[tuple[str, str]] = (
+    "spu_final_rating",
+    "STRING",
+)
+
 COVERAGE_COLUMNS: Final[tuple[tuple[str, str], ...]] = (
     ("selected_start_date", "DATE"),
     ("selected_end_date", "DATE"),
@@ -194,8 +199,9 @@ COLUMN_VERBOSE_NAMES: Final = {
     "model": "型号",
     "sku_level": "SKU等级",
     "product_level": "产品等级",
+    "spu_final_rating": "SPU最终评级",
     "spu_previous_month_sales_amount_cny": "SPU上月销售额（人民币）",
-    "spu_previous_month_sales_level": "SPU上月销售等级",
+    "spu_previous_month_sales_level": "SPU评级",
     "sales_qty": "销量",
     "sales_amount_usd": "销售额（美元）",
     "gross_profit_usd": "毛利润（美元）",
@@ -293,7 +299,7 @@ FILTERS: Final[tuple[tuple[str, str], ...]] = (
     ("开发经理", "developer"),
     ("型号", "model"),
     ("SKU等级", "sku_level"),
-    ("产品等级", "product_level"),
+    ("SPU最终评级", "spu_final_rating"),
 )
 
 KPI_DEFINITIONS: Final[tuple[tuple[str, str, str, str], ...]] = (
@@ -521,6 +527,7 @@ def _source_select_list(alias: str, columns: Sequence[tuple[str, str]]) -> list[
     selected: list[str] = []
     for name, _ in columns:
         selected.append(f"{alias}.{name}")
+    selected.append(f"{alias}.{SPU_FINAL_RATING_COLUMN[0]}")
     selected.append(
         f"CASE {alias}.spu_previous_month_sales_level "
         "WHEN 'Ps' THEN 1 WHEN 'S' THEN 2 WHEN 'A' THEN 3 "
@@ -618,6 +625,8 @@ def _validate_detail_source_columns() -> None:
     """Fail before asset generation when either accepted ADS table is incomplete."""
     daily_columns = {name for name, _ in DAILY_SOURCE_COLUMNS}
     monthly_columns = {name for name, _ in MONTHLY_SOURCE_COLUMNS}
+    daily_columns.add(SPU_FINAL_RATING_COLUMN[0])
+    monthly_columns.add(SPU_FINAL_RATING_COLUMN[0])
     missing_columns = (DETAIL_REQUIRED_COLUMNS - daily_columns) | (
         DETAIL_REQUIRED_COLUMNS - monthly_columns
     )
@@ -722,10 +731,10 @@ previous_filtered AS (
 current_rows AS (
   SELECT m.spu,
          m.spu_previous_month_sales_level AS spu_rating,
-         m.sku_level AS final_rating,
+         m.spu_final_rating,
          SUM(m.sales_amount_usd) AS current_month_sales_amount_usd
   FROM current_filtered m
-  GROUP BY m.spu, m.spu_previous_month_sales_level, m.sku_level
+  GROUP BY m.spu, m.spu_previous_month_sales_level, m.spu_final_rating
 ),
 previous_rows AS (
   SELECT m.spu, SUM(m.sales_amount_usd) AS previous_month_sales_amount_usd
@@ -736,7 +745,8 @@ SELECT
   q.current_ym AS ym,
   c.spu,
   c.spu_rating,
-  c.final_rating,
+  c.spu_final_rating,
+  COALESCE(c.spu_final_rating, '') AS final_rating,
   p.previous_month_sales_amount_usd,
   c.current_month_sales_amount_usd,
   c.current_month_sales_amount_usd /
@@ -761,7 +771,7 @@ def _detail_sql(*, grain: str) -> str:
             "ym",
             "spu",
             "spu_previous_month_sales_level",
-            "sku_level",
+            "spu_final_rating",
         )
     elif grain == "sku":
         dimensions = ("ym", "company_sku", "sku", "product_level", "size", "color")
@@ -1494,7 +1504,8 @@ DETAIL_LABELS: Final[dict[str, str]] = {
     "sku": "SKU",
     "ym": "年月",
     "spu_previous_month_sales_level": "SPU评级",
-    "sku_level": "最终评级",
+    "spu_final_rating": "SPU最终评级",
+    "sku_level": "SKU等级",
     "product_level": "产品等级",
     "size": "尺寸",
     "color": "颜色",
@@ -1520,7 +1531,7 @@ DETAIL_DISPLAYED_COLUMNS: Final[dict[str, tuple[str, ...]]] = {
         "spu",
         "ym",
         "spu_previous_month_sales_level",
-        "sku_level",
+        "spu_final_rating",
         "hot_product_index",
         "score",
         "sales_amount_usd",
@@ -1566,6 +1577,7 @@ DETAIL_COLUMN_TYPES: Final[dict[str, str]] = {
     "sku": "STRING",
     "ym": "STRING",
     "spu_previous_month_sales_level": "STRING",
+    "spu_final_rating": "STRING",
     "sku_level": "STRING",
     "product_level": "STRING",
     "size": "STRING",
@@ -1595,6 +1607,7 @@ def _leaderboard_columns() -> list[Asset]:
         ("ym", "STRING", False),
         ("spu", "STRING", False),
         ("spu_rating", "STRING", False),
+        ("spu_final_rating", "STRING", False),
         ("final_rating", "STRING", False),
         ("previous_month_sales_amount_usd", "DECIMAL", False),
         ("current_month_sales_amount_usd", "DECIMAL", False),
@@ -1607,7 +1620,7 @@ def _leaderboard_columns() -> list[Asset]:
         for name, type_, is_dttm in output_columns
     ]
     visible_names = {name for name, _, _ in output_columns}
-    source_types = dict(MONTHLY_SOURCE_COLUMNS)
+    source_types = dict((*MONTHLY_SOURCE_COLUMNS, SPU_FINAL_RATING_COLUMN))
     for _, filter_column in FILTERS:
         if filter_column in visible_names:
             continue
@@ -1679,7 +1692,7 @@ def _detail_columns(grain: str) -> list[Asset]:
         )
     )
     visible_names = {*names, "month_start_date"}
-    source_types = dict(DAILY_SOURCE_COLUMNS)
+    source_types = dict((*DAILY_SOURCE_COLUMNS, SPU_FINAL_RATING_COLUMN))
     for _, filter_column in FILTERS:
         if filter_column in visible_names:
             continue
@@ -1755,11 +1768,11 @@ DETAIL_MONEY_COLUMNS: Final[frozenset[str]] = frozenset(
     {"sales_amount_usd", "gross_profit_usd"}
 )
 DETAIL_IDENTIFIER_COLUMNS: Final[dict[str, tuple[str, ...]]] = {
-    "spu": ("spu", "ym", "spu_previous_month_sales_level", "sku_level"),
+    "spu": ("spu", "ym", "spu_previous_month_sales_level", "spu_final_rating"),
     "sku": ("company_sku", "sku"),
 }
 DETAIL_GROUPBY: Final[dict[str, tuple[str, ...]]] = {
-    "spu": ("spu", "ym", "spu_previous_month_sales_level", "sku_level"),
+    "spu": ("spu", "ym", "spu_previous_month_sales_level", "spu_final_rating"),
     "sku": ("company_sku", "sku", "ym", "product_level", "size", "color"),
 }
 DETAIL_SORT: Final[dict[str, tuple[tuple[str, bool], ...]]] = {
@@ -2015,7 +2028,7 @@ def _dimension_detail_columns(grain: str) -> list[Asset]:
             )
         )
 
-    source_types = dict(DAILY_SOURCE_COLUMNS)
+    source_types = dict((*DAILY_SOURCE_COLUMNS, SPU_FINAL_RATING_COLUMN))
     for _, filter_column in FILTERS:
         if filter_column in {column["column_name"] for column in columns}:
             continue
@@ -2174,6 +2187,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
         _dataset_column(name, type_, is_dttm=type_ in {"DATE", "DATETIME"})
         for name, type_ in DAILY_SOURCE_COLUMNS
     ]
+    daily_columns.append(_dataset_column(*SPU_FINAL_RATING_COLUMN))
     daily_columns.extend(
         [
             _dataset_column("week_start_date", "DATE", is_dttm=True),
@@ -2192,6 +2206,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
         _dataset_column(name, type_, is_dttm=type_ in {"DATE", "DATETIME"})
         for name, type_ in MONTHLY_SOURCE_COLUMNS
     ]
+    monthly_columns.append(_dataset_column(*SPU_FINAL_RATING_COLUMN))
     monthly_columns.extend(
         [
             _dataset_column(
@@ -2402,7 +2417,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
             uuid=UUIDS["dataset_spu_detail"],
             main_dttm_col="month_start_date",
             description=(
-                "爆品指数SPU月度叶子明细；按SPU、年月、SPU评级和最终评级聚合。"
+                "爆品指数SPU月度叶子明细；按SPU、年月、SPU评级和SPU最终评级聚合。"
             ),
             sql=_detail_sql(grain="spu"),
             columns=_detail_columns("spu"),
@@ -3348,7 +3363,7 @@ def _charts() -> AssetBundle:
         viz_type="table",
         dataset_uuid=UUIDS["dataset_spu_detail"],
         params=_detail_chart_params("spu"),
-        description="按SPU、年月、SPU评级和最终评级展示经营明细。",
+        description="按SPU、年月、SPU评级和SPU最终评级展示经营明细。",
     )
     charts["charts/Hot_Product_Index_SKU_Detail.yaml"] = _chart(
         slice_name="SKU维度",
