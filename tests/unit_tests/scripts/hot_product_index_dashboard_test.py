@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import json  # noqa: TID251
+import re
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -55,6 +56,23 @@ def assets_by_key(
     }
 
 
+def assert_table_query_context(
+    chart: dict[str, Any], query_context: dict[str, Any]
+) -> None:
+    """Validate raw and aggregate table query shapes."""
+    query = query_context["queries"][0]
+    if chart["params"].get("query_mode") == "raw":
+        assert query["columns"] == chart["params"]["all_columns"]
+        assert query["metrics"] == []
+        return
+    assert query["columns"] == chart["params"]["groupby"]
+    assert query["metrics"] == [
+        *chart["params"]["metrics"],
+        *chart["params"].get("hidden_metrics", []),
+    ]
+    assert query_context["form_data"]["metrics"] == chart["params"]["metrics"]
+
+
 def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> None:
     """A repeat build must be byte-identical and contain every import dependency."""
     first = tmp_path / "first.zip"
@@ -67,8 +85,8 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
     assets = read_bundle(first)
     assert assets["metadata.yaml"] == {"type": "assets", "version": "1.0.0"}
     assert not any(path.startswith("databases/") for path in assets)
-    assert sum(path.startswith("datasets/") for path in assets) == 6
-    assert sum(path.startswith("charts/") for path in assets) == 24
+    assert sum(path.startswith("datasets/") for path in assets) == 9
+    assert sum(path.startswith("charts/") for path in assets) == 27
     assert sum(path.startswith("dashboards/") for path in assets) == 2
 
     datasets = assets_by_key(assets, "datasets", "table_name")
@@ -81,6 +99,9 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
         "爆品指数-SPU月度经营明细",
         "爆品指数-SKU月度经营明细",
         "爆品指数-SPU销量排行榜",
+        "爆品指数-国家经营明细",
+        "爆品指数-SPU开发经理经营明细",
+        "爆品指数-型号经营明细",
     }
     assert set(dashboards) == {
         "拉杆箱在售产品爆品指数看板",
@@ -91,7 +112,7 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
         asset["uuid"]
         for asset in [*datasets.values(), *charts.values(), *dashboards.values()]
     ]
-    assert len(uuids) == len(set(uuids)) == 32
+    assert len(uuids) == len(set(uuids)) == 38
     assert all(str(UUID(value)) == value for value in uuids)
     assert datasets["爆品指数-日明细"]["uuid"] == (
         "ea2025d6-91ac-502f-9238-9f21ca62b761"
@@ -129,9 +150,7 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
                 query_context["queries"][0]["columns"] == chart["params"]["all_columns"]
             )
         elif chart["viz_type"] == "table":
-            assert chart["viz_type"] == "table"
-            assert query_context["queries"][0]["columns"] == chart["params"]["groupby"]
-            assert query_context["queries"][0]["metrics"] == chart["params"]["metrics"]
+            assert_table_query_context(chart, query_context)
         elif chart["viz_type"] == "mixed_timeseries":
             assert len(query_context["queries"]) == 2
             assert query_context["queries"][0]["metrics"] == chart["params"]["metrics"]
@@ -691,7 +710,7 @@ def test_virtual_datasets_fail_closed_on_incomplete_month_publication(
         assert 'target_type="DATE"' in sql
         assert "remove_filter=True" in sql
         assert "selected_end_exclusive_date" in sql
-        assert "TIMESTAMPDIFF(MONTH" in sql
+        assert re.search(r"TIMESTAMPDIFF\s*\(\s*MONTH", sql)
         assert "daily_quality AS (" in sql
         assert "monthly_quality AS (" in sql
         assert "COUNT(DISTINCT d.ym)" in sql
@@ -843,11 +862,11 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
     main_charts = [
         chart for chart in charts.values() if chart["uuid"] in main_chart_uuids
     ]
-    assert len(main_charts) == 23
+    assert len(main_charts) == 26
     assert sum(chart["viz_type"] == "big_number_total" for chart in main_charts) == 9
     assert sum(chart["viz_type"] == "funnel" for chart in main_charts) == 2
     assert sum(chart["viz_type"] == "handlebars" for chart in main_charts) == 1
-    assert sum(chart["viz_type"] == "table" for chart in main_charts) == 3
+    assert sum(chart["viz_type"] == "table" for chart in main_charts) == 6
     assert sum(chart["viz_type"] == "mixed_timeseries" for chart in main_charts) == 3
     assert sum(chart["viz_type"] == "pie" for chart in main_charts) == 2
     assert sum(chart["viz_type"] == "treemap_v2" for chart in main_charts) == 1
@@ -866,15 +885,7 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
         for chart in main_charts
         if chart["viz_type"] == "big_number_total"
     )
-    assert (
-        not {
-            "国家维度",
-            "SPU开发经理",
-            "型号维度",
-            "渠道维度",
-        }
-        & charts.keys()
-    )
+    assert "渠道维度" not in charts
 
     position = main["position"]
     assert position["GRID_ID"]["children"][-4:] == [
@@ -888,18 +899,45 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
     assert position["TABS-DETAIL"]["children"] == [
         "TAB-SPU-DETAIL",
         "TAB-SKU-DETAIL",
+        "TAB-COUNTRY-DETAIL",
+        "TAB-DEVELOPER-DETAIL",
+        "TAB-MODEL-DETAIL",
     ]
     assert position["TAB-SPU-DETAIL"]["meta"]["text"] == "SPU维度"
     assert position["TAB-SKU-DETAIL"]["meta"]["text"] == "SKU维度"
+    assert position["TAB-COUNTRY-DETAIL"]["meta"]["text"] == "国家"
+    assert position["TAB-DEVELOPER-DETAIL"]["meta"]["text"] == "SPU开发经理"
+    assert position["TAB-MODEL-DETAIL"]["meta"]["text"] == "型号"
+    assert not any(node_id.startswith("TAB-CHANNEL") for node_id in position)
+    assert not any(
+        node.get("type") == "TAB" and node.get("meta", {}).get("text") == "渠道"
+        for node in position.values()
+        if isinstance(node, dict)
+    )
     assert position["TAB-SPU-DETAIL"]["children"] == ["ROW-SPU-DETAIL"]
     assert position["TAB-SKU-DETAIL"]["children"] == ["ROW-SKU-DETAIL"]
+    assert position["TAB-COUNTRY-DETAIL"]["children"] == ["ROW-COUNTRY-DETAIL"]
+    assert position["TAB-DEVELOPER-DETAIL"]["children"] == ["ROW-DEVELOPER-DETAIL"]
+    assert position["TAB-MODEL-DETAIL"]["children"] == ["ROW-MODEL-DETAIL"]
     assert position["ROW-SPU-DETAIL"]["children"] == ["CHART-SPU-DETAIL"]
     assert position["ROW-SKU-DETAIL"]["children"] == ["CHART-SKU-DETAIL"]
+    assert position["ROW-COUNTRY-DETAIL"]["children"] == ["CHART-COUNTRY-DETAIL"]
+    assert position["ROW-DEVELOPER-DETAIL"]["children"] == ["CHART-DEVELOPER-DETAIL"]
+    assert position["ROW-MODEL-DETAIL"]["children"] == ["CHART-MODEL-DETAIL"]
     assert position["CHART-SPU-DETAIL"]["meta"]["uuid"] == (
         "4454d29b-3161-5d51-9e7b-7c1a9e96db06"
     )
     assert position["CHART-SKU-DETAIL"]["meta"]["uuid"] == (
         "76d38770-7b51-5f9e-b9df-d1b48113b8a3"
+    )
+    assert position["CHART-COUNTRY-DETAIL"]["meta"]["uuid"] == (
+        "f32d9482-620e-461d-9bcc-9d492e84c6f8"
+    )
+    assert position["CHART-DEVELOPER-DETAIL"]["meta"]["uuid"] == (
+        "4b973af8-843a-4742-bc08-2370e32c9276"
+    )
+    assert position["CHART-MODEL-DETAIL"]["meta"]["uuid"] == (
+        "1d957d19-49e0-4a73-961d-70f492f0b114"
     )
     assert position["CHART-SPU-DETAIL"]["parents"][-2:] == [
         "TAB-SPU-DETAIL",
@@ -908,6 +946,18 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
     assert position["CHART-SKU-DETAIL"]["parents"][-2:] == [
         "TAB-SKU-DETAIL",
         "ROW-SKU-DETAIL",
+    ]
+    assert position["CHART-COUNTRY-DETAIL"]["parents"][-2:] == [
+        "TAB-COUNTRY-DETAIL",
+        "ROW-COUNTRY-DETAIL",
+    ]
+    assert position["CHART-DEVELOPER-DETAIL"]["parents"][-2:] == [
+        "TAB-DEVELOPER-DETAIL",
+        "ROW-DEVELOPER-DETAIL",
+    ]
+    assert position["CHART-MODEL-DETAIL"]["parents"][-2:] == [
+        "TAB-MODEL-DETAIL",
+        "ROW-MODEL-DETAIL",
     ]
 
     filters = main["metadata"]["native_filter_configuration"]
@@ -948,6 +998,9 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
         ("bd0d4806-9f13-59a0-be0b-4d7458f88e7f", "selected_start_date"),
         ("de2f3527-4fb7-51df-a1ef-067567348ee6", "month_start_date"),
         ("baea3900-76bf-5de9-8f10-aad2cc5e4b60", "month_start_date"),
+        ("9422d2ca-a0a7-4dbb-b03d-bd04a6960338", "month_start_date"),
+        ("5b7a6624-3ce4-4f40-b82d-cf15d0602471", "month_start_date"),
+        ("3cdba303-b955-4ae1-b4c9-8f7d8e52eae2", "month_start_date"),
     ]
 
     status_uuid = charts["爆品指数数据状态"]["uuid"]
@@ -971,6 +1024,9 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
                 "669d6bf7-779b-545b-9b9d-5b45a5d3842c",
                 "de2f3527-4fb7-51df-a1ef-067567348ee6",
                 "baea3900-76bf-5de9-8f10-aad2cc5e4b60",
+                "9422d2ca-a0a7-4dbb-b03d-bd04a6960338",
+                "5b7a6624-3ce4-4f40-b82d-cf15d0602471",
+                "3cdba303-b955-4ae1-b4c9-8f7d8e52eae2",
                 "2b5c33b2-2af6-5436-8b3d-e7292e5a64ae",
             ]
             assert len({target["column"]["name"] for target in item["targets"]}) == 1
@@ -1045,7 +1101,7 @@ def test_main_dashboard_hides_decorative_chart_header_controls_only(
 
 
 def test_main_dashboard_rejects_missing_detail_chart_uuid(tmp_path: Path) -> None:
-    """The 23-chart invariant fails when a detail node points to no chart asset."""
+    """The 26-chart invariant fails when a detail node points to no chart asset."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     assets["dashboards/Hot_Product_Index.yaml"]["position"]["CHART-SPU-DETAIL"]["meta"][
         "uuid"

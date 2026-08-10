@@ -55,6 +55,54 @@ def assets_by_key(
     }
 
 
+REMAINING_DETAIL_SPECS: dict[str, dict[str, Any]] = {
+    "国家维度": {
+        "dataset_uuid": "9422d2ca-a0a7-4dbb-b03d-bd04a6960338",
+        "chart_uuid": "f32d9482-620e-461d-9bcc-9d492e84c6f8",
+        "dataset_name": "爆品指数-国家经营明细",
+        "dimensions": ("country",),
+    },
+    "SPU开发经理": {
+        "dataset_uuid": "5b7a6624-3ce4-4f40-b82d-cf15d0602471",
+        "chart_uuid": "4b973af8-843a-4742-bc08-2370e32c9276",
+        "dataset_name": "爆品指数-SPU开发经理经营明细",
+        "dimensions": ("developer", "spu"),
+    },
+    "型号维度": {
+        "dataset_uuid": "3cdba303-b955-4ae1-b4c9-8f7d8e52eae2",
+        "chart_uuid": "1d957d19-49e0-4a73-961d-70f492f0b114",
+        "dataset_name": "爆品指数-型号经营明细",
+        "dimensions": ("model",),
+    },
+}
+
+REMAINING_DETAIL_METRICS = (
+    "sales_amount_usd",
+    "sales_qty",
+    "gross_profit_usd",
+    "gross_margin",
+    "return_goods_qty",
+    "return_rate",
+    "order_qty",
+    "avg_sales_qty_7d",
+    "avg_sales_qty_30d",
+    "avg_sales_qty_90d",
+    "theoretical_stock_qty",
+    "actual_stock_qty",
+)
+
+
+def cte_section(sql: str, cte_name: str, *next_cte_names: str) -> str:
+    """Return one top-level CTE body without coupling tests to full SQL text."""
+    start = sql.index(f"{cte_name} AS (")
+    ends = [
+        sql.find(f"{next_cte_name} AS (", start + len(cte_name))
+        for next_cte_name in next_cte_names
+    ]
+    end = min(end for end in ends if end >= 0)
+    return sql[start:end]
+
+
 def test_remaining_analysis_layout_and_parent_chains(tmp_path: Path) -> None:
     """The remaining analysis charts form the approved two-row nested grid."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
@@ -193,15 +241,25 @@ def test_remaining_analysis_filter_scope_includes_leaderboard_only_daily(
     assert len(select_filters) == 12
     for item in select_filters:
         assert leaderboard_uuid in item["chartsInScope"]
-        assert leaderboard_dataset_uuid in {
-            target["datasetUuid"] for target in item["targets"]
-        }
+        target_datasets = {target["datasetUuid"] for target in item["targets"]}
+        assert {
+            leaderboard_dataset_uuid,
+            UUIDS["dataset_country_detail"],
+            UUIDS["dataset_developer_detail"],
+            UUIDS["dataset_model_detail"],
+        } <= target_datasets
         assert new_chart_uuids <= set(item["chartsInScope"])
 
     assert leaderboard_uuid not in month_filter["chartsInScope"]
-    assert leaderboard_dataset_uuid not in {
+    month_target_datasets = {
         target["datasetUuid"] for target in month_filter["targets"]
     }
+    assert leaderboard_dataset_uuid not in month_target_datasets
+    assert {
+        UUIDS["dataset_country_detail"],
+        UUIDS["dataset_developer_detail"],
+        UUIDS["dataset_model_detail"],
+    } <= month_target_datasets
     assert new_chart_uuids - {leaderboard_uuid} <= set(month_filter["chartsInScope"])
 
 
@@ -724,6 +782,21 @@ def test_remaining_visible_numeric_fields_use_approved_formats(tmp_path: Path) -
     ]
     assert {metric["d3format"] for metric in leaderboard["metrics"]} <= allowed_formats
 
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    for name in REMAINING_DETAIL_SPECS:
+        config = charts[name]["params"]["column_config"]
+        assert {
+            item["d3NumberFormat"]
+            for item in config.values()
+            if "d3NumberFormat" in item
+        } <= allowed_formats
+        assert {
+            metric["d3format"]
+            for metric in datasets[REMAINING_DETAIL_SPECS[name]["dataset_name"]][
+                "metrics"
+            ]
+        } <= allowed_formats
+
 
 def test_new_dataset_columns_have_chinese_verbose_names(tmp_path: Path) -> None:
     """New datasets expose business labels rather than physical column names."""
@@ -756,15 +829,437 @@ def test_guide_describes_new_contracts_without_excluded_tabs_or_physical_fields(
         "美元销售额",
         "评级达标进度",
         "SPU 和 SKU 环图",
+        "国家",
+        "SPU开发经理",
+        "型号",
+        "汇总",
         "颜色代码",
         "最后一个连字符",
     ):
         assert phrase in template
-    assert not any(
-        excluded in template
-        for excluded in {"国家维度", "SPU开发经理", "型号维度", "渠道维度"}
-    )
+    assert "渠道" in template
+    assert any(phrase in template for phrase in ("未启用", "不启用", "不展示"))
     assert "product_level" not in template
+
+
+def test_remaining_detail_dataset_and_chart_contracts(tmp_path: Path) -> None:
+    """The three approved dimension tabs expose only their business fields."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    charts = assets_by_key(assets, "charts", "slice_name")
+    forbidden = {"hot_product_index", "score", "in_sale_sku_count"}
+
+    for chart_name, spec in REMAINING_DETAIL_SPECS.items():
+        dataset = datasets[spec["dataset_name"]]
+        chart = charts[chart_name]
+        dimensions = list(spec["dimensions"])
+        expected_columns = [*dimensions, *REMAINING_DETAIL_METRICS]
+        columns = {column["column_name"]: column for column in dataset["columns"]}
+
+        assert dataset["uuid"] == spec["dataset_uuid"]
+        assert dataset["main_dttm_col"] == "month_start_date"
+        assert chart["uuid"] == spec["chart_uuid"]
+        assert chart["dataset_uuid"] == dataset["uuid"]
+        assert chart["viz_type"] == "table"
+        assert chart["params"]["groupby"] == dimensions
+        assert chart["params"]["metrics"] == list(REMAINING_DETAIL_METRICS)
+        assert set(expected_columns) <= columns.keys()
+        assert not forbidden & columns.keys()
+        assert not (forbidden | {"channel"}) & set(chart["params"]["groupby"])
+        assert not (forbidden | {"channel"}) & set(chart["params"]["metrics"])
+
+        for column_name in expected_columns:
+            label = columns[column_name]["verbose_name"]
+            assert label
+            assert label != column_name
+            assert any("\u4e00" <= char <= "\u9fff" for char in label) or label in {
+                "SPU",
+                "SKU",
+            }
+
+
+def test_remaining_detail_tables_emit_an_explicit_bottom_summary_row(
+    tmp_path: Path,
+) -> None:
+    """Dimension tables own a deterministic summary row instead of native totals."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    charts = assets_by_key(assets, "charts", "slice_name")
+
+    for chart_name, spec in REMAINING_DETAIL_SPECS.items():
+        sql = datasets[spec["dataset_name"]]["sql"]
+        params = charts[chart_name]["params"]
+        lowered = sql.lower()
+        assert "union all" in lowered
+        assert re.search(r"汇总|summary|is_total|row_type", sql, flags=re.IGNORECASE)
+        assert params["groupby"] == list(spec["dimensions"])
+        assert not {"row_type", "is_total", "sort_order"} & set(params["groupby"])
+        assert not {"row_type", "is_total", "sort_order"} & set(
+            params.get("column_config", {})
+        )
+
+
+def test_remaining_detail_tables_disable_server_pagination_and_builtin_totals(
+    tmp_path: Path,
+) -> None:
+    """Dimension tables return one query and own their summary row."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+
+    for chart_name in REMAINING_DETAIL_SPECS:
+        params = charts[chart_name]["params"]
+        context = json.loads(charts[chart_name]["query_context"])
+        assert params.get("server_pagination", False) is False
+        assert params.get("server_page_length") == 0
+        assert params.get("show_totals", False) is False
+        assert len(context["queries"]) == 1
+        query = context["queries"][0]
+        assert "is_rowcount" not in query
+        assert query.get("row_limit", 0) > 0
+        assert all("is_rowcount" not in item for item in context["queries"])
+
+
+def test_remaining_detail_query_context_hides_row_sort_and_keeps_summary_last(
+    tmp_path: Path,
+) -> None:
+    """Doris receives aggregate metrics while the synthetic sort key stays hidden."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    charts = assets_by_key(assets, "charts", "slice_name")
+
+    for chart_name, spec in REMAINING_DETAIL_SPECS.items():
+        dataset = datasets[spec["dataset_name"]]
+        params = charts[chart_name]["params"]
+        context = json.loads(charts[chart_name]["query_context"])
+        query = context["queries"][0]
+        sql = dataset["sql"]
+        dimensions = list(spec["dimensions"])
+
+        assert params["query_mode"] == "aggregate"
+        assert context["form_data"]["query_mode"] == "aggregate"
+        assert params["groupby"] == dimensions
+        assert params["metrics"] == list(REMAINING_DETAIL_METRICS)
+        assert params["hidden_metrics"] == ["row_sort"]
+        assert "percent_metrics" not in params
+        assert params["timeseries_limit_metric"] == "row_sort"
+        assert params["order_desc"] is False
+        assert context["form_data"]["metrics"] == list(REMAINING_DETAIL_METRICS)
+        assert "row_sort" not in context["form_data"]["metrics"]
+        assert context["form_data"]["timeseries_limit_metric"] == "row_sort"
+        assert query["columns"] == dimensions
+        assert query["metrics"] == [*REMAINING_DETAIL_METRICS, "row_sort"]
+        assert len(query["metrics"]) == 13
+        assert query["post_processing"] == [
+            {"operation": "select", "options": {"exclude": ["row_sort"]}}
+        ]
+        dataset_metrics = {
+            metric["metric_name"]: metric for metric in dataset["metrics"]
+        }
+        assert dataset_metrics["row_sort"]["expression"] == "MAX(row_sort)"
+
+        visible_fields = (
+            set(params.get("all_columns", []))
+            | set(params.get("groupby", []))
+            | set(params.get("metrics", []))
+            | set(params.get("column_config", {}))
+            | set(context["form_data"].get("all_columns", []))
+            | set(context["form_data"].get("metrics", []))
+            | set(query.get("columns", []))
+        )
+        assert "row_sort" not in visible_fields
+
+        expected_sort = [
+            ["row_sort", True],
+            ["sales_amount_usd", False],
+            *[[dimension, True] for dimension in dimensions],
+        ]
+        assert params["order_by_cols"] == []
+        assert [
+            json.loads(item) for item in params["query_order_by_cols"]
+        ] == expected_sort
+        assert query["orderby"] == expected_sort
+        assert sql.count("0 AS row_sort") == 1
+        assert sql.count("1 AS row_sort") == 1
+        assert re.search(
+            r"SELECT\s+\*\s+FROM\s+detail_rows\s+UNION\s+ALL\s+"
+            r"SELECT\s+\*\s+FROM\s+summary_rows",
+            sql,
+            flags=re.IGNORECASE,
+        )
+        detail_rows = cte_section(sql, "detail_rows", "summary_rows")
+        for dimension in dimensions:
+            if dimension == "developer":
+                assert re.search(
+                    r"COALESCE\(\s*f\.developer\s*,\s*'-'\s*\)\s+AS\s+developer\b",
+                    detail_rows,
+                    flags=re.IGNORECASE,
+                )
+            else:
+                assert re.search(
+                    rf"\bf\.{dimension}\s+AS\s+{dimension}\b",
+                    detail_rows,
+                    flags=re.IGNORECASE,
+                )
+
+
+def test_remaining_detail_stock_uses_effective_end_ym_snapshot(
+    tmp_path: Path,
+) -> None:
+    """Stock is read from the effective end month, not each selected month."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+
+    for spec in REMAINING_DETAIL_SPECS.values():
+        sql = datasets[spec["dataset_name"]]["sql"]
+        assert "effective_end_ym" in sql
+        assert re.search(
+            r"\b\w+\.ym\s*(?:=|<=>)\s*[^\n;]*effective_end_ym",
+            sql,
+            flags=re.IGNORECASE,
+        )
+        assert re.search(r"is_eligible\s*=\s*1", sql, flags=re.IGNORECASE)
+
+
+def test_remaining_detail_stock_deduplicates_dimension_and_sku_rows(
+    tmp_path: Path,
+) -> None:
+    """A SKU contributes stock once within each displayed dimension."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+
+    for spec in REMAINING_DETAIL_SPECS.values():
+        sql = datasets[spec["dataset_name"]]["sql"]
+        dimensions = list(spec["dimensions"])
+        dimension_sku = cte_section(sql, "stock_dimension_sku", "stock_by_dimension")
+        assert not re.search(r"SELECT\s+DISTINCT\b", dimension_sku, flags=re.IGNORECASE)
+        assert re.search(
+            r"SELECT[^;]*\bsku\b",
+            dimension_sku,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        assert re.search(
+            r"GROUP\s+BY[^;]*\b(?:\w+\.)?sku\b",
+            dimension_sku,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        assert re.search(
+            r"GROUP\s+BY[^;]*\b(?:" + "|".join(dimensions) + r")\b",
+            dimension_sku,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
+
+def test_remaining_detail_summary_deduplicates_global_sku_stock_totals(
+    tmp_path: Path,
+) -> None:
+    """The bottom total aggregates stock once per SKU across dimensions."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+
+    for spec in REMAINING_DETAIL_SPECS.values():
+        sql = datasets[spec["dataset_name"]]["sql"]
+        dimension_sku = cte_section(sql, "stock_dimension_sku", "stock_by_dimension")
+        assert not re.search(r"SELECT\s+DISTINCT\b", dimension_sku, flags=re.IGNORECASE)
+        assert re.search(
+            r"GROUP\s+BY[^;]*\b(?:\w+\.)?sku\b",
+            dimension_sku,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        assert re.search(
+            r"GROUP\s+BY\s+(?:\w+\.)?sku\b", sql, flags=re.IGNORECASE | re.DOTALL
+        )
+
+
+def test_remaining_detail_developer_summary_types_only_first_dimension(
+    tmp_path: Path,
+) -> None:
+    """The developer total labels both dimensions without leaking a NULL display."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    developer_sql = assets_by_key(assets, "datasets", "table_name")[
+        "爆品指数-SPU开发经理经营明细"
+    ]["sql"]
+
+    for cte_name, next_cte_name in (
+        ("flow_by_dimension", "flow_summary"),
+        ("rolling_by_dimension", "rolling_summary"),
+    ):
+        section = cte_section(developer_sql, cte_name, next_cte_name)
+        assert re.search(r"GROUP\s+BY\s+developer\s*,\s*spu\b", section)
+        assert not re.search(r"COALESCE\([^)]*developer", section)
+
+    for cte_name, next_cte_name in (
+        ("flow_summary", "rolling_by_dimension"),
+        ("rolling_summary", "stock_rows"),
+        ("summary_rows", "SELECT * FROM summary_rows"),
+    ):
+        if cte_name == "summary_rows":
+            section = developer_sql[developer_sql.index("summary_rows AS (") :]
+        else:
+            section = cte_section(developer_sql, cte_name, next_cte_name)
+        assert len(re.findall(r"'汇总'\s+AS", section)) == 1
+        assert re.search(r"'汇总'\s+AS\s+developer\b", section)
+        assert re.search(r"'-'\s+AS\s+spu\b", section)
+        assert not re.search(r"CAST\(\s*NULL\s+AS\s+VARCHAR", section)
+        assert not re.search(r"'汇总'\s+AS\s+spu\b", section)
+
+
+def test_remaining_detail_stock_serving_gate_requires_complete_unique_pairs(
+    tmp_path: Path,
+) -> None:
+    """Serving SQL rejects missing or conflicting stock rather than dropping rows."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+
+    for spec in REMAINING_DETAIL_SPECS.values():
+        sql = datasets[spec["dataset_name"]]["sql"]
+        stock_rows = cte_section(sql, "stock_rows", "stock_pair_quality")
+        pair_quality = cte_section(
+            sql, "stock_pair_quality", "stock_pair_gate", "stock_quality"
+        )
+        pair_gate = (
+            cte_section(sql, "stock_pair_gate", "stock_quality")
+            if "stock_pair_gate AS (" in sql
+            else pair_quality
+        )
+        quality = cte_section(sql, "stock_quality", "stock_by_sku")
+        stock_by_sku = cte_section(sql, "stock_by_sku", "stock_dimension_sku")
+
+        for column in ("sku", "theoretical_stock_qty", "actual_stock_qty"):
+            assert re.search(
+                rf"\b\w+\.{column}\b",
+                stock_rows,
+                flags=re.IGNORECASE,
+            )
+            assert not re.search(
+                rf"\b\w+\.{column}\s+IS\s+NOT\s+NULL\b",
+                stock_rows,
+                flags=re.IGNORECASE,
+            )
+        assert re.search(
+            r"COUNT\s*\(\s*DISTINCT\s+CONCAT\s*\(",
+            pair_quality,
+            flags=re.IGNORECASE,
+        )
+        assert re.search(
+            r"GROUP\s+BY\s+(?:\w+\.)?sku\b", pair_quality, flags=re.IGNORECASE
+        )
+        for column in ("sku", "theoretical_stock_qty", "actual_stock_qty"):
+            assert re.search(
+                rf"\b\w+\.{column}\s+IS\s+NOT\s+NULL\b",
+                pair_quality,
+                flags=re.IGNORECASE,
+            )
+        gate_sql = f"{pair_gate}\n{quality}"
+        assert re.search(r"COUNT\s*\(\s*\*\s*\)\s*>\s*0", gate_sql)
+        assert re.search(
+            r"(?:MAX|MIN)\s*\(\s*stock_pair_count\s*\)\s*=\s*1",
+            gate_sql,
+        )
+        for column in ("sku", "theoretical_stock_qty", "actual_stock_qty"):
+            assert re.search(
+                rf"\b\w+\.{column}\s+IS\s+NULL\b",
+                quality,
+                flags=re.IGNORECASE,
+            )
+        assert re.search(r"SUM\s*\(\s*CASE", quality, flags=re.IGNORECASE)
+        assert re.search(r"\)\s*=\s*0", quality)
+        assert re.search(r"pair_consistent\s*=\s*1", quality, flags=re.IGNORECASE)
+
+        assert re.search(
+            r"CROSS\s+JOIN\s+stock_quality\s+q", stock_by_sku, flags=re.IGNORECASE
+        )
+        assert re.search(
+            r"WHERE\s+q\.stock_consistent\s*=\s*1",
+            stock_by_sku,
+            flags=re.IGNORECASE,
+        )
+        assert sql.lower().count("q.stock_consistent = 1") >= 3
+        assert not re.search(
+            r"MAX\s*\(\s*(?:theoretical_stock_qty|actual_stock_qty)\s*\)",
+            sql,
+            flags=re.IGNORECASE,
+        )
+        assert "MIN(theoretical_stock_qty)" in stock_by_sku
+        assert "MIN(actual_stock_qty)" in stock_by_sku
+
+
+def test_remaining_detail_cross_country_fixture_keeps_global_sku_stock_once(
+    tmp_path: Path,
+) -> None:
+    """A SKU present in two countries must not double-count the summary stock."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    country_sql = assets_by_key(assets, "datasets", "table_name")[
+        "爆品指数-国家经营明细"
+    ]["sql"]
+    fixture = (("US", "SKU-1"), ("CN", "SKU-1"), ("US", "SKU-2"))
+    assert len({sku for _, sku in fixture}) == 2
+    assert "country" in country_sql
+    dimension_sku = cte_section(
+        country_sql, "stock_dimension_sku", "stock_by_dimension"
+    )
+    assert re.search(
+        r"SELECT[^;]*\bcountry\b[^;]*\bsku\b",
+        dimension_sku,
+        flags=re.I | re.S,
+    )
+    assert not re.search(r"SELECT\s+DISTINCT\b", dimension_sku, flags=re.IGNORECASE)
+    assert re.search(
+        r"GROUP\s+BY[^;]*\bcountry\b[^;]*\bsku\b",
+        dimension_sku,
+        flags=re.I | re.S,
+    )
+
+
+def test_remaining_detail_metrics_recompute_ratios_and_rolling_averages(
+    tmp_path: Path,
+) -> None:
+    """Ratios and rolling averages use source numerators and denominators."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    expected = {
+        "gross_margin": "SUM(gross_profit_usd) / NULLIF(SUM(sales_amount_usd), 0)",
+        "return_rate": "SUM(return_goods_qty) / NULLIF(SUM(sales_qty), 0)",
+    }
+
+    for spec in REMAINING_DETAIL_SPECS.values():
+        metrics = {
+            metric["metric_name"]: metric
+            for metric in datasets[spec["dataset_name"]]["metrics"]
+        }
+        for name, expression in expected.items():
+            assert metrics[name]["expression"] == expression
+        for name in ("avg_sales_qty_7d", "avg_sales_qty_30d", "avg_sales_qty_90d"):
+            expression = metrics[name]["expression"]
+            assert expression.startswith("SUM(")
+            assert "/ NULLIF(" in expression
+        assert "AVG(gross_margin)" not in datasets[spec["dataset_name"]]["sql"]
+        assert "AVG(return_rate)" not in datasets[spec["dataset_name"]]["sql"]
+
+
+def test_remaining_detail_native_filters_target_all_three_datasets_and_charts(
+    tmp_path: Path,
+) -> None:
+    """Native filters reach each new dataset and its corresponding chart."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    main = assets_by_key(assets, "dashboards", "dashboard_title")[
+        "拉杆箱在售产品爆品指数看板"
+    ]
+    filters = main["metadata"]["native_filter_configuration"]
+    by_name = {item["name"]: item for item in filters}
+    filter_names = {"国家维度": "国家", "SPU开发经理": "开发经理", "型号维度": "型号"}
+
+    for name, spec in REMAINING_DETAIL_SPECS.items():
+        dataset_uuid = spec["dataset_uuid"]
+        chart_uuid = spec["chart_uuid"]
+        assert chart_uuid in by_name["年月"]["chartsInScope"]
+        assert dataset_uuid in {
+            target["datasetUuid"] for target in by_name["年月"]["targets"]
+        }
+        filter_item = by_name[filter_names[name]]
+        assert chart_uuid in filter_item["chartsInScope"]
+        assert dataset_uuid in {
+            target["datasetUuid"] for target in filter_item["targets"]
+        }
 
 
 def test_remaining_query_contexts_load_chart_data_schema_and_remap_datasource(
@@ -783,6 +1278,9 @@ def test_remaining_query_contexts_load_chart_data_schema_and_remap_datasource(
         "颜色销售比例-周",
         "颜色销售比例-月",
         "颜色销量分布",
+        "国家维度",
+        "SPU开发经理",
+        "型号维度",
     )
 
     from tests.integration_tests.test_app import app

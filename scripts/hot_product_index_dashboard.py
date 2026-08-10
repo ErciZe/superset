@@ -40,6 +40,9 @@ UUIDS: Final = {
     "dataset_spu_detail": "de2f3527-4fb7-51df-a1ef-067567348ee6",
     "dataset_sku_detail": "baea3900-76bf-5de9-8f10-aad2cc5e4b60",
     "dataset_spu_leaderboard": "2b5c33b2-2af6-5436-8b3d-e7292e5a64ae",
+    "dataset_country_detail": "9422d2ca-a0a7-4dbb-b03d-bd04a6960338",
+    "dataset_developer_detail": "5b7a6624-3ce4-4f40-b82d-cf15d0602471",
+    "dataset_model_detail": "3cdba303-b955-4ae1-b4c9-8f7d8e52eae2",
     "chart_trend_day": "582d0460-8034-5a12-9f27-4de03b050cd4",
     "chart_trend_week": "d3504cb6-8abf-5d22-807b-326948e6b79b",
     "chart_trend_month": "8f36f17e-c95c-5076-9090-24652b22bb00",
@@ -49,6 +52,9 @@ UUIDS: Final = {
     "chart_color_trend_week": "90eed32b-5a2c-5cd5-8d6e-b38d98c720b8",
     "chart_color_trend_month": "267d5d23-3a69-5f8a-aca0-15b0020c9599",
     "chart_color_distribution": "e77069a0-1a40-583b-bae5-5ccba309c34b",
+    "chart_country_detail": "f32d9482-620e-461d-9bcc-9d492e84c6f8",
+    "chart_developer_detail": "4b973af8-843a-4742-bc08-2370e32c9276",
+    "chart_model_detail": "1d957d19-49e0-4a73-961d-70f492f0b114",
     "chart_kpi_sales_qty": "c5749623-be9e-5116-8c2f-de2b3e77e3a8",
     "chart_kpi_avg_daily_sales_qty": "aa2a07b5-35d7-581c-b8c2-c58918efd11f",
     "chart_kpi_sales_amount_usd": "b76f494e-2743-5215-b310-0d068ba44c8c",
@@ -242,6 +248,15 @@ COLUMN_VERBOSE_NAMES: Final = {
     "avg_sales_qty_7d": "近7天日均销量",
     "avg_sales_qty_30d": "近30天日均销量",
     "avg_sales_qty_90d": "近90天日均销量",
+    "row_type": "行类型",
+    "row_sort": "行排序",
+    "effective_end_ym": "实际计算结束月份",
+    "sales_qty_7d": "近7天销量分子",
+    "sales_qty_30d": "近30天销量分子",
+    "sales_qty_90d": "近90天销量分子",
+    "days_7d": "近7天自然日数",
+    "days_30d": "近30天自然日数",
+    "days_90d": "近90天自然日数",
 }
 
 DETAIL_REQUIRED_COLUMNS: Final[frozenset[str]] = frozenset(
@@ -1018,6 +1033,422 @@ WHERE coverage_complete = 1
 """
 
 
+def _dimension_detail_sql(*, grain: str) -> str:
+    """Build one selected-range dimension table with an explicit summary row."""
+    try:
+        dimensions = tuple(DIMENSION_DETAIL_SPECS[grain]["dimensions"])
+    except KeyError as ex:
+        raise ValueError(f"unsupported hot-product dimension grain: {grain}") from ex
+
+    dimension_select = ",\n      ".join(dimensions)
+    detail_dimension_select = ",\n      ".join(
+        (
+            f"COALESCE(f.{dimension}, '-') AS {dimension}"
+            if grain == "developer" and dimension == "developer"
+            else f"f.{dimension} AS {dimension}"
+        )
+        for dimension in dimensions
+    )
+    dimension_list = ", ".join(dimensions)
+    summary_dimensions = ",\n      ".join(
+        (f"'汇总' AS {dimension}" if index == 0 else f"'-' AS {dimension}")
+        for index, dimension in enumerate(dimensions)
+    )
+    detail_stock_group = ", ".join([*dimensions, "sku"])
+    detail_stock_select = ", ".join(
+        [*(f"p.{dimension}" for dimension in dimensions), "p.sku"]
+    )
+    stock_dimension_select = ",\n      ".join(
+        f"p.{dimension} AS {dimension}" for dimension in dimensions
+    )
+    stock_dimension_group = ", ".join(f"p.{dimension}" for dimension in dimensions)
+    detail_join = " AND ".join(
+        f"f.{dimension} <=> s.{dimension}" for dimension in dimensions
+    )
+    rolling_join = " AND ".join(
+        f"f.{dimension} <=> r.{dimension}" for dimension in dimensions
+    )
+    filter_daily = _native_filter_fragment("d")
+    filter_monthly = _native_filter_fragment("m")
+
+    rolling_select = ",\n      ".join(
+        (
+            "SUM(CASE WHEN p.sales_date >= "
+            "DATE_SUB(b.effective_end_exclusive_date, INTERVAL 7 DAY) "
+            "THEN p.sales_qty ELSE 0 END) AS sales_qty_7d",
+            "SUM(CASE WHEN p.sales_date >= "
+            "DATE_SUB(b.effective_end_exclusive_date, INTERVAL 30 DAY) "
+            "THEN p.sales_qty ELSE 0 END) AS sales_qty_30d",
+            "SUM(CASE WHEN p.sales_date >= "
+            "DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY) "
+            "THEN p.sales_qty ELSE 0 END) AS sales_qty_90d",
+            "MAX(DATEDIFF(b.effective_end_exclusive_date, "
+            "DATE_SUB(b.effective_end_exclusive_date, INTERVAL 7 DAY))) AS days_7d",
+            "MAX(DATEDIFF(b.effective_end_exclusive_date, "
+            "DATE_SUB(b.effective_end_exclusive_date, INTERVAL 30 DAY))) AS days_30d",
+            "MAX(DATEDIFF(b.effective_end_exclusive_date, "
+            "DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY))) AS days_90d",
+        )
+    )
+    flow_additive = ",\n      ".join(
+        (
+            "SUM(p.sales_amount_usd) AS sales_amount_usd",
+            "SUM(p.sales_qty) AS sales_qty",
+            "SUM(p.gross_profit_usd) AS gross_profit_usd",
+            "SUM(p.return_goods_qty) AS return_goods_qty",
+            "SUM(p.order_qty) AS order_qty",
+        )
+    )
+    # The summary row is built from the selected period rather than summing
+    # dimension rows, because one SKU can legitimately appear in multiple
+    # countries or under multiple development-manager identities.
+    return f"""{{% set time_filter = get_time_filter(
+  "sales_date", default="Current month", target_type="DATE",
+  remove_filter=True
+) %}}
+WITH selected_bounds AS (
+  SELECT
+    CAST({{{{ time_filter.from_expr }}}} AS DATE) AS selected_start_date,
+    CAST({{{{ time_filter.to_expr }}}} AS DATE) AS selected_end_exclusive_date,
+    w.global_data_through_date,
+    LEAST(
+      CAST({{{{ time_filter.to_expr }}}} AS DATE),
+      DATE_ADD(w.global_data_through_date, INTERVAL 1 DAY)
+    ) AS effective_end_exclusive_date,
+    TIMESTAMPDIFF(
+      MONTH,
+      CAST({{{{ time_filter.from_expr }}}} AS DATE),
+      CAST({{{{ time_filter.to_expr }}}} AS DATE)
+    ) AS expected_month_count
+  FROM (
+    SELECT MAX(data_through_date) AS global_data_through_date
+    FROM ads.ads_pdm_lx_hot_product_index_sku_d
+  ) w
+),
+lookback_quality AS (
+  SELECT
+    COUNT(DISTINCT d.sales_date) AS lookback_calendar_day_count,
+    MAX(DATEDIFF(
+      b.effective_end_exclusive_date,
+      DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
+    )) AS expected_lookback_day_count
+  FROM ads.ads_pdm_lx_hot_product_index_sku_d d
+  CROSS JOIN selected_bounds b
+  WHERE d.sales_date >= DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
+    AND d.sales_date < b.effective_end_exclusive_date
+),
+daily_quality AS (
+  SELECT
+    COUNT(DISTINCT d.ym) AS daily_month_count,
+    COUNT(DISTINCT d.sales_date) AS daily_calendar_day_count,
+    COALESCE(SUM(
+      CASE
+        WHEN d.is_eligible = 1
+          AND d.sales_date >= b.selected_start_date
+          AND d.sales_date < b.effective_end_exclusive_date
+          AND d.spu_previous_month_sales_level IS NULL
+        THEN 1
+        ELSE 0
+      END
+    ), 0) AS daily_missing_rating_count
+  FROM ads.ads_pdm_lx_hot_product_index_sku_d d
+  CROSS JOIN selected_bounds b
+  WHERE d.ym >= DATE_FORMAT(b.selected_start_date, '%Y-%m')
+    AND d.ym < DATE_FORMAT(b.selected_end_exclusive_date, '%Y-%m')
+    AND d.sales_date >= b.selected_start_date
+    AND d.sales_date < b.effective_end_exclusive_date
+),
+monthly_quality AS (
+  SELECT
+    COUNT(DISTINCT m.ym) AS monthly_month_count,
+    COALESCE(SUM(
+      CASE
+        WHEN m.is_eligible = 1
+          AND m.spu_previous_month_sales_level IS NULL
+        THEN 1
+        ELSE 0
+      END
+    ), 0) AS monthly_missing_rating_count
+  FROM ads.ads_pdm_lx_hot_product_index_sku_m m
+  CROSS JOIN selected_bounds b
+  WHERE m.ym >= DATE_FORMAT(b.selected_start_date, '%Y-%m')
+    AND m.ym < DATE_FORMAT(b.selected_end_exclusive_date, '%Y-%m')
+),
+quality AS (
+  SELECT
+    b.*,
+    DATE_SUB(b.selected_end_exclusive_date, INTERVAL 1 DAY) AS selected_end_date,
+    DATE_SUB(b.effective_end_exclusive_date, INTERVAL 1 DAY) AS effective_end_date,
+    DATE_FORMAT(
+      DATE_SUB(b.effective_end_exclusive_date, INTERVAL 1 DAY), '%Y-%m'
+    ) AS effective_end_ym,
+    d.daily_month_count,
+    d.daily_calendar_day_count,
+    m.monthly_month_count,
+    d.daily_missing_rating_count,
+    m.monthly_missing_rating_count,
+    l.lookback_calendar_day_count,
+    l.expected_lookback_day_count,
+    CASE
+      WHEN b.expected_month_count > 0
+        AND DAY(b.selected_start_date) = 1
+        AND DAY(b.selected_end_exclusive_date) = 1
+        AND d.daily_month_count = expected_month_count
+        AND d.daily_calendar_day_count = DATEDIFF(
+          b.effective_end_exclusive_date, b.selected_start_date
+        )
+        AND m.monthly_month_count = expected_month_count
+        AND b.effective_end_exclusive_date > b.selected_start_date
+      THEN 1
+      ELSE 0
+    END AS coverage_complete,
+    CASE
+      WHEN l.lookback_calendar_day_count = l.expected_lookback_day_count
+      THEN 1
+      ELSE 0
+    END AS lookback_complete,
+    CASE
+      WHEN d.daily_missing_rating_count = 0
+        AND m.monthly_missing_rating_count = 0
+      THEN 1
+      ELSE 0
+    END AS rating_complete
+  FROM selected_bounds b
+  CROSS JOIN lookback_quality l
+  CROSS JOIN daily_quality d
+  CROSS JOIN monthly_quality m
+),
+filtered_daily AS (
+  SELECT d.*
+  FROM ads.ads_pdm_lx_hot_product_index_sku_d d
+  CROSS JOIN quality b
+  WHERE b.coverage_complete = 1
+    AND b.lookback_complete = 1
+    AND d.is_eligible = 1
+    AND d.sales_date >= DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
+    AND d.sales_date < b.effective_end_exclusive_date
+{filter_daily}
+),
+selected_period AS (
+  SELECT p.*
+  FROM filtered_daily p
+  CROSS JOIN quality b
+  WHERE p.sales_date >= b.selected_start_date
+    AND p.sales_date < b.effective_end_exclusive_date
+),
+flow_by_dimension AS (
+  SELECT
+      {dimension_select},
+      {flow_additive}
+  FROM selected_period p
+  CROSS JOIN quality b
+  GROUP BY {dimension_list}
+),
+flow_summary AS (
+  SELECT
+      {summary_dimensions},
+      {flow_additive}
+  FROM selected_period p
+  CROSS JOIN quality b
+),
+rolling_by_dimension AS (
+  SELECT
+      {dimension_select},
+      {rolling_select}
+  FROM filtered_daily p
+  CROSS JOIN quality b
+  GROUP BY {dimension_list}
+),
+rolling_summary AS (
+  SELECT
+      {summary_dimensions},
+      {rolling_select}
+  FROM filtered_daily p
+  CROSS JOIN quality b
+),
+stock_rows AS (
+  SELECT
+      {dimension_select},
+      m.sku,
+      m.theoretical_stock_qty,
+      m.actual_stock_qty
+  FROM ads.ads_pdm_lx_hot_product_index_sku_m m
+  CROSS JOIN quality b
+  WHERE b.coverage_complete = 1
+    AND b.lookback_complete = 1
+    AND m.is_eligible = 1
+    AND m.ym = b.effective_end_ym
+{filter_monthly}
+),
+stock_pair_quality AS (
+  SELECT
+    m.sku,
+    COUNT(DISTINCT CONCAT(
+      CAST(m.theoretical_stock_qty AS VARCHAR(255)),
+      '|',
+      CAST(m.actual_stock_qty AS VARCHAR(255))
+    )) AS stock_pair_count
+  FROM stock_rows m
+  WHERE m.sku IS NOT NULL
+    AND m.theoretical_stock_qty IS NOT NULL
+    AND m.actual_stock_qty IS NOT NULL
+  GROUP BY m.sku
+),
+stock_pair_gate AS (
+  SELECT
+    CASE
+      WHEN COUNT(*) > 0
+        AND MAX(stock_pair_count) = 1
+        AND MIN(stock_pair_count) = 1
+      THEN 1
+      ELSE 0
+    END AS pair_consistent
+  FROM stock_pair_quality
+),
+stock_quality AS (
+  SELECT
+    CASE
+      WHEN COUNT(*) > 0
+        AND COALESCE(SUM(
+          CASE
+            WHEN m.sku IS NULL
+              OR m.theoretical_stock_qty IS NULL
+              OR m.actual_stock_qty IS NULL
+            THEN 1
+            ELSE 0
+          END
+        ), 0) = 0
+        AND p.pair_consistent = 1
+      THEN 1
+      ELSE 0
+    END AS stock_consistent
+  FROM stock_rows m
+  CROSS JOIN stock_pair_gate p
+  GROUP BY p.pair_consistent
+),
+stock_by_sku AS (
+  SELECT
+    sku,
+    MIN(theoretical_stock_qty) AS theoretical_stock_qty,
+    MIN(actual_stock_qty) AS actual_stock_qty
+  FROM stock_rows
+  CROSS JOIN stock_quality q
+  WHERE q.stock_consistent = 1
+  GROUP BY sku
+),
+stock_dimension_sku AS (
+  SELECT {detail_stock_select}
+  FROM stock_rows p
+  GROUP BY {detail_stock_group}
+),
+stock_by_dimension AS (
+  SELECT
+      {stock_dimension_select},
+      CASE
+        WHEN COUNT(*) = COUNT(s.theoretical_stock_qty)
+        THEN SUM(s.theoretical_stock_qty)
+        ELSE NULL
+      END AS theoretical_stock_qty,
+      CASE
+        WHEN COUNT(*) = COUNT(s.actual_stock_qty)
+        THEN SUM(s.actual_stock_qty)
+        ELSE NULL
+      END AS actual_stock_qty
+  FROM stock_dimension_sku p
+  LEFT JOIN stock_by_sku s
+    ON p.sku <=> s.sku
+  GROUP BY {stock_dimension_group}
+),
+stock_global AS (
+  SELECT
+    CASE
+      WHEN COUNT(*) = COUNT(theoretical_stock_qty)
+      THEN SUM(theoretical_stock_qty)
+      ELSE NULL
+    END AS theoretical_stock_qty,
+    CASE
+      WHEN COUNT(*) = COUNT(actual_stock_qty)
+      THEN SUM(actual_stock_qty)
+      ELSE NULL
+    END AS actual_stock_qty
+  FROM stock_by_sku
+),
+detail_rows AS (
+  SELECT
+      {detail_dimension_select},
+      f.sales_amount_usd,
+      f.sales_qty,
+      f.gross_profit_usd,
+      f.gross_profit_usd / NULLIF(f.sales_amount_usd, 0) AS gross_margin,
+      f.return_goods_qty,
+      f.return_goods_qty / NULLIF(f.sales_qty, 0) AS return_rate,
+      f.order_qty,
+      r.sales_qty_7d,
+      r.sales_qty_7d / NULLIF(r.days_7d, 0) AS avg_sales_qty_7d,
+      r.sales_qty_30d,
+      r.sales_qty_30d / NULLIF(r.days_30d, 0) AS avg_sales_qty_30d,
+      r.sales_qty_90d,
+      r.sales_qty_90d / NULLIF(r.days_90d, 0) AS avg_sales_qty_90d,
+      r.days_7d,
+      r.days_30d,
+      r.days_90d,
+      s.theoretical_stock_qty,
+      s.actual_stock_qty,
+      'detail' AS row_type,
+      0 AS row_sort,
+      b.effective_end_ym,
+      CAST(CONCAT(b.effective_end_ym, '-01') AS DATE) AS month_start_date
+  FROM flow_by_dimension f
+  LEFT JOIN rolling_by_dimension r
+    ON {rolling_join}
+  LEFT JOIN stock_by_dimension s
+    ON {detail_join}
+  CROSS JOIN quality b
+  CROSS JOIN stock_quality q
+  WHERE b.coverage_complete = 1
+    AND b.lookback_complete = 1
+    AND q.stock_consistent = 1
+),
+summary_rows AS (
+  SELECT
+      {summary_dimensions},
+      f.sales_amount_usd,
+      f.sales_qty,
+      f.gross_profit_usd,
+      f.gross_profit_usd / NULLIF(f.sales_amount_usd, 0) AS gross_margin,
+      f.return_goods_qty,
+      f.return_goods_qty / NULLIF(f.sales_qty, 0) AS return_rate,
+      f.order_qty,
+      r.sales_qty_7d,
+      r.sales_qty_7d / NULLIF(r.days_7d, 0) AS avg_sales_qty_7d,
+      r.sales_qty_30d,
+      r.sales_qty_30d / NULLIF(r.days_30d, 0) AS avg_sales_qty_30d,
+      r.sales_qty_90d,
+      r.sales_qty_90d / NULLIF(r.days_90d, 0) AS avg_sales_qty_90d,
+      r.days_7d,
+      r.days_30d,
+      r.days_90d,
+      s.theoretical_stock_qty,
+      s.actual_stock_qty,
+      'summary' AS row_type,
+      1 AS row_sort,
+      b.effective_end_ym,
+      CAST(CONCAT(b.effective_end_ym, '-01') AS DATE) AS month_start_date
+  FROM flow_summary f
+  CROSS JOIN rolling_summary r
+  CROSS JOIN stock_global s
+  CROSS JOIN quality b
+  CROSS JOIN stock_quality q
+  WHERE b.coverage_complete = 1
+    AND b.lookback_complete = 1
+    AND q.stock_consistent = 1
+)
+SELECT * FROM detail_rows
+UNION ALL
+SELECT * FROM summary_rows
+"""
+
+
 def _dataset(
     *,
     table_name: str,
@@ -1337,6 +1768,112 @@ DETAIL_SORT: Final[dict[str, tuple[tuple[str, bool], ...]]] = {
 }
 
 
+DIMENSION_DETAIL_SPECS: Final[dict[str, dict[str, Any]]] = {
+    "country": {
+        "dimensions": ("country",),
+        "label": "国家",
+        "dataset_key": "dataset_country_detail",
+        "dataset_name": "爆品指数-国家经营明细",
+        "dataset_path": "Hot_Product_Index_Country_Detail",
+        "chart_key": "chart_country_detail",
+        "chart_name": "国家维度",
+        "component_suffix": "COUNTRY",
+    },
+    "developer": {
+        "dimensions": ("developer", "spu"),
+        "label": "SPU开发经理",
+        "dataset_key": "dataset_developer_detail",
+        "dataset_name": "爆品指数-SPU开发经理经营明细",
+        "dataset_path": "Hot_Product_Index_Developer_Detail",
+        "chart_key": "chart_developer_detail",
+        "chart_name": "SPU开发经理",
+        "component_suffix": "DEVELOPER",
+    },
+    "model": {
+        "dimensions": ("model",),
+        "label": "型号",
+        "dataset_key": "dataset_model_detail",
+        "dataset_name": "爆品指数-型号经营明细",
+        "dataset_path": "Hot_Product_Index_Model_Detail",
+        "chart_key": "chart_model_detail",
+        "chart_name": "型号维度",
+        "component_suffix": "MODEL",
+    },
+}
+
+DIMENSION_DETAIL_VISIBLE_METRICS: Final[tuple[str, ...]] = (
+    "sales_amount_usd",
+    "sales_qty",
+    "gross_profit_usd",
+    "gross_margin",
+    "return_goods_qty",
+    "return_rate",
+    "order_qty",
+    "avg_sales_qty_7d",
+    "avg_sales_qty_30d",
+    "avg_sales_qty_90d",
+    "theoretical_stock_qty",
+    "actual_stock_qty",
+)
+
+DIMENSION_DETAIL_INTERNAL_COLUMNS: Final[tuple[str, ...]] = (
+    "row_type",
+    "row_sort",
+    "effective_end_ym",
+    "sales_qty_7d",
+    "sales_qty_30d",
+    "sales_qty_90d",
+    "days_7d",
+    "days_30d",
+    "days_90d",
+    "month_start_date",
+)
+
+DIMENSION_DETAIL_METRICS: Final[dict[str, str]] = {
+    "sales_amount_usd": "SUM(sales_amount_usd)",
+    "sales_qty": "SUM(sales_qty)",
+    "gross_profit_usd": "SUM(gross_profit_usd)",
+    "gross_margin": ("SUM(gross_profit_usd) / NULLIF(SUM(sales_amount_usd), 0)"),
+    "return_goods_qty": "SUM(return_goods_qty)",
+    "return_rate": "SUM(return_goods_qty) / NULLIF(SUM(sales_qty), 0)",
+    "order_qty": "SUM(order_qty)",
+    "avg_sales_qty_7d": "SUM(sales_qty_7d) / NULLIF(MAX(days_7d), 0)",
+    "avg_sales_qty_30d": "SUM(sales_qty_30d) / NULLIF(MAX(days_30d), 0)",
+    "avg_sales_qty_90d": "SUM(sales_qty_90d) / NULLIF(MAX(days_90d), 0)",
+    "theoretical_stock_qty": "SUM(theoretical_stock_qty)",
+    "actual_stock_qty": "SUM(actual_stock_qty)",
+}
+
+DIMENSION_DETAIL_COLUMN_TYPES: Final[dict[str, str]] = {
+    "country": "STRING",
+    "developer": "STRING",
+    "spu": "STRING",
+    "model": "STRING",
+    "sales_amount_usd": "DECIMAL",
+    "sales_qty": "BIGINT",
+    "gross_profit_usd": "DECIMAL",
+    "gross_margin": "DECIMAL",
+    "return_goods_qty": "BIGINT",
+    "return_rate": "DECIMAL",
+    "order_qty": "BIGINT",
+    "avg_sales_qty_7d": "DECIMAL",
+    "avg_sales_qty_30d": "DECIMAL",
+    "avg_sales_qty_90d": "DECIMAL",
+    "theoretical_stock_qty": "DECIMAL",
+    "actual_stock_qty": "DECIMAL",
+    "row_type": "STRING",
+    "row_sort": "BIGINT",
+    "effective_end_ym": "STRING",
+    "sales_qty_7d": "BIGINT",
+    "sales_qty_30d": "BIGINT",
+    "sales_qty_90d": "BIGINT",
+    "days_7d": "BIGINT",
+    "days_30d": "BIGINT",
+    "days_90d": "BIGINT",
+    "month_start_date": "DATE",
+}
+
+
 def _detail_column_config(grain: str) -> Asset:
     """Build fixed widths, alignment, formats, and pinned detail columns."""
     try:
@@ -1443,6 +1980,184 @@ def _detail_chart_params(grain: str) -> Asset:
         "show_cell_bars": False,
         "show_totals": True,
         "table_timestamp_format": "smart_date",
+        "time_range": "Current month",
+        "viz_type": "table",
+    }
+
+
+def _dimension_detail_columns(grain: str) -> list[Asset]:
+    """Build visible and hidden columns for a selected-range dimension table."""
+    try:
+        dimensions = tuple(DIMENSION_DETAIL_SPECS[grain]["dimensions"])
+    except KeyError as ex:
+        raise ValueError(f"unsupported hot-product dimension grain: {grain}") from ex
+
+    visible_names = (*dimensions, *DIMENSION_DETAIL_VISIBLE_METRICS)
+    columns: list[Asset] = []
+    for name in visible_names:
+        columns.append(
+            _dataset_column(
+                name,
+                DIMENSION_DETAIL_COLUMN_TYPES[name],
+                display_name=COLUMN_VERBOSE_NAMES[name],
+                groupby=name in dimensions,
+            )
+        )
+    for name in DIMENSION_DETAIL_INTERNAL_COLUMNS:
+        columns.append(
+            _dataset_column(
+                name,
+                DIMENSION_DETAIL_COLUMN_TYPES[name],
+                is_dttm=name == "month_start_date",
+                description="仅供明细表排序、时间筛选或分子分母重算，界面不展示。",
+                filterable=False,
+                groupby=False,
+            )
+        )
+
+    source_types = dict(DAILY_SOURCE_COLUMNS)
+    for _, filter_column in FILTERS:
+        if filter_column in {column["column_name"] for column in columns}:
+            continue
+        columns.append(
+            _dataset_column(
+                filter_column,
+                source_types[filter_column],
+                description="仅作为原生筛选目标，不参与明细表展示或聚合。",
+                groupby=False,
+            )
+        )
+    return columns
+
+
+def _dimension_detail_metrics() -> tuple[Asset, ...]:
+    """Build additive and recomputed metrics for the three dimension tables."""
+    labels = {
+        "sales_amount_usd": "销售额",
+        "sales_qty": "销量",
+        "gross_profit_usd": "毛利润",
+        "gross_margin": "毛利率",
+        "return_goods_qty": "退货量",
+        "return_rate": "退货率",
+        "order_qty": "订单量",
+        "avg_sales_qty_7d": "近7天日均销量",
+        "avg_sales_qty_30d": "近30天日均销量",
+        "avg_sales_qty_90d": "近90天日均销量",
+        "theoretical_stock_qty": "理论库存数",
+        "actual_stock_qty": "实际库存数",
+    }
+    formats = {
+        "sales_amount_usd": "$,.1~f",
+        "sales_qty": ",.0f",
+        "gross_profit_usd": "$,.1~f",
+        "gross_margin": ".1~%",
+        "return_goods_qty": ",.0f",
+        "return_rate": ".1~%",
+        "order_qty": ",.0f",
+        "avg_sales_qty_7d": ",.1~f",
+        "avg_sales_qty_30d": ",.1~f",
+        "avg_sales_qty_90d": ",.1~f",
+        "theoretical_stock_qty": ",.1~f",
+        "actual_stock_qty": ",.1~f",
+    }
+    visible_metrics = tuple(
+        _metric(
+            name,
+            labels[name],
+            DIMENSION_DETAIL_METRICS[name],
+            formats[name],
+            f"爆品指数{labels[name]}维度明细指标。",
+        )
+        for name in DIMENSION_DETAIL_VISIBLE_METRICS
+    )
+    return (
+        *visible_metrics,
+        _metric(
+            "row_sort",
+            "行排序（内部）",
+            "MAX(row_sort)",
+            ",.0f",
+            "仅用于将 SQL 提供的汇总行稳定置底，不在表格中展示。",
+        ),
+    )
+
+
+def _dimension_detail_column_config(grain: str) -> Asset:
+    """Build stable widths and one-decimal formats for dimension tables."""
+    try:
+        dimensions = tuple(DIMENSION_DETAIL_SPECS[grain]["dimensions"])
+    except KeyError as ex:
+        raise ValueError(f"unsupported hot-product dimension grain: {grain}") from ex
+
+    config: Asset = {}
+    dimension_width = 120 if grain != "developer" else 112
+    for name in (*dimensions, *DIMENSION_DETAIL_VISIBLE_METRICS):
+        is_dimension = name in dimensions
+        item: Asset = {
+            "columnWidth": dimension_width if is_dimension else 112,
+            "horizontalAlign": "left" if is_dimension else "right",
+            "nullValue": "-",
+            "truncateLongCells": True,
+        }
+        if name in {
+            "sales_amount_usd",
+            "gross_profit_usd",
+        }:
+            item["d3NumberFormat"] = "$,.1~f"
+            item["currencyFormat"] = {
+                "symbol": "USD",
+                "symbolPosition": "prefix",
+            }
+        elif name in {"gross_margin", "return_rate"}:
+            item["d3NumberFormat"] = ".1~%"
+        elif not is_dimension:
+            item["d3NumberFormat"] = ",.1~f"
+        if is_dimension:
+            item["pinned"] = "left"
+        config[name] = item
+    return config
+
+
+def _dimension_detail_chart_params(grain: str) -> Asset:
+    """Build a non-paged table with an explicit SQL-provided summary row."""
+    try:
+        dimensions = list(DIMENSION_DETAIL_SPECS[grain]["dimensions"])
+    except KeyError as ex:
+        raise ValueError(f"unsupported hot-product dimension grain: {grain}") from ex
+    orderby = [
+        ["row_sort", True],
+        ["sales_amount_usd", False],
+        *[[dimension, True] for dimension in dimensions],
+    ]
+    return {
+        "adhoc_filters": [],
+        "allow_rearrange_columns": True,
+        "allow_render_html": False,
+        "align_pn": False,
+        "column_config": _dimension_detail_column_config(grain),
+        "color_pn": True,
+        "groupby": dimensions,
+        "all_columns": [*dimensions, *DIMENSION_DETAIL_VISIBLE_METRICS],
+        "hidden_metrics": ["row_sort"],
+        "include_search": False,
+        "metrics": list(DIMENSION_DETAIL_VISIBLE_METRICS),
+        "order_desc": False,
+        "order_by_cols": [],
+        "query_order_by_cols": [
+            json.dumps(item, ensure_ascii=False) for item in orderby
+        ],
+        "page_length": 0,
+        "query_mode": "aggregate",
+        "row_limit": 100000,
+        "server_page_length": 0,
+        "server_pagination": False,
+        "serverColumnPagination": False,
+        "show_cell_bars": False,
+        "show_column_totals": False,
+        "show_row_totals": False,
+        "show_totals": False,
+        "table_timestamp_format": "smart_date",
+        "timeseries_limit_metric": "row_sort",
         "time_range": "Current month",
         "viz_type": "table",
     }
@@ -1720,14 +2435,44 @@ def _datasets(database_uuid: str) -> AssetBundle:
             database_uuid=database_uuid,
         ),
     }
+    for grain, spec in DIMENSION_DETAIL_SPECS.items():
+        datasets[f"datasets/Doris_ling_xing/{spec['dataset_path']}.yaml"] = _dataset(
+            table_name=str(spec["dataset_name"]),
+            uuid=UUIDS[str(spec["dataset_key"])],
+            main_dttm_col="month_start_date",
+            description=(
+                f"爆品指数{spec['label']}经营明细；按筛选范围聚合流量指标，"
+                "库存取实际计算结束月份并按SKU去重。"
+            ),
+            sql=_dimension_detail_sql(grain=grain),
+            columns=_dimension_detail_columns(grain),
+            metrics=_dimension_detail_metrics(),
+            database_uuid=database_uuid,
+        )
     return datasets
 
 
 def _table_query_context(params: Asset) -> str:
     """Build the stock table page, row-count, and totals query requests."""
-    columns = list(params["groupby"])
-    metrics = list(params["metrics"])
-    orderby = [json.loads(item) for item in params.get("order_by_cols", [])]
+    raw_mode = params.get("query_mode") == "raw"
+    columns = (
+        list(params.get("all_columns", params["groupby"]))
+        if raw_mode
+        else list(params["groupby"])
+    )
+    hidden_metrics = [str(metric) for metric in params.get("hidden_metrics", [])]
+    metrics = [] if raw_mode else [*list(params["metrics"]), *hidden_metrics]
+    orderby = [
+        json.loads(item)
+        for item in params.get("query_order_by_cols", params.get("order_by_cols", []))
+    ]
+    server_pagination = bool(params.get("server_pagination", True))
+    server_page_length = params.get("server_page_length")
+    page_length = (
+        int(server_page_length)
+        if server_page_length is not None and int(server_page_length) > 0
+        else int(params["row_limit"])
+    )
     query: Asset = {
         "annotation_layers": [],
         "applied_time_extras": {},
@@ -1740,31 +2485,43 @@ def _table_query_context(params: Asset) -> str:
         "metrics": metrics,
         "order_desc": bool(params.get("order_desc", False)),
         "orderby": orderby,
-        "post_processing": [],
-        "row_limit": int(params["server_page_length"]),
+        "post_processing": (
+            [
+                {
+                    "operation": "select",
+                    "options": {"exclude": hidden_metrics},
+                }
+            ]
+            if hidden_metrics
+            else []
+        ),
+        "row_limit": page_length,
         "row_offset": 0,
         "series_limit": 0,
         "time_offsets": [],
         "time_range": str(params.get("time_range", "Current month")),
         "url_params": {},
     }
-    row_count_query = {
-        **query,
-        "is_rowcount": True,
-        "row_limit": int(params["row_limit"]),
-        "row_offset": 0,
-        "time_offsets": [],
-    }
-    totals_query = {
-        **query,
-        "columns": [],
-        "post_processing": [],
-        "row_limit": 0,
-        "row_offset": 0,
-        "time_offsets": [],
-    }
-    totals_query.pop("order_desc")
-    totals_query.pop("orderby")
+    queries = [query]
+    if server_pagination:
+        row_count_query = {
+            **query,
+            "is_rowcount": True,
+            "row_limit": int(params["row_limit"]),
+            "row_offset": 0,
+            "time_offsets": [],
+        }
+        totals_query = {
+            **query,
+            "columns": [],
+            "post_processing": [],
+            "row_limit": 0,
+            "row_offset": 0,
+            "time_offsets": [],
+        }
+        totals_query.pop("order_desc")
+        totals_query.pop("orderby")
+        queries.extend((row_count_query, totals_query))
 
     datasource = {"id": 0, "type": "table"}
     form_data = {
@@ -1778,7 +2535,7 @@ def _table_query_context(params: Asset) -> str:
         "datasource": datasource,
         "force": False,
         "form_data": form_data,
-        "queries": [query, row_count_query, totals_query],
+        "queries": queries,
         "result_format": "json",
         "result_type": "full",
     }
@@ -2221,6 +2978,12 @@ def _guide_chart_params() -> Asset:
   <p>
     SPU 和 SKU 环图按筛选后销量分别计算全量分类占比，中心显示总销量，不合并其他分类。
   </p>
+  <h2>经营明细 Tab</h2>
+  <p>
+    经营明细按 SPU、SKU、国家、SPU开发经理和型号依次展示；每张表底部提供显式的
+    “汇总”行，金额、销量、毛利润、退货量和订单量取合计，毛利率、退货率与近7/30/90天
+    日均销量均按分子和分母重新计算。渠道（未启用）不展示。
+  </p>
   <h2>颜色口径</h2>
   <p>
     颜色趋势和分布使用颜色代码：颜色文本含连字符时取最后一个连字符后的文本，
@@ -2595,6 +3358,17 @@ def _charts() -> AssetBundle:
         params=_detail_chart_params("sku"),
         description="按公司SKU、SKU、年月、产品等级、尺寸和颜色展示经营明细。",
     )
+    for grain, spec in DIMENSION_DETAIL_SPECS.items():
+        charts[f"charts/{spec['dataset_path']}.yaml"] = _chart(
+            slice_name=str(spec["chart_name"]),
+            uuid=UUIDS[str(spec["chart_key"])],
+            viz_type="table",
+            dataset_uuid=UUIDS[str(spec["dataset_key"])],
+            params=_dimension_detail_chart_params(grain),
+            description=(
+                f"按{spec['label']}展示所选范围销售、效益、退货、订单和库存指标。"
+            ),
+        )
     trend_charts = (
         ("day", "指标整体趋势-天", "chart_trend_day"),
         ("week", "指标整体趋势-周", "chart_trend_week"),
@@ -2808,7 +3582,13 @@ def _main_position() -> Asset:
             "type": "MARKDOWN",
         },
         "TABS-DETAIL": {
-            "children": ["TAB-SPU-DETAIL", "TAB-SKU-DETAIL"],
+            "children": [
+                "TAB-SPU-DETAIL",
+                "TAB-SKU-DETAIL",
+                "TAB-COUNTRY-DETAIL",
+                "TAB-DEVELOPER-DETAIL",
+                "TAB-MODEL-DETAIL",
+            ],
             "id": "TABS-DETAIL",
             "meta": {},
             "parents": ["ROOT_ID", "GRID_ID"],
@@ -2855,6 +3635,79 @@ def _main_position() -> Asset:
             width=12,
             height=72,
             parent_ids=["ROOT_ID", "GRID_ID", "TABS-DETAIL", "TAB-SKU-DETAIL"],
+        ),
+        "TAB-COUNTRY-DETAIL": _tab(
+            "TAB-COUNTRY-DETAIL",
+            "国家",
+            ["ROW-COUNTRY-DETAIL"],
+            tabs_id="TABS-DETAIL",
+        ),
+        "TAB-DEVELOPER-DETAIL": _tab(
+            "TAB-DEVELOPER-DETAIL",
+            "SPU开发经理",
+            ["ROW-DEVELOPER-DETAIL"],
+            tabs_id="TABS-DETAIL",
+        ),
+        "TAB-MODEL-DETAIL": _tab(
+            "TAB-MODEL-DETAIL",
+            "型号",
+            ["ROW-MODEL-DETAIL"],
+            tabs_id="TABS-DETAIL",
+        ),
+        "ROW-COUNTRY-DETAIL": _row(
+            "ROW-COUNTRY-DETAIL",
+            ["CHART-COUNTRY-DETAIL"],
+            parent_ids=["ROOT_ID", "GRID_ID", "TABS-DETAIL", "TAB-COUNTRY-DETAIL"],
+        ),
+        "ROW-DEVELOPER-DETAIL": _row(
+            "ROW-DEVELOPER-DETAIL",
+            ["CHART-DEVELOPER-DETAIL"],
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "TABS-DETAIL",
+                "TAB-DEVELOPER-DETAIL",
+            ],
+        ),
+        "ROW-MODEL-DETAIL": _row(
+            "ROW-MODEL-DETAIL",
+            ["CHART-MODEL-DETAIL"],
+            parent_ids=["ROOT_ID", "GRID_ID", "TABS-DETAIL", "TAB-MODEL-DETAIL"],
+        ),
+        "CHART-COUNTRY-DETAIL": _chart_node(
+            component_id="CHART-COUNTRY-DETAIL",
+            chart_id=1023,
+            chart_uuid=UUIDS["chart_country_detail"],
+            slice_name="国家维度",
+            row_id="ROW-COUNTRY-DETAIL",
+            width=12,
+            height=72,
+            parent_ids=["ROOT_ID", "GRID_ID", "TABS-DETAIL", "TAB-COUNTRY-DETAIL"],
+        ),
+        "CHART-DEVELOPER-DETAIL": _chart_node(
+            component_id="CHART-DEVELOPER-DETAIL",
+            chart_id=1024,
+            chart_uuid=UUIDS["chart_developer_detail"],
+            slice_name="SPU开发经理",
+            row_id="ROW-DEVELOPER-DETAIL",
+            width=12,
+            height=72,
+            parent_ids=[
+                "ROOT_ID",
+                "GRID_ID",
+                "TABS-DETAIL",
+                "TAB-DEVELOPER-DETAIL",
+            ],
+        ),
+        "CHART-MODEL-DETAIL": _chart_node(
+            component_id="CHART-MODEL-DETAIL",
+            chart_id=1025,
+            chart_uuid=UUIDS["chart_model_detail"],
+            slice_name="型号维度",
+            row_id="ROW-MODEL-DETAIL",
+            width=12,
+            height=72,
+            parent_ids=["ROOT_ID", "GRID_ID", "TABS-DETAIL", "TAB-MODEL-DETAIL"],
         ),
         "ROW-ANALYSIS-PRIMARY": _row(
             "ROW-ANALYSIS-PRIMARY",
@@ -3283,6 +4136,13 @@ def _select_filter(
                 "column": {"name": column},
                 "datasetUuid": UUIDS["dataset_sku_detail"],
             },
+            *(
+                {
+                    "column": {"name": column},
+                    "datasetUuid": UUIDS[str(spec["dataset_key"])],
+                }
+                for spec in DIMENSION_DETAIL_SPECS.values()
+            ),
             {
                 "column": {"name": column},
                 "datasetUuid": UUIDS["dataset_spu_leaderboard"],
@@ -3336,6 +4196,13 @@ def _month_filter(main_chart_uuids: Sequence[str]) -> Asset:
                 "column": {"name": "month_start_date"},
                 "datasetUuid": UUIDS["dataset_sku_detail"],
             },
+            *(
+                {
+                    "column": {"name": "month_start_date"},
+                    "datasetUuid": UUIDS[str(spec["dataset_key"])],
+                }
+                for spec in DIMENSION_DETAIL_SPECS.values()
+            ),
         ],
         "type": "NATIVE_FILTER",
     }
@@ -3349,6 +4216,9 @@ def _main_metadata() -> Asset:
         UUIDS["chart_funnel_spu_count"],
         UUIDS["chart_spu_detail"],
         UUIDS["chart_sku_detail"],
+        UUIDS["chart_country_detail"],
+        UUIDS["chart_developer_detail"],
+        UUIDS["chart_model_detail"],
         UUIDS["chart_trend_day"],
         UUIDS["chart_trend_week"],
         UUIDS["chart_trend_month"],
@@ -3684,18 +4554,18 @@ def validate_assets(  # noqa: C901
     dashboards = _asset_family(assets, "dashboards/")
     if assets.get("metadata.yaml") != {"type": "assets", "version": ASSET_VERSION}:
         raise ValueError("metadata.yaml must declare an assets v1 bundle")
-    if (len(datasets), len(charts), len(dashboards)) != (6, 24, 2):
+    if (len(datasets), len(charts), len(dashboards)) != (9, 27, 2):
         raise ValueError(
-            "hot-product bundle must contain 6 datasets, 24 charts, and 2 dashboards "
-            "(9 KPI, 2 funnels, 1 status, 1 guide, 2 detail, and 9 analysis charts)"
+            "hot-product bundle must contain 9 datasets, 27 charts, and 2 dashboards "
+            "(9 KPI, 2 funnels, 1 status, 1 guide, 5 detail, and 9 analysis charts)"
         )
 
     identified_assets = [*datasets, *charts, *dashboards]
     asset_uuids = [str(asset["uuid"]) for asset in identified_assets]
     if len(asset_uuids) != len(set(asset_uuids)):
         raise ValueError("asset UUIDs must be unique")
-    if len(asset_uuids) != 32:
-        raise ValueError("hot-product bundle must contain 32 published asset UUIDs")
+    if len(asset_uuids) != 38:
+        raise ValueError("hot-product bundle must contain 38 published asset UUIDs")
     for asset_uuid in asset_uuids:
         UUID(asset_uuid)
 
@@ -3735,7 +4605,13 @@ def validate_assets(  # noqa: C901
 
     approved_tabs = {
         UUIDS["dashboard_main"]: {
-            "TABS-DETAIL": ("TAB-SPU-DETAIL", "TAB-SKU-DETAIL"),
+            "TABS-DETAIL": (
+                "TAB-SPU-DETAIL",
+                "TAB-SKU-DETAIL",
+                "TAB-COUNTRY-DETAIL",
+                "TAB-DEVELOPER-DETAIL",
+                "TAB-MODEL-DETAIL",
+            ),
             "TABS-TREND": (
                 "TAB-TREND-DAY",
                 "TAB-TREND-WEEK",
@@ -3766,7 +4642,7 @@ def validate_assets(  # noqa: C901
     if (
         len(all_position_chart_uuids) != len(chart_uuids)
         or set(all_position_chart_uuids) != chart_uuids
-        or len(all_position_chart_uuids) != 24
+        or len(all_position_chart_uuids) != 27
     ):
         positioned_chart_uuids = set(all_position_chart_uuids)
         missing_chart_keys = sorted(
@@ -3775,7 +4651,7 @@ def validate_assets(  # noqa: C901
             if key.startswith("chart_") and chart_uuid not in positioned_chart_uuids
         )
         raise ValueError(
-            "dashboard chart UUID positions must reference each of the 24 chart "
+            "dashboard chart UUID positions must reference each of the 27 chart "
             "UUIDs exactly once"
             + (f"; missing {missing_chart_keys}" if missing_chart_keys else "")
         )
@@ -3784,11 +4660,11 @@ def validate_assets(  # noqa: C901
     guide_chart_uuids = position_chart_uuids[UUIDS["dashboard_guide"]]
     expected_main_chart_uuids = chart_uuids - {UUIDS["chart_guide"]}
     if (
-        len(main_chart_uuids) != 23
+        len(main_chart_uuids) != 26
         or set(main_chart_uuids) != expected_main_chart_uuids
     ):
         raise ValueError(
-            "main dashboard chart UUID position must contain exactly the 23 "
+            "main dashboard chart UUID position must contain exactly the 26 "
             "business charts"
         )
     if guide_chart_uuids != [UUIDS["chart_guide"]]:
@@ -3797,10 +4673,10 @@ def validate_assets(  # noqa: C901
         )
 
     main_chart_count = len(main_chart_uuids)
-    if main_chart_count != 23:
+    if main_chart_count != 26:
         raise ValueError(
-            "main dashboard scope must contain exactly 23 approved chart nodes "
-            "(9 KPI, 2 funnels, 1 status, 2 detail, and 9 analysis charts)"
+            "main dashboard scope must contain exactly 26 approved chart nodes "
+            "(9 KPI, 2 funnels, 1 status, 5 detail, and 9 analysis charts)"
         )
     new_chart_keys = (
         "chart_trend_day",
@@ -3812,6 +4688,9 @@ def validate_assets(  # noqa: C901
         "chart_color_trend_week",
         "chart_color_trend_month",
         "chart_color_distribution",
+        "chart_country_detail",
+        "chart_developer_detail",
+        "chart_model_detail",
     )
     main_chart_node_uuids = main_chart_uuids
     for chart_key in new_chart_keys:
