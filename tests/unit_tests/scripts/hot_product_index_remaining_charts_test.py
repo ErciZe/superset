@@ -205,20 +205,13 @@ def test_remaining_analysis_filter_scope_includes_leaderboard_only_daily(
     assert new_chart_uuids - {leaderboard_uuid} <= set(month_filter["chartsInScope"])
 
 
-def test_remaining_analysis_css_is_root_scoped(tmp_path: Path) -> None:
-    """New chart styling is limited to the two tabs and leaderboard roots."""
+def test_remaining_analysis_uses_stock_dashboard_css(tmp_path: Path) -> None:
+    """The stock dashboard does not carry chart-specific CSS overrides."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
         "拉杆箱在售产品爆品指数看板"
     ]
-    css = main["css"]
-
-    assert "#TABS-TREND .ant-tabs-card > .ant-tabs-nav .ant-tabs-ink-bar" in css
-    assert "#TABS-COLOR-TREND .ant-tabs-card > .ant-tabs-nav .ant-tabs-ink-bar" in css
-    assert "#CHART-SPU-LEADERBOARD .ag-header" in css
-    assert "#2978B5" in css
-    assert "#d8edc8" in css
-    assert "background: #ffffff" in css
+    assert main["css"] == ""
 
 
 def test_daily_dataset_exposes_trend_and_color_semantics(tmp_path: Path) -> None:
@@ -232,9 +225,12 @@ def test_daily_dataset_exposes_trend_and_color_semantics(tmp_path: Path) -> None
     assert columns["week_start_date"]["is_dttm"] is True
     assert columns["yw"]["verbose_name"] == "年周"
     assert columns["yw"]["type"] == "STRING"
+    assert columns["ymd"]["verbose_name"] == "年月日"
+    assert columns["ymd"]["type"] == "STRING"
     assert columns["color_code"]["verbose_name"] == "颜色代码"
     assert columns["color_code"]["type"] == "STRING"
     assert "DATE_SUB(d.sales_date, INTERVAL WEEKDAY(d.sales_date) DAY)" in daily["sql"]
+    assert "DATE_FORMAT(d.sales_date, '%Y-%m-%d') AS ymd" in daily["sql"]
     assert "DATE_FORMAT(d.sales_date, '%xW%v') AS yw" in daily["sql"]
     assert (
         "NULLIF(TRIM(SUBSTRING_INDEX(d.color, '-', -1)), '') AS color_code"
@@ -429,21 +425,8 @@ def test_remaining_chart_identities_and_parameter_contract(tmp_path: Path) -> No
         path: expected[expected_name] for path, expected_name in expected_paths.items()
     }
 
-    selected = {
-        "爆品指数": True,
-        "销量": False,
-        "日均销量": False,
-        "退货量": False,
-        "订单量": False,
-        "在售SKU数": False,
-        "在售SPU数": False,
-        "退货率": False,
-        "毛利率": False,
-        "销售额": True,
-        "毛利润": True,
-    }
     for name, x_axis in {
-        "指标整体趋势-天": "sales_date",
+        "指标整体趋势-天": "ymd",
         "指标整体趋势-周": "yw",
         "指标整体趋势-月": "ym",
     }.items():
@@ -476,14 +459,12 @@ def test_remaining_chart_identities_and_parameter_contract(tmp_path: Path) -> No
         assert (
             params["x_axis_time_format"]
             == {
-                "sales_date": "%Y-%m-%d",
+                "ymd": "%Y-%m-%d",
                 "yw": "%YW%V",
                 "ym": "%Y-%m",
             }[x_axis]
         )
-        assert json.loads(params["echart_options"]) == {
-            "legend": {"selected": selected}
-        }
+        assert "echart_options" not in params
 
         context = json.loads(chart["query_context"])
         assert len(context["queries"]) == 2
@@ -514,7 +495,6 @@ def test_remaining_pie_and_color_trend_contracts(tmp_path: Path) -> None:
     charts = assets_by_key(assets, "charts", "slice_name")
     for name, groupby, legend_type in (
         ("SPU销售比例", "spu", "plain"),
-        ("SKU销售比例", "sku", "scroll"),
         ("颜色销量分布", "color_code", "plain"),
     ):
         chart = charts[name]
@@ -529,7 +509,7 @@ def test_remaining_pie_and_color_trend_contracts(tmp_path: Path) -> None:
         assert params["sort_by_metric"] is True
         assert params["donut"] is True
         assert params["show_total"] is True
-        assert params["total_label"] == "总销量"
+        assert "total_label" not in params
         assert params["label_type"] == "key_percent"
         assert params["number_format"] == ",.0f"
 
@@ -547,6 +527,19 @@ def test_remaining_pie_and_color_trend_contracts(tmp_path: Path) -> None:
                 },
             }
         ]
+
+    sku = charts["SKU销售比例"]
+    sku_params = sku["params"]
+    assert sku["viz_type"] == "treemap_v2"
+    assert sku_params["groupby"] == ["sku"]
+    assert sku_params["metric"] == "sales_qty_total"
+    assert sku_params["row_limit"] == 1000
+    assert sku_params["number_format"] == ",.0f"
+    sku_query = json.loads(sku["query_context"])["queries"][0]
+    assert sku_query["columns"] == ["sku"]
+    assert sku_query["metrics"] == ["sales_qty_total"]
+    assert sku_query["orderby"] == [["sales_qty_total", False]]
+    assert sku_query["post_processing"] == []
 
     for name, x_axis in (("颜色销售比例-周", "yw"), ("颜色销售比例-月", "ym")):
         chart = charts[name]
@@ -580,11 +573,9 @@ def test_remaining_leaderboard_contract_and_conditional_formatting(
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     leaderboard = assets_by_key(assets, "charts", "slice_name")["SPU销量排行榜"]
     params = leaderboard["params"]
-    assert leaderboard["viz_type"] == "ag-grid-table-scheme"
-    assert params["displayed_columns"] == [
-        "spu",
-        "spu_rating",
-        "final_rating",
+    assert leaderboard["viz_type"] == "table"
+    assert params["groupby"] == ["spu", "spu_rating", "final_rating"]
+    assert params["metrics"] == [
         "previous_month_sales_amount_usd",
         "current_month_sales_amount_usd",
         "rating_progress",
@@ -593,10 +584,8 @@ def test_remaining_leaderboard_contract_and_conditional_formatting(
     assert params["server_page_length"] == 50
     assert params["server_pagination"] is True
     assert params["show_totals"] is False
-    assert params["advanced_filter_enabled"] is False
-    assert params["column_view_schemes_enabled"] is False
     assert params["include_search"] is False
-    assert params["orderby"] == [
+    assert [json.loads(item) for item in params["order_by_cols"]] == [
         ["current_month_sales_amount_usd", False],
         ["spu", True],
         ["final_rating", True],
@@ -681,7 +670,9 @@ def test_leaderboard_columns_fit_all_business_headers_in_the_primary_grid(
         expected_widths
     )
     assert sum(expected_widths.values()) == 656
-    assert leaderboard["params"]["displayed_columns"] == list(expected_widths)
+    assert leaderboard["params"]["groupby"] + leaderboard["params"]["metrics"] == list(
+        expected_widths
+    )
 
     dataset = assets_by_key(assets, "datasets", "table_name")["爆品指数-SPU销量排行榜"]
     labels = {
@@ -852,7 +843,7 @@ def test_remaining_query_contexts_load_chart_data_schema_and_remap_datasource(
 def test_leaderboard_query_context_preserves_three_server_pagination_queries(
     tmp_path: Path,
 ) -> None:
-    """The AG Grid context keeps page, row-count, and totals requests distinct."""
+    """The stock table context keeps page, row-count, and totals requests distinct."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     leaderboard = assets_by_key(assets, "charts", "slice_name")["SPU销量排行榜"]
     params = leaderboard["params"]
@@ -864,7 +855,7 @@ def test_leaderboard_query_context_preserves_three_server_pagination_queries(
     assert page["metrics"] == params["metrics"]
     assert page["row_limit"] == 50
     assert page["row_offset"] == 0
-    assert page["orderby"] == params["orderby"]
+    assert page["orderby"] == [json.loads(item) for item in params["order_by_cols"]]
     assert page["time_range"] == "No filter"
 
     assert row_count["is_rowcount"] is True
@@ -872,7 +863,9 @@ def test_leaderboard_query_context_preserves_three_server_pagination_queries(
     assert row_count["row_offset"] == 0
     assert row_count["columns"] == params["groupby"]
     assert row_count["metrics"] == params["metrics"]
-    assert row_count["orderby"] == params["orderby"]
+    assert row_count["orderby"] == [
+        json.loads(item) for item in params["order_by_cols"]
+    ]
 
     assert totals["columns"] == []
     assert totals["metrics"] == params["metrics"]

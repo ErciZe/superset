@@ -1,5 +1,7 @@
 # 爆品指数剩余六个图表设计
 
+> **方案替代说明（2026-08-09）：** 本文保留历史 FineBI 对账与早期实现记录；当前交付采用纯原生 Superset 配置。明细/排行榜为 `table`，SPU/颜色为 stock Pie，SKU 为 `treemap_v2`，漏斗为 stock Funnel；不生成 dashboard CSS、`legend.selected`、`total_label`、`advanced_filter_enabled`、`row_hierarchy_fields` 或 `server_pagination_default_orderby`。日趋势使用 `ymd` 字符串类目轴，周/月使用 `yw`/`ym`。
+
 ## 1. 目标与范围
 
 本阶段在生产看板“拉杆箱在售产品爆品指数看板”中补齐 FineBI 主画布剩余的六个可见组件：

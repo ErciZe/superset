@@ -168,6 +168,7 @@ STATUS_DISPLAY_COLUMNS: Final[tuple[tuple[str, str], ...]] = (
 
 COLUMN_VERBOSE_NAMES: Final = {
     "sales_date": "销售日期",
+    "ymd": "年月日",
     "week_start_date": "周一日期",
     "month_start_date": "月份开始日期",
     "sid": "店铺标识",
@@ -521,6 +522,7 @@ def _daily_sql() -> str:
         (
             "DATE_SUB(d.sales_date, INTERVAL WEEKDAY(d.sales_date) DAY) "
             "AS week_start_date",
+            "DATE_FORMAT(d.sales_date, '%Y-%m-%d') AS ymd",
             "DATE_FORMAT(d.sales_date, '%xW%v') AS yw",
             "NULLIF(TRIM(SUBSTRING_INDEX(d.color, '-', -1)), '') AS color_code",
         )
@@ -1406,7 +1408,7 @@ def _detail_conditional_formatting() -> list[Asset]:
 
 
 def _detail_chart_params(grain: str) -> Asset:
-    """Build one stable AG Grid detail chart form-data contract."""
+    """Build one stock table detail chart form-data contract."""
     try:
         groupby = list(DETAIL_GROUPBY[grain])
         metric_names = list(DETAIL_METRICS)
@@ -1416,7 +1418,6 @@ def _detail_chart_params(grain: str) -> Asset:
                 for name in metric_names
                 if name not in {"theoretical_stock_qty", "actual_stock_qty"}
             ]
-        displayed_columns = list(DETAIL_DISPLAYED_COLUMNS[grain])
         orderby = [list(item) for item in DETAIL_SORT[grain]]
     except KeyError as ex:
         raise ValueError(f"unsupported hot-product detail grain: {grain}") from ex
@@ -1424,26 +1425,26 @@ def _detail_chart_params(grain: str) -> Asset:
     return {
         "adhoc_filters": [],
         "allow_rearrange_columns": True,
-        "advanced_filter_enabled": False,
+        "allow_render_html": False,
+        "align_pn": False,
         "column_config": _detail_column_config(grain),
-        "column_view_schemes_enabled": False,
+        "color_pn": True,
         "conditional_formatting": _detail_conditional_formatting(),
-        "displayed_columns": displayed_columns,
-        "emit_filter": False,
         "groupby": groupby,
         "include_search": False,
         "metrics": metric_names,
         "order_desc": False,
-        "orderby": orderby,
+        "order_by_cols": [json.dumps(item, ensure_ascii=False) for item in orderby],
+        "page_length": 0,
         "query_mode": "aggregate",
-        "row_hierarchy_fields": groupby if grain == "spu" else [],
         "row_limit": 100000,
-        "server_pagination_default_orderby": orderby,
         "server_page_length": 50,
         "server_pagination": True,
+        "show_cell_bars": False,
         "show_totals": True,
+        "table_timestamp_format": "smart_date",
         "time_range": "Current month",
-        "viz_type": "ag-grid-table-scheme",
+        "viz_type": "table",
     }
 
 
@@ -1461,6 +1462,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
     daily_columns.extend(
         [
             _dataset_column("week_start_date", "DATE", is_dttm=True),
+            _dataset_column("ymd", "STRING"),
             _dataset_column("yw", "STRING"),
             _dataset_column("color_code", "STRING"),
             _dataset_column(
@@ -1722,10 +1724,10 @@ def _datasets(database_uuid: str) -> AssetBundle:
 
 
 def _table_query_context(params: Asset) -> str:
-    """Build AG Grid base, row-count, and totals queries in plugin order."""
+    """Build the stock table page, row-count, and totals query requests."""
     columns = list(params["groupby"])
     metrics = list(params["metrics"])
-    orderby = [list(item) for item in params["orderby"]]
+    orderby = [json.loads(item) for item in params.get("order_by_cols", [])]
     query: Asset = {
         "annotation_layers": [],
         "applied_time_extras": {},
@@ -1981,7 +1983,7 @@ def _pie_query_context(params: Asset) -> str:
 def _query_context(params: Asset) -> str:
     """Build a saved query context that the chart data endpoint can execute."""
     viz_type = str(params["viz_type"])
-    if viz_type == "ag-grid-table-scheme":
+    if viz_type == "table":
         return _table_query_context(params)
     if viz_type == "mixed_timeseries":
         return _mixed_timeseries_query_context(params)
@@ -1989,6 +1991,18 @@ def _query_context(params: Asset) -> str:
         return _timeseries_query_context(params)
     if viz_type == "pie":
         return _pie_query_context(params)
+    if viz_type == "treemap_v2":
+        groupby = [str(column) for column in params["groupby"]]
+        metric = str(params["metric"])
+        treemap_query = _echarts_query(
+            columns=groupby,
+            metrics=[metric],
+            series_columns=[],
+            row_limit=int(params["row_limit"]),
+            orderby=[[metric, False]],
+            time_range=str(params.get("time_range", "Current month")),
+        )
+        return _echarts_envelope(params, [treemap_query])
     if viz_type == "big_number_total":
         columns: list[str] = []
         metrics = [str(params["metric"])]
@@ -2110,7 +2124,6 @@ def _funnel_params(
         "metric": metric,
         "number_format": number_format,
         "percent_format": ",.1~%",
-        "rectangular_segments": True,
         "order_by_cols": ['["spu_previous_month_sales_level_sort_metric", true]'],
         "orient": "vertical",
         "percent_calculation_type": "total",
@@ -2259,7 +2272,7 @@ def _guide_chart_params() -> Asset:
 
 
 TREND_X_AXES: Final[dict[str, str]] = {
-    "day": "sales_date",
+    "day": "ymd",
     "week": "yw",
     "month": "ym",
 }
@@ -2278,25 +2291,9 @@ def _trend_params(grain: str) -> Asset:
         x_axis_time_format = TREND_TIME_FORMATS[grain]
     except KeyError as ex:
         raise ValueError(f"unsupported hot-product trend grain: {grain}") from ex
-    selected = {
-        "爆品指数": True,
-        "销量": False,
-        "日均销量": False,
-        "退货量": False,
-        "订单量": False,
-        "在售SKU数": False,
-        "在售SPU数": False,
-        "退货率": False,
-        "毛利率": False,
-        "销售额": True,
-        "毛利润": True,
-    }
     return {
         "adhoc_filters": [],
         "color_scheme": "supersetColors",
-        "echart_options": json.dumps(
-            {"legend": {"selected": selected}}, ensure_ascii=False
-        ),
         "groupby": [],
         "groupby_b": [],
         "metrics": list(TREND_PRIMARY_METRICS),
@@ -2344,11 +2341,29 @@ def _pie_params(groupby: str, *, legend_type: str) -> Asset:
         "show_labels_threshold": 3,
         "show_legend": True,
         "show_total": True,
-        "total_label": "总销量",
         "sort_by_metric": True,
         "threshold_for_other": 0,
         "time_range": "Current month",
         "viz_type": "pie",
+    }
+
+
+def _treemap_params(groupby: str) -> Asset:
+    """Build the stock Treemap form-data contract for SKU share."""
+    return {
+        "adhoc_filters": [],
+        "color_scheme": "supersetColors",
+        "date_format": "smart_date",
+        "groupby": [groupby],
+        "label_type": "key_value",
+        "metric": "sales_qty_total",
+        "number_format": ",.0f",
+        "row_limit": 1000,
+        "show_labels": True,
+        "show_upper_labels": True,
+        "sort_by_metric": True,
+        "time_range": "Current month",
+        "viz_type": "treemap_v2",
     }
 
 
@@ -2474,33 +2489,33 @@ def _leaderboard_conditional_formatting() -> list[Asset]:
 
 
 def _leaderboard_chart_params() -> Asset:
-    """Build the stable, server-paged SPU leaderboard table contract."""
+    """Build the stock, server-paged SPU leaderboard table contract."""
     groupby = list(LEADERBOARD_GROUPBY)
     metrics = list(LEADERBOARD_METRICS)
     orderby = [list(item) for item in LEADERBOARD_ORDERBY]
     return {
         "adhoc_filters": [],
-        "advanced_filter_enabled": False,
         "allow_rearrange_columns": False,
+        "allow_render_html": False,
+        "align_pn": False,
         "column_config": _leaderboard_column_config(),
-        "column_view_schemes_enabled": False,
+        "color_pn": True,
         "conditional_formatting": _leaderboard_conditional_formatting(),
-        "displayed_columns": [*groupby, *metrics],
-        "emit_filter": False,
         "groupby": groupby,
         "include_search": False,
         "metrics": metrics,
         "order_desc": False,
-        "orderby": orderby,
+        "order_by_cols": [json.dumps(item, ensure_ascii=False) for item in orderby],
+        "page_length": 0,
         "query_mode": "aggregate",
-        "row_hierarchy_fields": [],
         "row_limit": 100000,
         "server_page_length": 50,
         "server_pagination": True,
-        "server_pagination_default_orderby": orderby,
+        "show_cell_bars": False,
         "show_totals": False,
+        "table_timestamp_format": "smart_date",
         "time_range": "No filter",
-        "viz_type": "ag-grid-table-scheme",
+        "viz_type": "table",
     }
 
 
@@ -2566,7 +2581,7 @@ def _charts() -> AssetBundle:
     charts["charts/Hot_Product_Index_SPU_Detail.yaml"] = _chart(
         slice_name="SPU维度",
         uuid=UUIDS["chart_spu_detail"],
-        viz_type="ag-grid-table-scheme",
+        viz_type="table",
         dataset_uuid=UUIDS["dataset_spu_detail"],
         params=_detail_chart_params("spu"),
         description="按SPU、年月、SPU评级和最终评级展示经营明细。",
@@ -2574,7 +2589,7 @@ def _charts() -> AssetBundle:
     charts["charts/Hot_Product_Index_SKU_Detail.yaml"] = _chart(
         slice_name="SKU维度",
         uuid=UUIDS["chart_sku_detail"],
-        viz_type="ag-grid-table-scheme",
+        viz_type="table",
         dataset_uuid=UUIDS["dataset_sku_detail"],
         params=_detail_chart_params("sku"),
         description="按公司SKU、SKU、年月、产品等级、尺寸和颜色展示经营明细。",
@@ -2604,15 +2619,15 @@ def _charts() -> AssetBundle:
     charts["charts/Hot_Product_Index_SKU_Sales_Ratio.yaml"] = _chart(
         slice_name="SKU销售比例",
         uuid=UUIDS["chart_sku_share"],
-        viz_type="pie",
+        viz_type="treemap_v2",
         dataset_uuid=UUIDS["dataset_daily"],
-        params=_pie_params("sku", legend_type="scroll"),
+        params=_treemap_params("sku"),
         description="按SKU展示所选范围销量比例。",
     )
     charts["charts/Hot_Product_Index_SPU_Leaderboard.yaml"] = _chart(
         slice_name="SPU销量排行榜",
         uuid=UUIDS["chart_spu_leaderboard"],
-        viz_type="ag-grid-table-scheme",
+        viz_type="table",
         dataset_uuid=UUIDS["dataset_spu_leaderboard"],
         params=_leaderboard_chart_params(),
         description="按本月销售额展示水位月SPU销量排行榜。",
@@ -3376,7 +3391,6 @@ def _main_metadata() -> Asset:
             "chartsInScope": main_chart_uuids,
             "scope": {"excluded": [], "rootPath": ["ROOT_ID"]},
         },
-        "horizontal_filter_bar_two_rows": True,
         "label_colors": {
             "-": "#9CA3AF",
             "A": "#92D050",
@@ -3399,7 +3413,6 @@ def _dashboard(
     slug: str,
     uuid: str,
     description: str,
-    css: str,
     position: Asset,
     metadata: Asset,
 ) -> Asset:
@@ -3407,7 +3420,7 @@ def _dashboard(
     return {
         "certification_details": None,
         "certified_by": None,
-        "css": css,
+        "css": "",
         "dashboard_title": title,
         "description": description,
         "metadata": metadata,
@@ -3422,389 +3435,6 @@ def _dashboard(
 
 def _dashboards() -> AssetBundle:
     """Build the main dashboard and its separate explanation dashboard."""
-    main_css = """.dashboard-header,
-.dashboard-header-container {
-  background: #90AD71;
-  color: #ffffff;
-  height: 44px !important;
-  min-height: 44px !important;
-  padding: 0;
-}
-.dashboard-header .editable-title,
-.dashboard-header .editable-title input,
-.dashboard-header-container .editable-title,
-.dashboard-header-container .editable-title input {
-  color: #ffffff;
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 44px;
-  text-align: center;
-}
-.dashboard-header-container .header-with-actions {
-  align-items: center;
-  background: #90AD71;
-  height: 44px !important;
-  justify-content: center;
-  min-height: 44px !important;
-  padding: 0 16px;
-  position: relative;
-}
-.dashboard-header-container .header-with-actions .title-panel {
-  justify-content: center;
-  margin-right: 0;
-  width: 100%;
-}
-.dashboard-header-container .header-with-actions .right-button-panel {
-  min-width: 100px;
-  position: absolute;
-  right: 16px;
-}
-body:not(:has(.dashboard--editing))
-  .dashboard-header-container .dynamic-title-input {
-  background: transparent !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  color: #ffffff !important;
-  font-size: 26px !important;
-  font-weight: 700 !important;
-  height: 44px !important;
-  line-height: 44px !important;
-  max-width: min(360px, calc(100vw - 520px));
-  min-width: 360px;
-  padding: 0 !important;
-  text-align: center;
-  width: 360px !important;
-  -webkit-text-fill-color: #ffffff;
-}
-body:not(:has(.dashboard--editing))
-  [data-test='dashboard-header-wrapper'] {
-  position: relative !important;
-  top: auto !important;
-}
-body:has(#main-menu) #main-menu {
-  display: none !important;
-}
-.grid-row:has(#MARKDOWN-DOC-LINK) {
-  height: 0 !important;
-  margin: 0 !important;
-  min-height: 0 !important;
-  overflow: visible;
-}
-.grid-row {
-  gap: 4px;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-}
-.grid-column {
-  padding-left: 2px !important;
-  padding-right: 2px !important;
-}
-.dashboard-component-chart-holder {
-  border-radius: 0;
-}
-.dragdroppable-column:has(#MARKDOWN-DOC-LINK) {
-  backface-visibility: visible;
-  transform: none;
-}
-#MARKDOWN-DOC-LINK {
-  background: transparent;
-  border: 0;
-  height: 34px !important;
-  min-height: 34px !important;
-  position: fixed;
-  right: 140px;
-  top: 5px;
-  width: 114px !important;
-  z-index: 100;
-}
-#MARKDOWN-DOC-LINK > .resizable-container {
-  height: 100% !important;
-  max-height: 100% !important;
-  max-width: 100% !important;
-  min-height: 100% !important;
-  min-width: 100% !important;
-  width: 100% !important;
-}
-#MARKDOWN-DOC-LINK .dashboard-component-chart-holder {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  display: flex;
-  justify-content: center;
-  overflow: visible;
-}
-#MARKDOWN-DOC-LINK p { margin: 0; }
-#MARKDOWN-DOC-LINK a {
-  background: #e8f2e5;
-  border: 1px solid rgba(255,255,255,.65);
-  border-radius: 2px;
-  color: #0f5132;
-  display: inline-block;
-  font-weight: 600;
-  min-width: 108px;
-  padding: 5px 12px;
-  text-align: center;
-  text-decoration: none;
-}
-.dashboard:not(.dashboard--editing) #CHART-STATUS + .chart-slice
-  [data-test='slice-header'],
-.dashboard:not(.dashboard--editing) [id^='CHART-KPI-'] + .chart-slice
-  [data-test='slice-header'] {
-  display: none;
-}
-.dashboard:not(.dashboard--editing) [id^='CHART-'] + .chart-slice
-  [data-test='slice-header'] {
-  min-height: 0;
-  padding: 0;
-}
-.dashboard:not(.dashboard--editing) #CHART-TREND-DAY + .chart-slice
-  [data-test='slice-header'] .header-title,
-.dashboard:not(.dashboard--editing) #CHART-TREND-WEEK + .chart-slice
-  [data-test='slice-header'] .header-title,
-.dashboard:not(.dashboard--editing) #CHART-TREND-MONTH + .chart-slice
-  [data-test='slice-header'] .header-title,
-.dashboard:not(.dashboard--editing) #CHART-COLOR-WEEK + .chart-slice
-  [data-test='slice-header'] .header-title,
-.dashboard:not(.dashboard--editing) #CHART-COLOR-MONTH + .chart-slice
-  [data-test='slice-header'] .header-title {
-  display: none;
-}
-.dashboard:not(.dashboard--editing) [id^='CHART-'] + .chart-slice
-  [data-test='slice-header'] .filter-counts,
-.dashboard:not(.dashboard--editing) [id^='CHART-'] + .chart-slice
-  [data-test='slice-header']
-  [aria-label='More Options'] {
-  display: none;
-}
-[id^='CHART-'] + .chart-slice [data-test='slice-header'] .header-controls {
-  pointer-events: auto;
-}
-.dashboard-component-chart-holder:has(> #CHART-STATUS) { border: 0; }
-#CHART-STATUS + .chart-slice .handlebars > div {
-  overflow: hidden;
-  padding: 0;
-}
-#CHART-STATUS + .chart-slice .handlebars section {
-  align-items: center;
-  background: #d8edc8;
-  color: #13213a;
-  display: flex;
-  font-size: 13px;
-  gap: 20px;
-  height: 100%;
-  justify-content: space-between;
-  padding: 0 16px;
-}
-#CHART-STATUS + .chart-slice .handlebars section strong {
-  color: #13213a;
-  font-size: 22px;
-  font-weight: 700;
-}
-#CHART-STATUS + .chart-slice .handlebars section span {
-  flex: 1;
-  text-align: center;
-}
-#ROW-KPIS,
-#ROW-ANALYSIS-SHARES {
-  gap: 4px;
-}
-.dashboard-component-chart-holder:has(> [id^='CHART-KPI-']) {
-  background: #ffffff;
-  border: 1px solid #d8dee8;
-  border-radius: 0;
-}
-[id^='CHART-KPI-'] + .chart-slice .metric-name {
-  color: #13213a;
-  font-style: normal;
-  font-weight: 400;
-}
-[id^='CHART-KPI-'] + .chart-slice .header-line {
-  color: #13213a;
-  font-style: italic;
-  font-weight: 700;
-}
-[id^='CHART-KPI-'] + .chart-slice .superset-legacy-chart-big-number,
-[id^='CHART-KPI-'] + .chart-slice .text-container {
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-#ROW-ANALYSIS-SHARES .dashboard-component-chart-holder {
-  border-radius: 0;
-}
-.dashboard-component-chart-holder:has(> #CHART-FUNNEL-SALES-AMOUNT),
-.dashboard-component-chart-holder:has(> #CHART-FUNNEL-SPU-COUNT) {
-  background: #ffffff;
-  border-top: 1px solid #e5e7eb;
-}
-#MARKDOWN-DETAIL-TITLE .dashboard-component-chart-holder {
-  align-items: center;
-  background: #d8edc8;
-  border: 0;
-  display: flex;
-  justify-content: center;
-  min-height: 52px;
-  overflow: hidden;
-}
-#MARKDOWN-DETAIL-TITLE .markdown-content,
-#MARKDOWN-DETAIL-TITLE p {
-  color: #13213a;
-  font-size: 18px;
-  font-weight: 700;
-  margin: 0;
-  text-align: center;
-}
-#TABS-DETAIL .dashboard-component-tabs-content {
-  min-height: 640px;
-  overflow: visible;
-}
-#CHART-SPU-DETAIL,
-#CHART-SKU-DETAIL {
-  min-height: 640px;
-}
-#CHART-SPU-DETAIL .ag-header,
-#CHART-SKU-DETAIL .ag-header {
-  background: #d8edc8;
-  color: #13213a;
-  height: auto;
-  min-height: 44px;
-}
-#CHART-SPU-DETAIL .ag-header-cell-label,
-#CHART-SKU-DETAIL .ag-header-cell-label,
-#CHART-SPU-DETAIL .ag-header-cell-text,
-#CHART-SKU-DETAIL .ag-header-cell-text {
-  line-height: 1.2;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-}
-#CHART-SPU-DETAIL .ag-header-cell-menu-button,
-#CHART-SPU-DETAIL .ag-header-cell-filter-button,
-#CHART-SKU-DETAIL .ag-header-cell-menu-button,
-#CHART-SKU-DETAIL .ag-header-cell-filter-button,
-#CHART-SPU-LEADERBOARD .ag-header-cell-menu-button,
-#CHART-SPU-LEADERBOARD .ag-header-cell-filter-button {
-  display: none !important;
-}
-#CHART-SPU-DETAIL .header-filter,
-#CHART-SPU-DETAIL .three-dots-menu,
-#CHART-SKU-DETAIL .header-filter,
-#CHART-SKU-DETAIL .three-dots-menu,
-#CHART-SPU-LEADERBOARD .header-filter,
-#CHART-SPU-LEADERBOARD .three-dots-menu {
-  display: none !important;
-}
-#CHART-SPU-DETAIL .custom-header,
-#CHART-SKU-DETAIL .custom-header,
-#CHART-SPU-LEADERBOARD .custom-header {
-  min-width: 0;
-  overflow: visible !important;
-  padding: 0 !important;
-  text-overflow: clip !important;
-  white-space: normal !important;
-  overflow-wrap: anywhere;
-}
-#CHART-SPU-DETAIL .custom-header > span,
-#CHART-SKU-DETAIL .custom-header > span,
-#CHART-SPU-LEADERBOARD .custom-header > span {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: 100%;
-  overflow: visible !important;
-  overflow-wrap: anywhere;
-  text-overflow: clip !important;
-  white-space: normal !important;
-}
-#CHART-SPU-DETAIL .ag-header-cell-comp-wrapper,
-#CHART-SPU-DETAIL .ag-header-cell-label,
-#CHART-SKU-DETAIL .ag-header-cell-comp-wrapper,
-#CHART-SKU-DETAIL .ag-header-cell-label,
-#CHART-SPU-LEADERBOARD .ag-header-cell-comp-wrapper,
-#CHART-SPU-LEADERBOARD .ag-header-cell-label {
-  min-width: 0;
-}
-#CHART-SPU-DETAIL .ag-header-cell-text,
-#CHART-SKU-DETAIL .ag-header-cell-text,
-#CHART-SPU-LEADERBOARD .ag-header-cell-text {
-  display: block;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-#CHART-SPU-DETAIL .ag-header-row,
-#CHART-SPU-DETAIL .ag-header-cell,
-#CHART-SKU-DETAIL .ag-header-row,
-#CHART-SKU-DETAIL .ag-header-cell,
-#CHART-SPU-LEADERBOARD .ag-header-row,
-#CHART-SPU-LEADERBOARD .ag-header-cell {
-  min-height: 44px;
-}
-#CHART-SPU-DETAIL .ag-row-even:not(.ag-row-pinned),
-#CHART-SKU-DETAIL .ag-row-even:not(.ag-row-pinned) {
-  background: #ffffff;
-}
-#CHART-SPU-DETAIL .ag-row-odd:not(.ag-row-pinned),
-#CHART-SKU-DETAIL .ag-row-odd:not(.ag-row-pinned) {
-  background: #ffffff;
-}
-#CHART-SPU-DETAIL .ag-row-pinned,
-#CHART-SKU-DETAIL .ag-row-pinned {
-  background: #eaf3e4;
-  color: #13213a;
-  font-weight: 700;
-}
-#CHART-SPU-DETAIL .ag-pinned-left-cols-container,
-#CHART-SKU-DETAIL .ag-pinned-left-cols-container {
-  border-right: 1px solid rgba(41,120,181,.25);
-}
-#TABS-DETAIL .ant-tabs-card > .ant-tabs-nav .ant-tabs-ink-bar {
-  background: #2978B5;
-}
-#TABS-DETAIL .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active .ant-tabs-tab-btn {
-  color: #2978B5;
-}
-#TABS-TREND .ant-tabs-card > .ant-tabs-nav .ant-tabs-ink-bar,
-#TABS-COLOR-TREND .ant-tabs-card > .ant-tabs-nav .ant-tabs-ink-bar {
-  background: #2978B5;
-}
-#TABS-TREND .ant-tabs-card > .ant-tabs-nav .ant-tabs-tab-active .ant-tabs-tab-btn,
-#TABS-COLOR-TREND .ant-tabs-card > .ant-tabs-nav
-  .ant-tabs-tab-active .ant-tabs-tab-btn {
-  color: #2978B5;
-}
-#CHART-SPU-LEADERBOARD .ag-header {
-  background: #d8edc8;
-  color: #13213a;
-  height: auto;
-  min-height: 44px;
-}
-#CHART-SPU-LEADERBOARD .ag-header-cell-label,
-#CHART-SPU-LEADERBOARD .ag-header-cell-text {
-  line-height: 1.2;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
-}
-#CHART-SPU-LEADERBOARD .ag-row-even:not(.ag-row-pinned) {
-  background: #ffffff;
-}
-#CHART-SPU-LEADERBOARD .ag-row-odd:not(.ag-row-pinned) {
-  background: #ffffff;
-}
-#CHART-SPU-LEADERBOARD .ag-row-pinned {
-  background: #eaf3e4;
-  color: #13213a;
-  font-weight: 700;
-}
-@media (max-width: 900px) {
-  #CHART-STATUS + .chart-slice .handlebars section {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 4px;
-    padding: 4px 12px;
-  }
-  #CHART-STATUS + .chart-slice .handlebars section span { text-align: left; }
-}"""
     guide_metadata = {
         "chart_configuration": {},
         "chart_customization_config": [],
@@ -3828,7 +3458,6 @@ body:has(#main-menu) #main-menu {
             slug="hot-product-index",
             uuid=UUIDS["dashboard_main"],
             description="拉杆箱在售商品的销量、效益、在售规模和SPU等级结构总览。",
-            css=main_css,
             position=_main_position(),
             metadata=_main_metadata(),
         ),
@@ -3837,36 +3466,6 @@ body:has(#main-menu) #main-menu {
             slug="hot-product-index-guide",
             uuid=UUIDS["dashboard_guide"],
             description="爆品指数看板的数据、时间、指标和等级口径。",
-            css="""#CHART-GUIDE + .chart-slice [data-test='slice-header'] {
-  display: none;
-}
-#CHART-GUIDE + .chart-slice .handlebars > div {
-  overflow: auto;
-  padding: 0;
-}
-#CHART-GUIDE + .chart-slice .handlebars article {
-  color: #172033;
-  font-size: 14px;
-  line-height: 1.7;
-  margin: 0 auto;
-  max-width: 960px;
-  padding: 16px 24px 40px;
-}
-#CHART-GUIDE + .chart-slice .handlebars article h1 {
-  border-bottom: 2px solid #91b276;
-  font-size: 26px;
-  padding-bottom: 10px;
-}
-#CHART-GUIDE + .chart-slice .handlebars article h2 {
-  font-size: 18px;
-  margin-top: 24px;
-}
-#CHART-GUIDE + .chart-slice .handlebars article code {
-  background: #f3f4f6;
-  color: #9f1239;
-  padding: 2px 5px;
-}
-#CHART-GUIDE + .chart-slice .handlebars article li { margin: 4px 0; }""",
             position=_guide_position(),
             metadata=guide_metadata,
         ),

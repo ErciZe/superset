@@ -1,5 +1,7 @@
 # Hot Product Index Dashboard Implementation Plan
 
+> **方案替代说明（2026-08-09）：** 本文记录的早期实现计划保留用于审计，已由纯原生 Superset 配置方案取代。当前 assets 生成器使用标准横向筛选栏（不设置 `horizontal_filter_bar_two_rows`）、标准 `table`/`funnel`/`pie`/`treemap_v2` 图表和原生分页、搜索、列配置及条件格式；不生成 dashboard CSS 或 AG Grid 私有字段。
+
 > **Execution rule:** build and verify the BI layer only after the two ADS targets pass production acceptance. FineBI is a visual reference, not a metric source.
 
 **Goal:** 在生产 Superset 交付“拉杆箱在售产品爆品指数看板”的 P0 范围：13 个原生筛选器、9 个 KPI、2 个漏斗、数据状态和说明文档入口。

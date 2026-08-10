@@ -1,5 +1,7 @@
 # Hot Product Index Remaining Charts Implementation Plan
 
+> **方案替代说明（2026-08-09）：** 本文的历史执行记录保留不改写；当前实现由纯原生 Superset 配置取代。明细和排行榜使用标准 `viz_type=table` 及原生分页/条件格式，漏斗使用 stock Funnel，SPU 和颜色使用 stock Pie，SKU 销量比例使用 `treemap_v2`。生成资产不包含 dashboard CSS、`legend.selected`、`total_label` 或 AG Grid 私有字段；日趋势横轴为 `ymd` 字符串，周/月横轴为 `yw`/`ym`。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在现有“拉杆箱在售产品爆品指数看板”明细区之后，按已确认的 FineBI 逻辑交付指标整体趋势、SPU 销量排行榜、SPU 销售比例、SKU 销售比例、颜色销售比例和颜色销量分布六个可见组件。

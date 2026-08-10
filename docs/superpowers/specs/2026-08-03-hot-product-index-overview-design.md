@@ -1,5 +1,7 @@
 # Hot Product Index Overview Dashboard Design
 
+> **方案替代说明（2026-08-09）：** 本设计规格保留早期 P0 口径与审计背景，图表实现已由纯原生 Superset 配置取代。现行生成器使用标准横向筛选栏、stock Funnel 和标准表格控件；不输出 dashboard CSS、AG Grid 私有字段或两行筛选栏扩展。完整资产仍保持 2 个 dashboard、24 个 chart、6 个 dataset、32 个 UUID、23+1 图表和 13 个原生筛选器。
+
 ## Summary
 
 本规格定义 Superset 看板「爆品指数」的 P0 顶部总览，以及支撑该范围的 Doris 日表、月表数据契约。

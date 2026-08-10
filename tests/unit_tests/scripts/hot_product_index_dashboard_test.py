@@ -128,8 +128,8 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
             assert (
                 query_context["queries"][0]["columns"] == chart["params"]["all_columns"]
             )
-        elif chart["viz_type"] == "ag-grid-table-scheme":
-            assert chart["viz_type"] == "ag-grid-table-scheme"
+        elif chart["viz_type"] == "table":
+            assert chart["viz_type"] == "table"
             assert query_context["queries"][0]["columns"] == chart["params"]["groupby"]
             assert query_context["queries"][0]["metrics"] == chart["params"]["metrics"]
         elif chart["viz_type"] == "mixed_timeseries":
@@ -141,6 +141,9 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
         elif chart["viz_type"] == "echarts_timeseries_line":
             assert query_context["queries"][0]["metrics"] == chart["params"]["metrics"]
         elif chart["viz_type"] == "pie":
+            assert query_context["queries"][0]["metrics"] == [chart["params"]["metric"]]
+        elif chart["viz_type"] == "treemap_v2":
+            assert query_context["queries"][0]["columns"] == chart["params"]["groupby"]
             assert query_context["queries"][0]["metrics"] == [chart["params"]["metric"]]
         else:
             raise AssertionError(f"unhandled chart viz type: {chart['viz_type']}")
@@ -457,7 +460,6 @@ def test_detail_charts_preserve_approved_fields_pagination_and_sorting(
         "spu_previous_month_sales_level",
         "sku_level",
     ]
-    assert spu["params"]["row_hierarchy_fields"] == spu["params"]["groupby"]
     assert sku["params"]["groupby"] == [
         "company_sku",
         "sku",
@@ -466,97 +468,45 @@ def test_detail_charts_preserve_approved_fields_pagination_and_sorting(
         "size",
         "color",
     ]
-    assert sku["params"]["row_hierarchy_fields"] == []
-
-    assert spu["params"]["displayed_columns"] == [
-        "spu",
-        "ym",
-        "spu_previous_month_sales_level",
-        "sku_level",
-        "hot_product_index",
-        "score",
-        "sales_amount_usd",
-        "sales_qty",
-        "avg_daily_sales_qty",
-        "gross_profit_usd",
-        "gross_margin",
-        "return_goods_qty",
-        "return_rate",
-        "order_qty",
-        "avg_sales_qty_7d",
-        "avg_sales_qty_30d",
-        "avg_sales_qty_90d",
-    ]
-    assert sku["params"]["displayed_columns"] == [
-        "company_sku",
-        "sku",
-        "ym",
-        "product_level",
-        "size",
-        "color",
-        "hot_product_index",
-        "score",
-        "sales_amount_usd",
-        "sales_qty",
-        "avg_daily_sales_qty",
-        "gross_profit_usd",
-        "gross_margin",
-        "return_goods_qty",
-        "return_rate",
-        "order_qty",
-        "avg_sales_qty_7d",
-        "avg_sales_qty_30d",
-        "avg_sales_qty_90d",
-        "theoretical_stock_qty",
-        "actual_stock_qty",
-    ]
+    assert "displayed_columns" not in spu["params"]
+    assert "displayed_columns" not in sku["params"]
 
     for chart in (spu, sku):
         params = chart["params"]
-        assert params["viz_type"] == "ag-grid-table-scheme"
+        assert params["viz_type"] == "table"
         assert params["query_mode"] == "aggregate"
         assert params["server_pagination"] is True
         assert params["server_page_length"] == 50
         assert params["show_totals"] is True
-        assert params["advanced_filter_enabled"] is False
-        assert params["column_view_schemes_enabled"] is False
         assert params["include_search"] is False
         assert params["allow_rearrange_columns"] is True
-        assert params["emit_filter"] is False
         assert params["row_limit"] == 100000
+        assert params["page_length"] == 0
+        assert params["show_cell_bars"] is False
 
-    assert spu["params"]["orderby"] == [
+    assert [json.loads(item) for item in spu["params"]["order_by_cols"]] == [
         ["ym", False],
         ["sales_qty", False],
         ["spu", True],
     ]
-    assert (
-        spu["params"]["server_pagination_default_orderby"] == spu["params"]["orderby"]
-    )
     spu_widths = spu["params"]["column_config"]
+    spu_visible_columns = [*spu["params"]["groupby"], *spu["params"]["metrics"]]
     assert (
-        sum(
-            spu_widths[column]["columnWidth"]
-            for column in spu["params"]["displayed_columns"]
-        )
-        == 1800
+        sum(spu_widths[column]["columnWidth"] for column in spu_visible_columns) == 1800
     )
     assert all(
         spu_widths[column]["columnWidth"] == 112 for column in spu["params"]["groupby"]
     )
     assert all(
         spu_widths[column]["columnWidth"] == 104
-        for column in spu["params"]["displayed_columns"]
+        for column in spu_visible_columns
         if column not in spu["params"]["groupby"]
     )
-    assert sku["params"]["orderby"] == [
+    assert [json.loads(item) for item in sku["params"]["order_by_cols"]] == [
         ["ym", False],
         ["sales_qty", False],
         ["company_sku", True],
     ]
-    assert (
-        sku["params"]["server_pagination_default_orderby"] == sku["params"]["orderby"]
-    )
 
 
 def test_detail_charts_use_one_decimal_formats_and_fixed_index_boundaries(
@@ -631,7 +581,7 @@ def test_detail_query_context_matches_table_server_query_order(
         assert base["metrics"] == params["metrics"]
         assert base["row_limit"] == 50
         assert base["row_offset"] == 0
-        assert base["orderby"] == params["orderby"]
+        assert base["orderby"] == [json.loads(item) for item in params["order_by_cols"]]
         assert row_count["is_rowcount"] is True
         assert row_count["row_limit"] == params["row_limit"]
         assert row_count["row_offset"] == 0
@@ -897,11 +847,10 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
     assert sum(chart["viz_type"] == "big_number_total" for chart in main_charts) == 9
     assert sum(chart["viz_type"] == "funnel" for chart in main_charts) == 2
     assert sum(chart["viz_type"] == "handlebars" for chart in main_charts) == 1
-    assert (
-        sum(chart["viz_type"] == "ag-grid-table-scheme" for chart in main_charts) == 3
-    )
+    assert sum(chart["viz_type"] == "table" for chart in main_charts) == 3
     assert sum(chart["viz_type"] == "mixed_timeseries" for chart in main_charts) == 3
-    assert sum(chart["viz_type"] == "pie" for chart in main_charts) == 3
+    assert sum(chart["viz_type"] == "pie" for chart in main_charts) == 2
+    assert sum(chart["viz_type"] == "treemap_v2" for chart in main_charts) == 1
     assert (
         sum(chart["viz_type"] == "echarts_timeseries_line" for chart in main_charts)
         == 2
@@ -1023,30 +972,12 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
 
 
 def test_detail_css_is_scoped_to_table_components_and_tabs(tmp_path: Path) -> None:
-    """FineBI table styling does not leak to unrelated dashboard components."""
+    """Stock dashboard assets do not carry private CSS overrides."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
         "拉杆箱在售产品爆品指数看板"
     ]
-    css = main["css"]
-    assert "#CHART-SPU-DETAIL .ag-header" in css
-    assert "#CHART-SKU-DETAIL .ag-header" in css
-    assert "background: #d8edc8" in css
-    assert "background: #ffffff" in css
-    assert "background: #eaf3e4" in css
-    assert "#8AA964" not in css
-    assert "white-space: normal" in css
-    assert ".ag-header-cell-text" in css
-    assert "min-height: 44px" in css
-    assert ".ag-row-even:not(.ag-row-pinned)" in css
-    assert ".ag-row-odd:not(.ag-row-pinned)" in css
-    assert ".ag-row-pinned" in css
-    assert "font-weight: 700" in css
-    assert "#TABS-DETAIL .ant-tabs-card > .ant-tabs-nav .ant-tabs-ink-bar" in css
-    assert "#2978B5" in css
-    assert ".ant-tabs-tab-active .ant-tabs-tab-btn" in css
-    assert "#CHART-SPU-DETAIL .ag-header" in css
-    assert "#CHART-SKU-DETAIL .ag-header" in css
+    assert main["css"] == ""
 
 
 def test_main_dashboard_matches_finebi_density_and_shell_contract(
@@ -1060,7 +991,8 @@ def test_main_dashboard_matches_finebi_density_and_shell_contract(
     position = main["position"]
 
     assert position["HEADER_ID"]["meta"]["height"] == 44
-    assert main["metadata"]["horizontal_filter_bar_two_rows"] is True
+    assert main["metadata"]["filter_bar_orientation"] == "HORIZONTAL"
+    assert "horizontal_filter_bar_two_rows" not in main["metadata"]
     assert position["COLUMN-TREND"]["meta"]["width"] == 7.25
     assert position["COLUMN-LEADERBOARD"]["meta"]["width"] == 4.75
     assert position["CHART-SPU-LEADERBOARD"]["meta"]["height"] == 38
@@ -1078,20 +1010,7 @@ def test_main_dashboard_matches_finebi_density_and_shell_contract(
         )
     )
 
-    css = main["css"]
-    assert "body:has(#main-menu) #main-menu" in css
-    assert "background: #90AD71" in css
-    assert "height: 44px" in css
-    assert "font-size: 26px" in css
-    assert "font-size: 22px" in css
-    assert ".dashboard-header-container .header-with-actions" in css
-    assert "#90AD71" in css
-    assert "font-style: italic" in css
-    assert "font-weight: 700" in css
-    assert "border-radius: 0" in css
-    assert ".grid-row" in css
-    assert ".grid-column" in css
-    assert "#MARKDOWN-DOC-LINK a" in css
+    assert main["css"] == ""
 
 
 def test_main_dashboard_matches_finebi_title_and_table_readability_contract(
@@ -1102,53 +1021,10 @@ def test_main_dashboard_matches_finebi_title_and_table_readability_contract(
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
         "拉杆箱在售产品爆品指数看板"
     ]
-    css = " ".join(main["css"].split())
-
-    title_selector = (
-        "body:not(:has(.dashboard--editing)) "
-        ".dashboard-header-container .dynamic-title-input"
-    )
-    assert title_selector in css
-    assert "background: transparent" in css
-    assert "border: 0" in css
-    assert "box-shadow: none" in css
-    assert "color: #ffffff" in css
-    assert "font-size: 26px" in css
-    assert "font-weight: 700" in css
-    assert "line-height: 44px" in css
-    assert "text-align: center" in css
-    assert "width: 360px !important" in css
-    assert "min-width: 360px" in css
-    assert "max-width: min(360px, calc(100vw - 520px))" in css
     assert main["position"]["HEADER_ID"]["meta"]["text"] == (
         "拉杆箱在售产品爆品指数看板"
     )
-    assert "body:not(:has(.dashboard--editing))" in css
-    assert "[data-test='dashboard-header-wrapper']" in css
-    assert "position: relative !important" in css
-    assert "top: auto !important" in css
-
-    table_roots = (
-        "#CHART-SPU-DETAIL",
-        "#CHART-SKU-DETAIL",
-        "#CHART-SPU-LEADERBOARD",
-    )
-    for root in table_roots:
-        assert f"{root} .ag-header-cell-menu-button" in css
-        assert f"{root} .ag-header-cell-filter-button" in css
-        assert f"{root} .ag-header-cell-comp-wrapper" in css
-        assert f"{root} .header-filter" in css
-        assert f"{root} .three-dots-menu" in css
-        assert f"{root} .custom-header" in css
-        assert f"{root} .custom-header > span" in css
-    assert "display: none !important" in css
-    assert "min-width: 0" in css
-    assert "overflow-wrap: anywhere" in css
-    assert "padding: 0 !important" in css
-    assert "white-space: normal !important" in css
-    assert "overflow: visible !important" in css
-    assert "text-overflow: clip !important" in css
-    assert "min-height: 44px" in css
+    assert main["css"] == ""
 
 
 def test_main_dashboard_hides_decorative_chart_header_controls_only(
@@ -1159,48 +1035,7 @@ def test_main_dashboard_hides_decorative_chart_header_controls_only(
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
         "拉杆箱在售产品爆品指数看板"
     ]
-    raw_css = main["css"]
-    css = " ".join(raw_css.split())
-
-    view_scope = ".dashboard:not(.dashboard--editing)"
-    assert view_scope in css
-    assert (
-        f"{view_scope} [id^='CHART-'] + .chart-slice"
-        " [data-test='slice-header'] .filter-counts"
-    ) in css
-    assert (
-        f"{view_scope} [id^='CHART-'] + .chart-slice"
-        " [data-test='slice-header'] [aria-label='More Options']"
-    ) in css
-    assert ".header-controls" in css
-    assert "display: none" in css
-    assert "pointer-events: auto" in css
-    assert (
-        "\n[id^='CHART-'] + .chart-slice [data-test='slice-header'] .header-title"
-    ) not in raw_css
-
-    hidden_chart_titles = (
-        "CHART-TREND-DAY",
-        "CHART-TREND-WEEK",
-        "CHART-TREND-MONTH",
-        "CHART-COLOR-WEEK",
-        "CHART-COLOR-MONTH",
-    )
-    for chart_id in hidden_chart_titles:
-        assert f"{view_scope} #{chart_id} + .chart-slice" in css
-
-    visible_chart_titles = (
-        "CHART-FUNNEL-SALES-AMOUNT",
-        "CHART-FUNNEL-SPU-COUNT",
-        "CHART-SPU-LEADERBOARD",
-        "CHART-SPU-SHARE",
-        "CHART-SKU-SHARE",
-        "CHART-COLOR-DISTRIBUTION",
-    )
-    for chart_id in visible_chart_titles:
-        assert (
-            f"{chart_id} + .chart-slice [data-test='slice-header'] .header-title"
-        ) not in css
+    assert main["css"] == ""
 
 
 def test_main_dashboard_rejects_missing_detail_chart_uuid(tmp_path: Path) -> None:
@@ -1353,9 +1188,8 @@ def test_funnels_keep_the_business_grade_order(tmp_path: Path) -> None:
         assert params["percent_calculation_type"] == "total"
         assert params["percent_format"] == ",.1~%"
         assert params["label_template"] == "{name}\\n{value} | {percent}"
-        assert params["rectangular_segments"] is True
         query_context = json.loads(funnel["query_context"])
-        assert query_context["form_data"]["rectangular_segments"] is True
+        assert "rectangular_segments" not in query_context["form_data"]
         assert query_context["queries"][0]["orderby"] == [
             ["spu_previous_month_sales_level_sort_metric", True]
         ]
@@ -1451,22 +1285,7 @@ def test_guide_link_is_a_header_layout_component(tmp_path: Path) -> None:
         "parents": ["ROOT_ID", "GRID_ID", "ROW-DOC-LINK"],
         "type": "MARKDOWN",
     }
-    assert "#MARKDOWN-DOC-LINK" in main["css"]
-    assert "position: fixed" in main["css"]
-    assert "right: 140px" in main["css"]
-    assert (
-        ".dashboard-header-container .header-with-actions .right-button-panel"
-        in main["css"]
-    )
-    assert "min-width: 100px" in main["css"]
-    assert """#MARKDOWN-DOC-LINK > .resizable-container {
-  height: 100% !important;
-  max-height: 100% !important;
-  max-width: 100% !important;
-  min-height: 100% !important;
-  min-width: 100% !important;
-  width: 100% !important;
-}""" in main["css"]
+    assert main["css"] == ""
 
 
 def test_status_banner_renders_without_sanitized_css_or_row_limit_warning(
@@ -1488,10 +1307,7 @@ def test_status_banner_renders_without_sanitized_css_or_row_limit_warning(
     assert "\n" not in params["handlebarsTemplate"]
 
     assert main["position"]["CHART-STATUS"]["meta"]["height"] == 8
-    css = " ".join(main["css"].split())
-    assert "#CHART-STATUS + .chart-slice [data-test='slice-header']" in css
-    assert "[id^='CHART-KPI-'] + .chart-slice [data-test='slice-header']" in css
-    assert ".dashboard-component-chart-holder:has(> #CHART-STATUS)" in css
+    assert main["css"] == ""
 
 
 def test_guide_chart_keeps_styles_outside_sanitized_handlebars(
@@ -1511,8 +1327,7 @@ def test_guide_chart_keeps_styles_outside_sanitized_handlebars(
     assert "dateFormat" not in params["handlebarsTemplate"]
     assert "product_level" not in params["handlebarsTemplate"]
     assert "SKU 行级产品等级" in params["handlebarsTemplate"]
-    assert "#CHART-GUIDE + .chart-slice [data-test='slice-header']" in guide["css"]
-    assert "#CHART-GUIDE + .chart-slice .handlebars article" in guide["css"]
+    assert guide["css"] == ""
 
 
 def test_write_bundle_rejects_an_invalid_database_uuid(tmp_path: Path) -> None:
@@ -1523,3 +1338,51 @@ def test_write_bundle_rejects_an_invalid_database_uuid(tmp_path: Path) -> None:
         write_bundle(output, database_uuid="not-a-uuid")
 
     assert not output.exists()
+
+
+def test_stock_chart_contract_removes_private_dashboard_extensions(
+    tmp_path: Path,
+) -> None:
+    """The import bundle uses stock Superset chart and dashboard contracts."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    dashboards = assets_by_key(assets, "dashboards", "dashboard_title")
+    main = dashboards["拉杆箱在售产品爆品指数看板"]
+
+    assert main["css"] == ""
+    assert main["metadata"]["filter_bar_orientation"] == "HORIZONTAL"
+    assert "horizontal_filter_bar_two_rows" not in main["metadata"]
+
+    assert charts["SPU维度"]["viz_type"] == "table"
+    assert charts["SKU维度"]["viz_type"] == "table"
+    assert charts["SPU销量排行榜"]["viz_type"] == "table"
+    assert charts["SKU销售比例"]["viz_type"] == "treemap_v2"
+
+    banned_keys = {
+        "advanced_filter_enabled",
+        "row_hierarchy_fields",
+        "server_pagination_default_orderby",
+        "rectangular_segments",
+        "total_label",
+    }
+
+    def assert_no_banned_keys(value: Any) -> None:
+        if isinstance(value, dict):
+            assert not banned_keys & value.keys()
+            for child in value.values():
+                assert_no_banned_keys(child)
+        elif isinstance(value, list):
+            for child in value:
+                assert_no_banned_keys(child)
+
+    assert_no_banned_keys(assets)
+    assert all(
+        "legend.selected" not in chart["params"].get("echart_options", "")
+        for chart in charts.values()
+    )
+
+    daily = assets_by_key(assets, "datasets", "table_name")["爆品指数-日明细"]
+    daily_columns = {column["column_name"]: column for column in daily["columns"]}
+    assert daily_columns["ymd"]["type"] == "STRING"
+    assert "DATE_FORMAT(d.sales_date, '%Y-%m-%d') AS ymd" in daily["sql"]
+    assert charts["指标整体趋势-天"]["params"]["x_axis"] == "ymd"
