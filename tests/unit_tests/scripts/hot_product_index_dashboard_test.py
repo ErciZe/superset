@@ -1233,9 +1233,9 @@ def test_visible_numbers_use_at_most_one_decimal_place(tmp_path: Path) -> None:
             "销量",
             "日均销量",
             "销售额",
-            "在售SPU数",
+            "在售SPU",
             "爆品指数",
-            "在售SKU数",
+            "在售SKU",
             "毛利润",
             "毛利率",
             "退货率",
@@ -1244,9 +1244,9 @@ def test_visible_numbers_use_at_most_one_decimal_place(tmp_path: Path) -> None:
         "销量": ",.0f",
         "日均销量": ",.1~f",
         "销售额": "$,.0f",
-        "在售SPU数": ",.0f",
+        "在售SPU": ",.0f",
         "爆品指数": ",.1~f",
-        "在售SKU数": ",.0f",
+        "在售SKU": ",.0f",
         "毛利润": "$,.1~f",
         "毛利率": ".1~%",
         "退货率": ".1~%",
@@ -1261,6 +1261,19 @@ def test_visible_numbers_use_at_most_one_decimal_place(tmp_path: Path) -> None:
     assert daily_metric_formats["gross_profit_usd_total"] == "$,.1~f"
     assert daily_metric_formats["gross_margin"] == ".1~%"
     assert daily_metric_formats["return_rate"] == ".1~%"
+
+
+def test_inventory_kpi_titles_fit_one_line_without_changing_metrics(
+    tmp_path: Path,
+) -> None:
+    """Short slice titles leave the native Big Number chart its full height."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+
+    assert charts["在售SPU"]["params"]["metric"] == "in_sale_spu_count"
+    assert charts["在售SKU"]["params"]["metric"] == "in_sale_sku_count"
+    assert "在售SPU数" not in charts
+    assert "在售SKU数" not in charts
 
 
 def test_guide_link_is_a_header_layout_component(tmp_path: Path) -> None:
