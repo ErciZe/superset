@@ -296,6 +296,10 @@ FILTERS: Final[tuple[tuple[str, str], ...]] = (
     ("实际评级", "product_level"),
 )
 
+RATING_SEMANTICS: Final[str] = (
+    "实际评级取月度快照；快照缺失显示空白；计算评级为现有计算值。"
+)
+
 KPI_DEFINITIONS: Final[tuple[tuple[str, str, str, str], ...]] = (
     ("销量", "dataset_daily", "sales_qty_total", ",.0f"),
     ("日均销量", "dataset_daily", "avg_daily_sales_qty", ",.1~f"),
@@ -3024,8 +3028,8 @@ def _guide_chart_params() -> Asset:
   </ul>
   <h2>评级</h2>
   <p>
-    实际评级使用月度产品等级快照；计算评级使用目标月 SPU
-    的上一个自然月销售等级，固定顺序为 Ps、S、A、B、C、-。
+    实际评级取月度快照；快照缺失显示空白；计算评级为现有计算值。计算评级使用目标月
+    SPU 的上一个自然月销售等级，固定顺序为 Ps、S、A、B、C、-。
   </p>
   <h2>数据来源</h2>
   <p>
@@ -3363,7 +3367,10 @@ def _charts() -> AssetBundle:
         viz_type="handlebars",
         dataset_uuid=UUIDS["dataset_status"],
         params=_guide_chart_params(),
-        description="爆品指数指标、时间、在售范围、计算评级和实际评级口径。",
+        description=(
+            "爆品指数指标、时间、在售范围、计算评级和实际评级口径；"
+            f"{RATING_SEMANTICS}"
+        ),
     )
     charts["charts/Hot_Product_Index_SPU_Detail.yaml"] = _chart(
         slice_name="SPU维度",
@@ -3371,7 +3378,10 @@ def _charts() -> AssetBundle:
         viz_type="table",
         dataset_uuid=UUIDS["dataset_spu_detail"],
         params=_detail_chart_params("spu"),
-        description="按SPU、年月、计算评级和实际评级展示经营明细。",
+        description=(
+            "按SPU、年月、计算评级和实际评级展示经营明细；"
+            f"{RATING_SEMANTICS}"
+        ),
     )
     charts["charts/Hot_Product_Index_SKU_Detail.yaml"] = _chart(
         slice_name="SKU维度",
@@ -3379,7 +3389,10 @@ def _charts() -> AssetBundle:
         viz_type="table",
         dataset_uuid=UUIDS["dataset_sku_detail"],
         params=_detail_chart_params("sku"),
-        description="按公司SKU、SKU、年月、实际评级、尺寸和颜色展示经营明细。",
+        description=(
+            "按公司SKU、SKU、年月、实际评级、尺寸和颜色展示经营明细；"
+            f"{RATING_SEMANTICS}"
+        ),
     )
     for grain, spec in DIMENSION_DETAIL_SPECS.items():
         charts[f"charts/{spec['dataset_path']}.yaml"] = _chart(

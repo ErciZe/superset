@@ -1496,8 +1496,26 @@ def test_guide_chart_keeps_styles_outside_sanitized_handlebars(
     assert "{{selected_end_ymd}}" in params["handlebarsTemplate"]
     assert "dateFormat" not in params["handlebarsTemplate"]
     assert "product_level" not in params["handlebarsTemplate"]
-    assert "实际评级使用月度产品等级快照" in params["handlebarsTemplate"]
+    assert "实际评级取月度快照" in params["handlebarsTemplate"]
     assert guide["css"] == ""
+
+
+def test_rating_descriptions_preserve_snapshot_null_semantics(tmp_path: Path) -> None:
+    """Guide and rating charts document blank missing snapshots without fallback values."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    guide_template = charts["爆品指数说明"]["params"]["handlebarsTemplate"]
+    expected_phrases = (
+        "实际评级取月度快照",
+        "快照缺失显示空白",
+        "计算评级为现有计算值",
+    )
+    assert all(phrase in guide_template for phrase in expected_phrases)
+    for chart_name in ("爆品指数说明", "SPU维度", "SKU维度"):
+        assert all(
+            phrase in charts[chart_name]["description"]
+            for phrase in expected_phrases
+        )
 
 
 def test_write_bundle_rejects_an_invalid_database_uuid(tmp_path: Path) -> None:
