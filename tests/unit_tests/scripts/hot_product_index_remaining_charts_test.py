@@ -358,8 +358,9 @@ def test_spu_leaderboard_uses_watermark_anchored_two_period_contract(
         assert sql.count(f"get_filters('{column}', remove_filter=True)") == 2
     assert "spu_previous_month_sales_amount_cny" not in sql
     assert "SUM(m.sales_amount_usd)" in sql
-    assert "GROUP BY m.spu, m.spu_previous_month_sales_level, m.spu_final_rating" in sql
-    assert "COALESCE(c.spu_final_rating, '') AS final_rating" in sql
+    assert "GROUP BY m.spu, m.spu_previous_month_sales_level, m.product_level" in sql
+    assert "COALESCE(c.product_level, '') AS actual_rating" in sql
+    assert "spu_final_rating" not in sql
     assert "watermark_time_progress" not in sql
     assert (
         "NULLIF(DAY(q.data_through_date) / DAY(LAST_DAY(q.data_through_date)), 0)"
@@ -367,13 +368,15 @@ def test_spu_leaderboard_uses_watermark_anchored_two_period_contract(
     )
 
     columns = {column["column_name"]: column for column in leaderboard["columns"]}
+    assert columns["product_level"]["groupby"] is False
+    assert "原生筛选目标" in (columns["product_level"]["description"] or "")
     assert {
         columns[name]["verbose_name"]
         for name in (
             "spu",
             "spu_rating",
-            "spu_final_rating",
-            "final_rating",
+            "product_level",
+            "actual_rating",
             "previous_month_sales_amount_usd",
             "current_month_sales_amount_usd",
             "rating_progress",
@@ -381,9 +384,9 @@ def test_spu_leaderboard_uses_watermark_anchored_two_period_contract(
         )
     } == {
         "SPU",
-        "SPU评级",
-        "SPU最终评级",
-        "最终评级",
+        "计算评级",
+        "实际评级",
+        "实际评级",
         "上月销售额",
         "本月销量额",
         "本月评级达标进度",
@@ -635,7 +638,7 @@ def test_remaining_leaderboard_contract_and_conditional_formatting(
     leaderboard = assets_by_key(assets, "charts", "slice_name")["SPU销量排行榜"]
     params = leaderboard["params"]
     assert leaderboard["viz_type"] == "table"
-    assert params["groupby"] == ["spu", "spu_rating", "final_rating"]
+    assert params["groupby"] == ["spu", "spu_rating", "actual_rating"]
     assert params["metrics"] == [
         "previous_month_sales_amount_usd",
         "current_month_sales_amount_usd",
@@ -649,7 +652,7 @@ def test_remaining_leaderboard_contract_and_conditional_formatting(
     assert [json.loads(item) for item in params["order_by_cols"]] == [
         ["current_month_sales_amount_usd", False],
         ["spu", True],
-        ["final_rating", True],
+        ["actual_rating", True],
     ]
     assert params["conditional_formatting"] == [
         {
@@ -721,7 +724,7 @@ def test_leaderboard_columns_fit_all_business_headers_in_the_primary_grid(
     expected_widths = {
         "spu": 64,
         "spu_rating": 80,
-        "final_rating": 80,
+        "actual_rating": 80,
         "previous_month_sales_amount_usd": 112,
         "current_month_sales_amount_usd": 112,
         "rating_progress": 104,
@@ -743,8 +746,8 @@ def test_leaderboard_columns_fit_all_business_headers_in_the_primary_grid(
     }
     assert labels == {
         "spu": "SPU",
-        "spu_rating": "SPU评级",
-        "final_rating": "最终评级",
+        "spu_rating": "计算评级",
+        "actual_rating": "实际评级",
         "previous_month_sales_amount_usd": "上月销售额",
         "current_month_sales_amount_usd": "本月销量额",
         "rating_progress": "本月评级达标进度",

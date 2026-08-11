@@ -132,9 +132,9 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
         for column in datasets["爆品指数-日明细"]["columns"]
     }
     assert daily_column_labels["channel"] == "渠道"
-    assert daily_column_labels["product_level"] == "产品等级"
-    assert daily_column_labels["spu_previous_month_sales_level"] == "SPU评级"
-    assert daily_column_labels["spu_final_rating"] == "SPU最终评级"
+    assert daily_column_labels["product_level"] == "实际评级"
+    assert daily_column_labels["spu_previous_month_sales_level"] == "计算评级"
+    assert "spu_final_rating" not in daily_column_labels
     assert {chart["dataset_uuid"] for chart in charts.values()} <= {
         dataset["uuid"] for dataset in datasets.values()
     }
@@ -171,8 +171,8 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
         assert query_context["result_type"] == "full"
 
 
-def test_spu_final_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> None:
-    """SPU final rating stays raw through datasets, detail grain, and filters."""
+def test_actual_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> None:
+    """Monthly product level is the raw actual rating in native assets."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     datasets = assets_by_key(assets, "datasets", "table_name")
     relevant_names = {
@@ -188,19 +188,19 @@ def test_spu_final_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> 
     for name in relevant_names:
         dataset = datasets[name]
         columns = {item["column_name"]: item for item in dataset["columns"]}
-        assert columns["spu_final_rating"]["verbose_name"] == "SPU最终评级"
-        assert columns["spu_final_rating"]["type"] == "STRING"
-        assert "spu_final_rating" in dataset["sql"]
-    assert "COALESCE(d.spu_final_rating" not in datasets["爆品指数-日明细"]["sql"]
-    assert "COALESCE(m.spu_final_rating" not in datasets["爆品指数-月末在售"]["sql"]
+        assert columns["product_level"]["verbose_name"] == "实际评级"
+        assert columns["product_level"]["type"] == "STRING"
+        assert "spu_final_rating" not in columns
+        assert "product_level" in dataset["sql"]
+        assert "spu_final_rating" not in dataset["sql"]
 
     spu = datasets["爆品指数-SPU月度经营明细"]
     assert (
-        "COALESCE(spu_final_rating, '') AS final_rating,\n    spu_final_rating,"
+        "COALESCE(product_level, '') AS actual_rating,\n    product_level,"
         in (spu["sql"])
     )
     assert (
-        "GROUP BY ym, spu, spu_previous_month_sales_level, spu_final_rating"
+        "GROUP BY ym, spu, spu_previous_month_sales_level, product_level"
         in (spu["sql"])
     )
     assert (
@@ -208,18 +208,19 @@ def test_spu_final_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> 
         not in (spu["sql"])
     )
     spu_columns = {item["column_name"]: item for item in spu["columns"]}
-    assert spu_columns["spu_previous_month_sales_level"]["verbose_name"] == "SPU评级"
-    assert spu_columns["final_rating"]["verbose_name"] == "最终评级"
-    assert spu_columns["final_rating"]["groupby"] is True
-    assert spu_columns["spu_final_rating"]["verbose_name"] == "SPU最终评级"
-    assert spu_columns["spu_final_rating"]["groupby"] is False
+    assert spu_columns["spu_previous_month_sales_level"]["verbose_name"] == "计算评级"
+    assert spu_columns["actual_rating"]["verbose_name"] == "实际评级"
+    assert spu_columns["actual_rating"]["groupby"] is True
+    assert spu_columns["product_level"]["verbose_name"] == "实际评级"
+    assert spu_columns["product_level"]["groupby"] is False
     assert spu_columns["sku_level"]["verbose_name"] == "SKU等级"
 
     leaderboard_sql = datasets["爆品指数-SPU销量排行榜"]["sql"]
-    assert "GROUP BY m.spu, m.spu_previous_month_sales_level, m.spu_final_rating" in (
+    assert "GROUP BY m.spu, m.spu_previous_month_sales_level, m.product_level" in (
         leaderboard_sql
     )
-    assert "m.sku_level AS final_rating" not in leaderboard_sql
+    assert "COALESCE(c.product_level, '') AS actual_rating" in leaderboard_sql
+    assert "m.sku_level AS actual_rating" not in leaderboard_sql
 
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
         "拉杆箱在售产品爆品指数看板"
@@ -239,10 +240,10 @@ def test_spu_final_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> 
         "开发经理",
         "型号",
         "SKU等级",
-        "SPU最终评级",
+        "实际评级",
     ]
     by_name = {item["name"]: item for item in filters}
-    assert {target["datasetUuid"] for target in by_name["SPU最终评级"]["targets"]} == {
+    assert {target["datasetUuid"] for target in by_name["实际评级"]["targets"]} == {
         UUIDS["dataset_daily"],
         UUIDS["dataset_monthly"],
         UUIDS["dataset_spu_detail"],
@@ -253,8 +254,8 @@ def test_spu_final_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> 
         UUIDS["dataset_spu_leaderboard"],
     }
     assert {
-        target["column"]["name"] for target in by_name["SPU最终评级"]["targets"]
-    } == {"spu_final_rating"}
+        target["column"]["name"] for target in by_name["实际评级"]["targets"]
+    } == {"product_level"}
     assert {target["column"]["name"] for target in by_name["SKU等级"]["targets"]} == {
         "sku_level"
     }
@@ -286,8 +287,8 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
             "spu",
             "ym",
             "spu_previous_month_sales_level",
-            "final_rating",
-            "spu_final_rating",
+            "actual_rating",
+            "product_level",
             "sku_level",
             "hot_product_index",
             "score",
@@ -307,9 +308,9 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
     assert spu_labels == {
         "spu": "SPU",
         "ym": "年月",
-        "spu_previous_month_sales_level": "SPU评级",
-        "final_rating": "最终评级",
-        "spu_final_rating": "SPU最终评级",
+        "spu_previous_month_sales_level": "计算评级",
+        "actual_rating": "实际评级",
+        "product_level": "实际评级",
         "sku_level": "SKU等级",
         "hot_product_index": "爆品指数",
         "score": "评分",
@@ -357,7 +358,7 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
         "company_sku": "公司SKU",
         "sku": "SKU",
         "ym": "年月",
-        "product_level": "产品等级",
+        "product_level": "实际评级",
         "size": "尺寸",
         "color": "颜色",
         "hot_product_index": "爆品指数",
@@ -419,7 +420,7 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
             "developer",
             "model",
             "sku_level",
-            "spu_final_rating",
+            "product_level",
         }
         metadata_by_name = {
             column["column_name"]: column for column in dataset["columns"]
@@ -434,7 +435,7 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
             "spu",
             "ym",
             "spu_previous_month_sales_level",
-            "final_rating",
+            "actual_rating",
         }
         if dataset["table_name"] == "爆品指数-SKU月度经营明细":
             visible_filter_columns = {
@@ -469,7 +470,7 @@ def test_detail_sql_has_exact_grains_filters_and_null_safe_metrics(
         "developer",
         "model",
         "sku_level",
-        "spu_final_rating",
+        "product_level",
     )
     expected_fragments = (
         "get_time_filter(",
@@ -496,7 +497,7 @@ def test_detail_sql_has_exact_grains_filters_and_null_safe_metrics(
     )
     detail_specs = {
         "爆品指数-SPU月度经营明细": (
-            "GROUP BY ym, spu, spu_previous_month_sales_level, spu_final_rating",
+            "GROUP BY ym, spu, spu_previous_month_sales_level, product_level",
         ),
         "爆品指数-SKU月度经营明细": (
             "GROUP BY ym, company_sku, sku, product_level, size, color",
@@ -542,12 +543,12 @@ def test_spu_stock_leaf_groups_once_per_spu_leaf(tmp_path: Path) -> None:
         sql.index("LEFT JOIN (\n    SELECT") : sql.index("  ) stock_leaf\n")
     ]
     assert (
-        "SELECT DISTINCT ym, spu, spu_previous_month_sales_level, spu_final_rating, sku"
+        "SELECT DISTINCT ym, spu, spu_previous_month_sales_level, product_level, sku"
         in stock_sql
     )
     assert "p.sku AS sku" not in stock_sql
     assert (
-        "GROUP BY p.ym, p.spu, p.spu_previous_month_sales_level, p.spu_final_rating"
+        "GROUP BY p.ym, p.spu, p.spu_previous_month_sales_level, p.product_level"
         in stock_sql
     )
     assert (
@@ -571,7 +572,7 @@ def test_detail_charts_preserve_approved_fields_pagination_and_sorting(
         "spu",
         "ym",
         "spu_previous_month_sales_level",
-        "final_rating",
+        "actual_rating",
     ]
     assert sku["params"]["groupby"] == [
         "company_sku",
@@ -1068,7 +1069,7 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
         "开发经理",
         "型号",
         "SKU等级",
-        "SPU最终评级",
+        "实际评级",
     ]
     assert all(
         "datasetUuid" in target and "datasetId" not in target
@@ -1495,7 +1496,7 @@ def test_guide_chart_keeps_styles_outside_sanitized_handlebars(
     assert "{{selected_end_ymd}}" in params["handlebarsTemplate"]
     assert "dateFormat" not in params["handlebarsTemplate"]
     assert "product_level" not in params["handlebarsTemplate"]
-    assert "SKU 行级产品等级" in params["handlebarsTemplate"]
+    assert "实际评级使用月度产品等级快照" in params["handlebarsTemplate"]
     assert guide["css"] == ""
 
 
