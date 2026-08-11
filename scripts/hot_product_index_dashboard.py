@@ -3368,8 +3368,7 @@ def _charts() -> AssetBundle:
         dataset_uuid=UUIDS["dataset_status"],
         params=_guide_chart_params(),
         description=(
-            "爆品指数指标、时间、在售范围、计算评级和实际评级口径；"
-            f"{RATING_SEMANTICS}"
+            f"爆品指数指标、时间、在售范围、计算评级和实际评级口径；{RATING_SEMANTICS}"
         ),
     )
     charts["charts/Hot_Product_Index_SPU_Detail.yaml"] = _chart(
@@ -3379,7 +3378,7 @@ def _charts() -> AssetBundle:
         dataset_uuid=UUIDS["dataset_spu_detail"],
         params=_detail_chart_params("spu"),
         description=(
-            "按SPU、年月、计算评级和实际评级展示经营明细；" f"{RATING_SEMANTICS}"
+            f"按SPU、年月、计算评级和实际评级展示经营明细；{RATING_SEMANTICS}"
         ),
     )
     charts["charts/Hot_Product_Index_SKU_Detail.yaml"] = _chart(
