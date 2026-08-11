@@ -1501,7 +1501,10 @@ def test_guide_chart_keeps_styles_outside_sanitized_handlebars(
 
 
 def test_rating_descriptions_preserve_snapshot_null_semantics(tmp_path: Path) -> None:
-    """Guide and rating charts document blank missing snapshots without fallback values."""
+    """Guide and rating charts document blank missing snapshots.
+
+    Descriptions must not imply fallback values for missing monthly snapshots.
+    """
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     charts = assets_by_key(assets, "charts", "slice_name")
     guide_template = charts["爆品指数说明"]["params"]["handlebarsTemplate"]
