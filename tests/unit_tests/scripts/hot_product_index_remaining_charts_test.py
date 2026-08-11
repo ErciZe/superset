@@ -386,12 +386,13 @@ def test_spu_leaderboard_uses_watermark_anchored_two_period_contract(
         "SPU",
         "计算评级",
         "实际评级",
-        "实际评级",
         "上月销售额",
         "本月销量额",
         "本月评级达标进度",
         "本月时间达标进度",
     }
+    assert columns["product_level"]["verbose_name"] == "实际评级"
+    assert columns["actual_rating"]["verbose_name"] == "实际评级"
 
 
 def test_remaining_charts_preflight_enumerates_all_source_columns() -> None:

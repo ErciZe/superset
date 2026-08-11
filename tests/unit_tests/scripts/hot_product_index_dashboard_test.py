@@ -253,9 +253,9 @@ def test_actual_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> Non
         UUIDS["dataset_model_detail"],
         UUIDS["dataset_spu_leaderboard"],
     }
-    assert {
-        target["column"]["name"] for target in by_name["实际评级"]["targets"]
-    } == {"product_level"}
+    assert {target["column"]["name"] for target in by_name["实际评级"]["targets"]} == {
+        "product_level"
+    }
     assert {target["column"]["name"] for target in by_name["SKU等级"]["targets"]} == {
         "sku_level"
     }
@@ -1516,8 +1516,7 @@ def test_rating_descriptions_preserve_snapshot_null_semantics(tmp_path: Path) ->
     assert all(phrase in guide_template for phrase in expected_phrases)
     for chart_name in ("爆品指数说明", "SPU维度", "SKU维度"):
         assert all(
-            phrase in charts[chart_name]["description"]
-            for phrase in expected_phrases
+            phrase in charts[chart_name]["description"] for phrase in expected_phrases
         )
 
 

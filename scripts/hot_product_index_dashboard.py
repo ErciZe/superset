@@ -3379,8 +3379,7 @@ def _charts() -> AssetBundle:
         dataset_uuid=UUIDS["dataset_spu_detail"],
         params=_detail_chart_params("spu"),
         description=(
-            "按SPU、年月、计算评级和实际评级展示经营明细；"
-            f"{RATING_SEMANTICS}"
+            "按SPU、年月、计算评级和实际评级展示经营明细；" f"{RATING_SEMANTICS}"
         ),
     )
     charts["charts/Hot_Product_Index_SKU_Detail.yaml"] = _chart(
