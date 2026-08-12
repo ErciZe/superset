@@ -1026,7 +1026,7 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
         == 2
     )
     assert all(
-        chart["params"].get("show_metric_name") is True
+        chart["params"].get("show_metric_name") is False
         for chart in main_charts
         if chart["viz_type"] == "big_number_total"
     )

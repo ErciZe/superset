@@ -2969,7 +2969,7 @@ def _big_number_params(metric: str, number_format: str) -> Asset:
         "header_font_size": 0.5,
         "metric": metric,
         "metric_name_font_size": 0.15,
-        "show_metric_name": True,
+        "show_metric_name": False,
         "show_trend_line": False,
         "start_y_axis_at_zero": True,
         "subheader": "",
