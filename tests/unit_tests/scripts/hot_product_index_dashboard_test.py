@@ -997,8 +997,29 @@ def test_funnels_stop_when_any_selected_eligible_rating_is_missing(
         "CASE WHEN MIN(rating_complete) = 1 THEN SUM(sales_amount_usd) ELSE NULL END"
     )
     assert daily_metrics["sales_qty_total"] == "SUM(sales_qty)"
-    assert charts["SPU销售额漏斗"]["params"]["metric"] == ("sales_amount_usd_funnel")
-    assert charts["SPU数漏斗"]["params"]["metric"] == ("in_sale_spu_count_funnel")
+    assert charts["SPU销售额漏斗"]["params"]["metric"] == {
+        "aggregate": None,
+        "column": None,
+        "datasourceWarning": False,
+        "expressionType": "SQL",
+        "hasCustomLabel": True,
+        "label": "销售额",
+        "optionName": "metric_hot_product_sales_amount_usd_funnel_zh",
+        "sqlExpression": daily_metrics["sales_amount_usd_funnel"],
+    }
+    monthly_metrics = {
+        metric["metric_name"]: metric["expression"] for metric in monthly["metrics"]
+    }
+    assert charts["SPU数漏斗"]["params"]["metric"] == {
+        "aggregate": None,
+        "column": None,
+        "datasourceWarning": False,
+        "expressionType": "SQL",
+        "hasCustomLabel": True,
+        "label": "在售SPU数",
+        "optionName": "metric_hot_product_in_sale_spu_count_funnel_zh",
+        "sqlExpression": monthly_metrics["in_sale_spu_count_funnel"],
+    }
     assert "评级源不完整" in charts["爆品指数数据状态"]["params"]["handlebarsTemplate"]
 
 

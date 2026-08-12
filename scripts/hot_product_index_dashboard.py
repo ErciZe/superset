@@ -2417,7 +2417,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
         _metric(
             "sales_qty_total",
             "销量",
-            "SUM(sales_qty)",
+            SALES_QTY_TOTAL_EXPRESSION,
             ",.0f",
             "所选期间满足在售条件的销量合计。",
         ),
@@ -2438,10 +2438,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
         _metric(
             "sales_amount_usd_funnel",
             "评级完整销售额",
-            (
-                "CASE WHEN MIN(rating_complete) = 1 "
-                "THEN SUM(sales_amount_usd) ELSE NULL END"
-            ),
+            SALES_AMOUNT_USD_FUNNEL_EXPRESSION,
             "$,.0f",
             "评级源完整时按计算评级汇总美元销售额，否则漏斗停算。",
         ),
@@ -2543,10 +2540,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
         _metric(
             "in_sale_spu_count_funnel",
             "评级完整在售SPU数",
-            (
-                "CASE WHEN MIN(rating_complete) = 1 "
-                "THEN COUNT(DISTINCT spu) ELSE NULL END"
-            ),
+            IN_SALE_SPU_COUNT_FUNNEL_EXPRESSION,
             ",.0f",
             "评级源完整时按计算评级统计在售SPU，否则漏斗停算。",
         ),
@@ -2762,6 +2756,56 @@ CHART_METRIC_LABELS: Final[dict[str, str]] = {
     "gross_profit_usd_wan": "毛利润",
 }
 
+SALES_QTY_TOTAL_EXPRESSION: Final[str] = "SUM(sales_qty)"
+SALES_AMOUNT_USD_FUNNEL_EXPRESSION: Final[str] = (
+    "CASE WHEN MIN(rating_complete) = 1 "
+    "THEN SUM(sales_amount_usd) ELSE NULL END"
+)
+IN_SALE_SPU_COUNT_FUNNEL_EXPRESSION: Final[str] = (
+    "CASE WHEN MIN(rating_complete) = 1 "
+    "THEN COUNT(DISTINCT spu) ELSE NULL END"
+)
+
+TOOLTIP_METRIC_DEFINITIONS: Final[dict[str, tuple[str, str]]] = {
+    "sales_qty_total": ("销量", SALES_QTY_TOTAL_EXPRESSION),
+    "sales_amount_usd_funnel": (
+        "销售额",
+        SALES_AMOUNT_USD_FUNNEL_EXPRESSION,
+    ),
+    "in_sale_spu_count_funnel": (
+        "在售SPU数",
+        IN_SALE_SPU_COUNT_FUNNEL_EXPRESSION,
+    ),
+}
+
+
+def _tooltip_metric(metric_name: str) -> Asset:
+    """Return a native ad-hoc metric with a Chinese tooltip label."""
+    try:
+        label, expression = TOOLTIP_METRIC_DEFINITIONS[metric_name]
+    except KeyError as ex:
+        raise ValueError(f"missing tooltip metric definition: {metric_name}") from ex
+    return {
+        "aggregate": None,
+        "column": None,
+        "datasourceWarning": False,
+        "expressionType": "SQL",
+        "hasCustomLabel": True,
+        "label": label,
+        "optionName": f"metric_hot_product_{metric_name}_zh",
+        "sqlExpression": expression,
+    }
+
+
+def _query_metric_label(metric: str | Mapping[str, Any]) -> str:
+    """Return the result-column label emitted for one query metric."""
+    if isinstance(metric, str):
+        return metric
+    label = metric.get("label")
+    if not isinstance(label, str) or not label:
+        raise ValueError("ad-hoc metric must define a non-empty label")
+    return label
+
 
 def _echarts_query(
     *,
@@ -2920,7 +2964,8 @@ def _timeseries_query_context(params: Asset) -> str:
 def _pie_query_context(params: Asset) -> str:
     """Build the standard Pie query with descending metric contribution."""
     groupby = [str(column) for column in params["groupby"]]
-    metric = str(params["metric"])
+    metric = params["metric"]
+    metric_label = _query_metric_label(metric)
     query = _echarts_query(
         columns=groupby,
         metrics=[metric],
@@ -2932,8 +2977,8 @@ def _pie_query_context(params: Asset) -> str:
             {
                 "operation": "contribution",
                 "options": {
-                    "columns": [metric],
-                    "rename_columns": [f"{metric}__contribution"],
+                    "columns": [metric_label],
+                    "rename_columns": [f"{metric_label}占比"],
                 },
             }
         ],
@@ -2954,7 +2999,7 @@ def _query_context(params: Asset) -> str:
         return _pie_query_context(params)
     if viz_type == "treemap_v2":
         groupby = [str(column) for column in params["groupby"]]
-        metric = str(params["metric"])
+        metric = params["metric"]
         treemap_query = _echarts_query(
             columns=groupby,
             metrics=[metric],
@@ -2971,7 +3016,7 @@ def _query_context(params: Asset) -> str:
         orderby: list[list[Any]] = []
     elif viz_type == "funnel":
         columns = list(params["groupby"])
-        metrics = [str(params["metric"])]
+        metrics = [params["metric"]]
         row_limit = int(params["row_limit"])
         orderby = [["spu_previous_month_sales_level_sort_metric", True]]
     elif viz_type == "handlebars":
@@ -3083,7 +3128,7 @@ def _funnel_params(
         "label_value_suffix": label_value_suffix,
         "legendMargin": 0,
         "legendOrientation": "top",
-        "metric": metric,
+        "metric": _tooltip_metric(metric),
         "number_format": number_format,
         "percent_format": ",.1~%",
         "order_by_cols": ['["spu_previous_month_sales_level_sort_metric", true]'],
@@ -3302,7 +3347,7 @@ def _pie_params(groupby: str, *, legend_type: str) -> Asset:
         "labels_outside": True,
         "legendOrientation": "bottom",
         "legendType": legend_type,
-        "metric": "sales_qty_total",
+        "metric": _tooltip_metric("sales_qty_total"),
         "number_format": ",.0f",
         "outerRadius": 74,
         "row_limit": 1000,
@@ -3325,7 +3370,7 @@ def _treemap_params(groupby: str) -> Asset:
         "date_format": "smart_date",
         "groupby": [groupby],
         "label_type": "key_value",
-        "metric": "sales_qty_total",
+        "metric": _tooltip_metric("sales_qty_total"),
         "number_format": ",.0f",
         "row_limit": 1000,
         "show_labels": True,

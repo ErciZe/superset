@@ -674,14 +674,16 @@ def test_remaining_pie_and_color_trend_contracts(tmp_path: Path) -> None:
         query = json.loads(chart["query_context"])["queries"]
         assert len(query) == 1
         assert query[0]["columns"] == [groupby]
-        assert query[0]["metrics"] == ["sales_qty_total"]
-        assert query[0]["orderby"] == [["sales_qty_total", False]]
+        metric = params["metric"]
+        assert metric["label"] == "销量"
+        assert query[0]["metrics"] == [metric]
+        assert query[0]["orderby"] == [[metric, False]]
         assert query[0]["post_processing"] == [
             {
                 "operation": "contribution",
                 "options": {
-                    "columns": ["sales_qty_total"],
-                    "rename_columns": ["sales_qty_total__contribution"],
+                    "columns": ["销量"],
+                    "rename_columns": ["销量占比"],
                 },
             }
         ]
@@ -690,13 +692,13 @@ def test_remaining_pie_and_color_trend_contracts(tmp_path: Path) -> None:
     sku_params = sku["params"]
     assert sku["viz_type"] == "treemap_v2"
     assert sku_params["groupby"] == ["sku"]
-    assert sku_params["metric"] == "sales_qty_total"
+    assert sku_params["metric"]["label"] == "销量"
     assert sku_params["row_limit"] == 1000
     assert sku_params["number_format"] == ",.0f"
     sku_query = json.loads(sku["query_context"])["queries"][0]
     assert sku_query["columns"] == ["sku"]
-    assert sku_query["metrics"] == ["sales_qty_total"]
-    assert sku_query["orderby"] == [["sales_qty_total", False]]
+    assert sku_query["metrics"] == [sku_params["metric"]]
+    assert sku_query["orderby"] == [[sku_params["metric"], False]]
     assert sku_query["post_processing"] == []
 
     for name, x_axis in (("颜色销售比例-周", "yw"), ("颜色销售比例-月", "ym")):
@@ -722,6 +724,46 @@ def test_remaining_pie_and_color_trend_contracts(tmp_path: Path) -> None:
         assert not any(
             item["operation"] == "resample" for item in query["post_processing"]
         )
+
+
+def test_echarts_tooltips_use_chinese_adhoc_metric_labels(tmp_path: Path) -> None:
+    """Interactive charts must not expose saved snake-case metric names."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    charts = assets_by_key(assets, "charts", "slice_name")
+    expected = {
+        "SPU销售比例": "销量",
+        "SKU销售比例": "销量",
+        "颜色销量分布": "销量",
+        "SPU销售额漏斗": "销售额",
+        "SPU数漏斗": "在售SPU数",
+    }
+
+    for chart_name, label in expected.items():
+        chart = charts[chart_name]
+        metric = chart["params"]["metric"]
+        assert metric["expressionType"] == "SQL"
+        assert metric["hasCustomLabel"] is True
+        assert metric["label"] == label
+        assert metric["sqlExpression"]
+        assert chart["query_context"]
+        query = json.loads(chart["query_context"])["queries"][0]
+        assert query["metrics"] == [metric]
+        assert not any(
+            isinstance(value, str) and re.search(r"[a-z]+_[a-z]", value)
+            for value in query["metrics"]
+        )
+
+    for chart_name in ("SPU销售比例", "颜色销量分布"):
+        query = json.loads(charts[chart_name]["query_context"])["queries"][0]
+        assert query["post_processing"] == [
+            {
+                "operation": "contribution",
+                "options": {
+                    "columns": ["销量"],
+                    "rename_columns": ["销量占比"],
+                },
+            }
+        ]
 
 
 def test_remaining_leaderboard_contract_and_conditional_formatting(
