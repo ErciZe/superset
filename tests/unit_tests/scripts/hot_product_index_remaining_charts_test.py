@@ -143,7 +143,7 @@ def test_remaining_analysis_layout_and_parent_chains(tmp_path: Path) -> None:
         "CHART-COLOR-DISTRIBUTION",
     ):
         assert position[component_id]["meta"]["width"] == 3
-        assert position[component_id]["meta"]["height"] == 38
+        assert position[component_id]["meta"]["height"] == 44
         assert position[component_id]["parents"] == [
             "ROOT_ID",
             "GRID_ID",
@@ -151,7 +151,7 @@ def test_remaining_analysis_layout_and_parent_chains(tmp_path: Path) -> None:
         ]
 
     assert position["CHART-SPU-LEADERBOARD"]["meta"]["width"] == 12
-    assert position["CHART-SPU-LEADERBOARD"]["meta"]["height"] == 38
+    assert position["CHART-SPU-LEADERBOARD"]["meta"]["height"] == 44
     assert position["CHART-SPU-LEADERBOARD"]["parents"] == [
         "ROOT_ID",
         "GRID_ID",

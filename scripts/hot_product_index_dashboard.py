@@ -3905,7 +3905,7 @@ def _main_position() -> Asset:
             slice_name="SPU销量排行榜",
             row_id="COLUMN-LEADERBOARD",
             width=12,
-            height=38,
+            height=44,
             parent_ids=[
                 "ROOT_ID",
                 "GRID_ID",
@@ -3928,7 +3928,7 @@ def _main_position() -> Asset:
             slice_name="SPU销售比例",
             row_id="ROW-ANALYSIS-SHARES",
             width=3,
-            height=38,
+            height=44,
         ),
         "CHART-SKU-SHARE": _chart_node(
             component_id="CHART-SKU-SHARE",
@@ -3937,7 +3937,7 @@ def _main_position() -> Asset:
             slice_name="SKU销售比例",
             row_id="ROW-ANALYSIS-SHARES",
             width=3,
-            height=38,
+            height=44,
         ),
         "COLUMN-COLOR-TREND": _column(
             "COLUMN-COLOR-TREND",
@@ -4046,7 +4046,7 @@ def _main_position() -> Asset:
             slice_name="颜色销量分布",
             row_id="ROW-ANALYSIS-SHARES",
             width=3,
-            height=38,
+            height=44,
         ),
         "CHART-STATUS": _chart_node(
             component_id="CHART-STATUS",

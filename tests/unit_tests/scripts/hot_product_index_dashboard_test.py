@@ -1152,17 +1152,22 @@ def test_main_dashboard_matches_finebi_density_and_shell_contract(
     assert "horizontal_filter_bar_two_rows" not in main["metadata"]
     assert position["COLUMN-TREND"]["meta"]["width"] == 7.25
     assert position["COLUMN-LEADERBOARD"]["meta"]["width"] == 4.75
-    assert position["CHART-SPU-LEADERBOARD"]["meta"]["height"] == 38
     assert all(
         position[component_id]["meta"]["height"] == 38
         for component_id in (
             "CHART-TREND-DAY",
             "CHART-TREND-WEEK",
             "CHART-TREND-MONTH",
-            "CHART-SPU-SHARE",
-            "CHART-SKU-SHARE",
             "CHART-COLOR-WEEK",
             "CHART-COLOR-MONTH",
+        )
+    )
+    assert all(
+        position[component_id]["meta"]["height"] == 44
+        for component_id in (
+            "CHART-SPU-LEADERBOARD",
+            "CHART-SPU-SHARE",
+            "CHART-SKU-SHARE",
             "CHART-COLOR-DISTRIBUTION",
         )
     )
