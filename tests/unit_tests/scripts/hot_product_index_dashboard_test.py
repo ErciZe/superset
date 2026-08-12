@@ -109,7 +109,7 @@ def test_write_bundle_produces_complete_deterministic_assets(tmp_path: Path) -> 
         "爆品指数-型号经营明细",
     }
     assert set(dashboards) == {
-        "拉杆箱在售产品爆品指数看板",
+        "在售产品爆品指数看板",
         "爆品指数说明文档",
     }
 
@@ -228,7 +228,7 @@ def test_actual_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> Non
     assert "m.sku_level AS actual_rating" not in leaderboard_sql
 
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
-        "拉杆箱在售产品爆品指数看板"
+        "在售产品爆品指数看板"
     ]
     filters = main["metadata"]["native_filter_configuration"]
     assert len(filters) == 14
@@ -280,17 +280,11 @@ def test_actual_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> Non
             "dataset_spu_leaderboard",
         )
     ]
-    assert category_filter["defaultDataMask"] == {
-        "extraFormData": {
-            "filters": [{"col": "category", "op": "IN", "val": ["拉杆箱"]}]
-        },
-        "filterState": {"value": ["拉杆箱"]},
-        "ownState": {},
-    }
+    assert "defaultDataMask" not in category_filter
     assert UUIDS["chart_status"] not in category_filter["chartsInScope"]
 
 
-def test_category_filter_uses_dim_product_across_business_datasets(
+def test_category_filter_uses_dim_lx_product_across_business_datasets(
     tmp_path: Path,
 ) -> None:
     """Every category target uses the stock DIM mapping and fails on conflicts."""
@@ -312,14 +306,14 @@ def test_category_filter_uses_dim_product_across_business_datasets(
         columns = {item["column_name"]: item for item in dataset["columns"]}
         assert columns["category"]["verbose_name"] == "品类"
         assert columns["category"]["type"] == "STRING"
-        assert "FROM dim.dim_product" in dataset["sql"]
+        assert "FROM dim.dim_lx_product" in dataset["sql"]
         assert "org_id = 1" in dataset["sql"]
         assert "COALESCE(NULLIF(TRIM(category), ''), '-')" in dataset["sql"]
         assert "category_conflict_count = 0" in dataset["sql"]
 
     status = datasets["爆品指数-数据状态"]
     assert "category" not in {item["column_name"] for item in status["columns"]}
-    assert "dim.dim_product" not in status["sql"]
+    assert "dim.dim_lx_product" not in status["sql"]
 
 
 def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
@@ -1028,7 +1022,7 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     charts = assets_by_key(assets, "charts", "slice_name")
     dashboards = assets_by_key(assets, "dashboards", "dashboard_title")
-    main = dashboards["拉杆箱在售产品爆品指数看板"]
+    main = dashboards["在售产品爆品指数看板"]
 
     main_chart_nodes = [
         node
@@ -1215,7 +1209,7 @@ def test_detail_css_is_scoped_to_table_components_and_tabs(tmp_path: Path) -> No
     """The main dashboard hides only the table page-size selector."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
-        "拉杆箱在售产品爆品指数看板"
+        "在售产品爆品指数看板"
     ]
     assert main["css"] == EXPECTED_MAIN_DASHBOARD_CSS
     assert ".dt-controls" not in main["css"]
@@ -1227,7 +1221,7 @@ def test_main_dashboard_matches_finebi_density_and_shell_contract(
     """The generated canvas reserves the FineBI-like shell and compact grid."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
-        "拉杆箱在售产品爆品指数看板"
+        "在售产品爆品指数看板"
     ]
     position = main["position"]
 
@@ -1265,10 +1259,10 @@ def test_main_dashboard_matches_finebi_title_and_table_readability_contract(
     """View mode styles the dynamic title and keeps table headers readable."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
-        "拉杆箱在售产品爆品指数看板"
+        "在售产品爆品指数看板"
     ]
     assert main["position"]["HEADER_ID"]["meta"]["text"] == (
-        "拉杆箱在售产品爆品指数看板"
+        "在售产品爆品指数看板"
     )
     assert main["css"] == EXPECTED_MAIN_DASHBOARD_CSS
 
@@ -1279,7 +1273,7 @@ def test_main_dashboard_hides_decorative_chart_header_controls_only(
     """Only decorative view-mode headers hide; business chart titles stay visible."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
-        "拉杆箱在售产品爆品指数看板"
+        "在售产品爆品指数看板"
     ]
     assert main["css"] == EXPECTED_MAIN_DASHBOARD_CSS
 
@@ -1322,16 +1316,22 @@ def test_validate_assets_requires_month_scope_to_exclude_only_leaderboard(
         validate_assets(assets, DEFAULT_DATABASE_UUID)
 
 
-def test_validate_assets_rejects_category_default_drift(tmp_path: Path) -> None:
-    """The stock category filter must continue to default to 拉杆箱."""
+def test_validate_assets_rejects_category_default(tmp_path: Path) -> None:
+    """The all-product dashboard must not silently constrain category."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     filters = assets["dashboards/Hot_Product_Index.yaml"]["metadata"][
         "native_filter_configuration"
     ]
     category_filter = next(item for item in filters if item["name"] == "品类")
-    category_filter["defaultDataMask"]["filterState"]["value"] = ["背包"]
+    category_filter["defaultDataMask"] = {
+        "extraFormData": {
+            "filters": [{"col": "category", "op": "IN", "val": ["拉杆箱"]}]
+        },
+        "filterState": {"value": ["拉杆箱"]},
+        "ownState": {},
+    }
 
-    with pytest.raises(ValueError, match="category filter must default"):
+    with pytest.raises(ValueError, match="category filter must not default"):
         validate_assets(assets, DEFAULT_DATABASE_UUID)
 
 
@@ -1467,7 +1467,7 @@ def test_funnels_keep_the_business_grade_order(tmp_path: Path) -> None:
         ]
 
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
-        "拉杆箱在售产品爆品指数看板"
+        "在售产品爆品指数看板"
     ]
     assert {
         key: main["metadata"]["label_colors"][key]
@@ -1550,7 +1550,7 @@ def test_guide_link_is_a_header_layout_component(tmp_path: Path) -> None:
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     charts = assets_by_key(assets, "charts", "slice_name")
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
-        "拉杆箱在售产品爆品指数看板"
+        "在售产品爆品指数看板"
     ]
 
     status = charts["爆品指数数据状态"]
@@ -1583,7 +1583,7 @@ def test_status_banner_renders_without_sanitized_css_or_row_limit_warning(
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     charts = assets_by_key(assets, "charts", "slice_name")
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
-        "拉杆箱在售产品爆品指数看板"
+        "在售产品爆品指数看板"
     ]
 
     params = charts["爆品指数数据状态"]["params"]
@@ -1655,7 +1655,7 @@ def test_stock_chart_contract_removes_private_dashboard_extensions(
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     charts = assets_by_key(assets, "charts", "slice_name")
     dashboards = assets_by_key(assets, "dashboards", "dashboard_title")
-    main = dashboards["拉杆箱在售产品爆品指数看板"]
+    main = dashboards["在售产品爆品指数看板"]
 
     assert main["css"] == EXPECTED_MAIN_DASHBOARD_CSS
     assert main["metadata"]["filter_bar_orientation"] == "HORIZONTAL"

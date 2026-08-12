@@ -628,7 +628,7 @@ def _product_category_ctes() -> str:
   SELECT DISTINCT
     sku,
     COALESCE(NULLIF(TRIM(category), ''), '-') AS category
-  FROM dim.dim_product
+  FROM dim.dim_lx_product
   WHERE org_id = 1
     AND sku IS NOT NULL
 ),
@@ -2382,7 +2382,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
             _dataset_column(
                 "category",
                 "STRING",
-                description="来自dim.dim_product且org_id=1的标准品类。",
+                description="来自dim.dim_lx_product且org_id=1的标准品类。",
             ),
             _dataset_column("week_start_date", "DATE", is_dttm=True),
             _dataset_column("ymd", "STRING"),
@@ -2410,7 +2410,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
             _dataset_column(
                 "category",
                 "STRING",
-                description="来自dim.dim_product且org_id=1的标准品类。",
+                description="来自dim.dim_lx_product且org_id=1的标准品类。",
             ),
             _dataset_column(
                 "spu_previous_month_sales_level_sort",
@@ -3817,7 +3817,7 @@ def _main_position() -> Asset:
         },
         "HEADER_ID": {
             "id": "HEADER_ID",
-            "meta": {"height": 44, "text": "拉杆箱在售产品爆品指数看板"},
+            "meta": {"height": 44, "text": "在售产品爆品指数看板"},
             "type": "HEADER",
         },
         "ROOT_ID": {
@@ -4525,7 +4525,6 @@ def _main_metadata() -> Asset:
             name=name,
             column=column,
             business_chart_uuids=business_chart_uuids,
-            default_value=("拉杆箱",) if column == "category" else None,
         )
         for name, column in FILTERS
     }
@@ -4626,10 +4625,10 @@ def _dashboards() -> AssetBundle:
     }
     return {
         "dashboards/Hot_Product_Index.yaml": _dashboard(
-            title="拉杆箱在售产品爆品指数看板",
+            title="在售产品爆品指数看板",
             slug="hot-product-index",
             uuid=UUIDS["dashboard_main"],
-            description="拉杆箱在售商品的销量、效益、在售规模和SPU等级结构总览。",
+            description="全部在售商品的销量、效益、在售规模和SPU等级结构总览。",
             position=_main_position(),
             metadata=_main_metadata(),
             css=MAIN_DASHBOARD_CSS,
@@ -5043,15 +5042,8 @@ def validate_assets(  # noqa: C901
     if len(category_filters) != 1:
         raise ValueError("main dashboard must contain exactly one category filter")
     category_filter = category_filters[0]
-    expected_category_mask = {
-        "extraFormData": {
-            "filters": [{"col": "category", "op": "IN", "val": ["拉杆箱"]}]
-        },
-        "filterState": {"value": ["拉杆箱"]},
-        "ownState": {},
-    }
-    if category_filter.get("defaultDataMask") != expected_category_mask:
-        raise ValueError("category filter must default to 拉杆箱")
+    if "defaultDataMask" in category_filter:
+        raise ValueError("category filter must not default to one category")
     expected_category_targets = [
         UUIDS[key]
         for key in (

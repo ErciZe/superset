@@ -164,7 +164,7 @@ def test_remaining_analysis_layout_and_parent_chains(tmp_path: Path) -> None:
     """The remaining analysis charts form the approved two-row nested grid."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
-        "拉杆箱在售产品爆品指数看板"
+        "在售产品爆品指数看板"
     ]
     position = main["position"]
 
@@ -270,7 +270,7 @@ def test_remaining_analysis_filter_scope_includes_leaderboard_only_daily(
     """Selects target the leaderboard while the month range excludes it."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
-        "拉杆箱在售产品爆品指数看板"
+        "在售产品爆品指数看板"
     ]
     filters = main["metadata"]["native_filter_configuration"]
     select_filters = [item for item in filters if item["filterType"] == "filter_select"]
@@ -324,7 +324,7 @@ def test_remaining_analysis_uses_stock_dashboard_css(tmp_path: Path) -> None:
     """The stock dashboard hides only the table page-size selector."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
-        "拉杆箱在售产品爆品指数看板"
+        "在售产品爆品指数看板"
     ]
     assert main["css"] == EXPECTED_MAIN_DASHBOARD_CSS
     assert ".dt-controls" not in main["css"]
@@ -388,7 +388,7 @@ def test_color_charts_use_authoritative_display_labels_and_colors(
     daily = assets_by_key(assets, "datasets", "table_name")["爆品指数-日明细"]
     charts = assets_by_key(assets, "charts", "slice_name")
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
-        "拉杆箱在售产品爆品指数看板"
+        "在售产品爆品指数看板"
     ]
     columns = {item["column_name"]: item for item in daily["columns"]}
 
@@ -1399,7 +1399,7 @@ def test_remaining_detail_native_filters_target_all_three_datasets_and_charts(
     """Native filters reach each new dataset and its corresponding chart."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
-        "拉杆箱在售产品爆品指数看板"
+        "在售产品爆品指数看板"
     ]
     filters = main["metadata"]["native_filter_configuration"]
     by_name = {item["name"]: item for item in filters}
