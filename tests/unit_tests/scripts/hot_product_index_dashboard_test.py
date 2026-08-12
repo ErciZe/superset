@@ -1684,9 +1684,16 @@ def test_stock_chart_contract_removes_private_dashboard_extensions(
                 assert_no_banned_keys(child)
 
     assert_no_banned_keys(assets)
+    trend_names = {
+        "指标整体趋势-天",
+        "指标整体趋势-周",
+        "指标整体趋势-月",
+    }
     assert all(
-        "legend.selected" not in chart["params"].get("echart_options", "")
-        for chart in charts.values()
+        "echart_options" in chart["params"]
+        if name in trend_names
+        else "echart_options" not in chart["params"]
+        for name, chart in charts.items()
     )
 
     daily = assets_by_key(assets, "datasets", "table_name")["爆品指数-日明细"]

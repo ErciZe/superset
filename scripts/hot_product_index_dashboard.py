@@ -427,6 +427,20 @@ TREND_SECONDARY_METRICS: Final[tuple[str, ...]] = (
     "gross_profit_usd_wan",
 )
 
+TREND_LEGEND_SELECTION: Final[dict[str, bool]] = {
+    "爆品指数": True,
+    "销量": False,
+    "日均销量": False,
+    "退货量": False,
+    "订单量": False,
+    "在售SKU数": False,
+    "在售SPU数": False,
+    "退货率": False,
+    "毛利率": False,
+    "销售额": True,
+    "毛利润": True,
+}
+
 
 def _dataset_column(
     name: str,
@@ -3308,6 +3322,9 @@ def _trend_params(grain: str) -> Asset:
     return {
         "adhoc_filters": [],
         "color_scheme": "supersetColors",
+        "echart_options": json.dumps(
+            {"legend": {"selected": TREND_LEGEND_SELECTION}}, ensure_ascii=False
+        ),
         "groupby": [],
         "groupby_b": [],
         "metrics": list(TREND_PRIMARY_METRICS),

@@ -553,6 +553,19 @@ def test_remaining_chart_identities_and_parameter_contract(tmp_path: Path) -> No
     """The nine visible chart assets keep the fixed FineBI identities."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     charts = assets_by_key(assets, "charts", "slice_name")
+    expected_legend_selection = {
+        "爆品指数": True,
+        "销量": False,
+        "日均销量": False,
+        "退货量": False,
+        "订单量": False,
+        "在售SKU数": False,
+        "在售SPU数": False,
+        "退货率": False,
+        "毛利率": False,
+        "销售额": True,
+        "毛利润": True,
+    }
     expected = {
         "指标整体趋势-天": "582d0460-8034-5a12-9f27-4de03b050cd4",
         "指标整体趋势-周": "d3504cb6-8abf-5d22-807b-326948e6b79b",
@@ -622,7 +635,9 @@ def test_remaining_chart_identities_and_parameter_contract(tmp_path: Path) -> No
                 "ym": "%Y-%m",
             }[x_axis]
         )
-        assert "echart_options" not in params
+        assert json.loads(params["echart_options"]) == {
+            "legend": {"selected": expected_legend_selection}
+        }
 
         context = json.loads(chart["query_context"])
         assert len(context["queries"]) == 2
