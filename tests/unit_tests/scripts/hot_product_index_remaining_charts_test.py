@@ -31,6 +31,11 @@ from scripts.hot_product_index_dashboard import (
     write_bundle,
 )
 
+EXPECTED_MAIN_DASHBOARD_CSS = """.dt-select-page-size {
+  display: none !important;
+}
+"""
+
 
 def read_bundle(path: Path) -> dict[str, dict[str, Any]]:
     """Read generated JSON-as-YAML assets and strip the ZIP root directory."""
@@ -264,12 +269,13 @@ def test_remaining_analysis_filter_scope_includes_leaderboard_only_daily(
 
 
 def test_remaining_analysis_uses_stock_dashboard_css(tmp_path: Path) -> None:
-    """The stock dashboard does not carry chart-specific CSS overrides."""
+    """The stock dashboard hides only the table page-size selector."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
         "拉杆箱在售产品爆品指数看板"
     ]
-    assert main["css"] == ""
+    assert main["css"] == EXPECTED_MAIN_DASHBOARD_CSS
+    assert ".dt-controls" not in main["css"]
 
 
 def test_daily_dataset_exposes_trend_and_color_semantics(tmp_path: Path) -> None:

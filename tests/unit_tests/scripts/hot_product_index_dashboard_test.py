@@ -32,6 +32,11 @@ from scripts.hot_product_index_dashboard import (
     write_bundle,
 )
 
+EXPECTED_MAIN_DASHBOARD_CSS = """.dt-select-page-size {
+  display: none !important;
+}
+"""
+
 
 def read_bundle(path: Path) -> dict[str, dict[str, Any]]:
     """Read generated JSON-as-YAML assets and strip the ZIP root directory."""
@@ -1186,12 +1191,13 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
 
 
 def test_detail_css_is_scoped_to_table_components_and_tabs(tmp_path: Path) -> None:
-    """Stock dashboard assets do not carry private CSS overrides."""
+    """The main dashboard hides only the table page-size selector."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
         "拉杆箱在售产品爆品指数看板"
     ]
-    assert main["css"] == ""
+    assert main["css"] == EXPECTED_MAIN_DASHBOARD_CSS
+    assert ".dt-controls" not in main["css"]
 
 
 def test_main_dashboard_matches_finebi_density_and_shell_contract(
@@ -1229,7 +1235,7 @@ def test_main_dashboard_matches_finebi_density_and_shell_contract(
         )
     )
 
-    assert main["css"] == ""
+    assert main["css"] == EXPECTED_MAIN_DASHBOARD_CSS
 
 
 def test_main_dashboard_matches_finebi_title_and_table_readability_contract(
@@ -1243,7 +1249,7 @@ def test_main_dashboard_matches_finebi_title_and_table_readability_contract(
     assert main["position"]["HEADER_ID"]["meta"]["text"] == (
         "拉杆箱在售产品爆品指数看板"
     )
-    assert main["css"] == ""
+    assert main["css"] == EXPECTED_MAIN_DASHBOARD_CSS
 
 
 def test_main_dashboard_hides_decorative_chart_header_controls_only(
@@ -1254,7 +1260,7 @@ def test_main_dashboard_hides_decorative_chart_header_controls_only(
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
         "拉杆箱在售产品爆品指数看板"
     ]
-    assert main["css"] == ""
+    assert main["css"] == EXPECTED_MAIN_DASHBOARD_CSS
 
 
 def test_main_dashboard_rejects_missing_detail_chart_uuid(tmp_path: Path) -> None:
@@ -1543,7 +1549,7 @@ def test_guide_link_is_a_header_layout_component(tmp_path: Path) -> None:
         "parents": ["ROOT_ID", "GRID_ID", "ROW-DOC-LINK"],
         "type": "MARKDOWN",
     }
-    assert main["css"] == ""
+    assert main["css"] == EXPECTED_MAIN_DASHBOARD_CSS
 
 
 def test_status_banner_renders_without_sanitized_css_or_row_limit_warning(
@@ -1565,7 +1571,7 @@ def test_status_banner_renders_without_sanitized_css_or_row_limit_warning(
     assert "\n" not in params["handlebarsTemplate"]
 
     assert main["position"]["CHART-STATUS"]["meta"]["height"] == 8
-    assert main["css"] == ""
+    assert main["css"] == EXPECTED_MAIN_DASHBOARD_CSS
 
 
 def test_guide_chart_keeps_styles_outside_sanitized_handlebars(
@@ -1627,7 +1633,7 @@ def test_stock_chart_contract_removes_private_dashboard_extensions(
     dashboards = assets_by_key(assets, "dashboards", "dashboard_title")
     main = dashboards["拉杆箱在售产品爆品指数看板"]
 
-    assert main["css"] == ""
+    assert main["css"] == EXPECTED_MAIN_DASHBOARD_CSS
     assert main["metadata"]["filter_bar_orientation"] == "HORIZONTAL"
     assert "horizontal_filter_bar_two_rows" not in main["metadata"]
 

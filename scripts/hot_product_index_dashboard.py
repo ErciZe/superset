@@ -4414,6 +4414,12 @@ def _main_metadata() -> Asset:
     }
 
 
+MAIN_DASHBOARD_CSS: Final[str] = """.dt-select-page-size {
+  display: none !important;
+}
+"""
+
+
 def _dashboard(
     *,
     title: str,
@@ -4422,12 +4428,13 @@ def _dashboard(
     description: str,
     position: Asset,
     metadata: Asset,
+    css: str = "",
 ) -> Asset:
     """Build one published dashboard asset."""
     return {
         "certification_details": None,
         "certified_by": None,
-        "css": "",
+        "css": css,
         "dashboard_title": title,
         "description": description,
         "metadata": metadata,
@@ -4467,6 +4474,7 @@ def _dashboards() -> AssetBundle:
             description="拉杆箱在售商品的销量、效益、在售规模和SPU等级结构总览。",
             position=_main_position(),
             metadata=_main_metadata(),
+            css=MAIN_DASHBOARD_CSS,
         ),
         "dashboards/Hot_Product_Index_Guide.yaml": _dashboard(
             title="爆品指数说明文档",
