@@ -19,7 +19,9 @@ from __future__ import annotations
 # The generated SQL interpolates only module-owned column lists.
 # ruff: noqa: S608
 import argparse
+import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any, Final, Iterable, Mapping, Sequence
 from uuid import UUID
@@ -32,6 +34,70 @@ DEFAULT_DATABASE_UUID: Final = "2f4b7c5a-35ab-4df1-870a-8157f2d3f621"
 BUNDLE_ROOT: Final = "hot_product_index_assets"
 ASSET_VERSION: Final = "1.0.0"
 STATUS_PLACEHOLDER_CHART_ID: Final = 1000
+COLOR_MAP_SNAPSHOT_PATH: Final = Path(__file__).with_name("hot_product_color_map.json")
+
+
+def _validate_color_mappings(mappings: list[Any]) -> tuple[Asset, ...]:
+    """Validate the shape and values of color mappings."""
+    color_codes: set[str] = set()
+    validated: list[Asset] = []
+    for mapping in mappings:
+        if not isinstance(mapping, dict):
+            raise ValueError("color-map snapshot mapping must be an object")
+        color_code = mapping.get("color_code")
+        color_name = mapping.get("color_name_zh")
+        display_hex = mapping.get("display_hex")
+        if not isinstance(color_code, str) or not color_code.strip():
+            raise ValueError("color-map snapshot color_code is required")
+        if color_code in color_codes:
+            raise ValueError(f"duplicate color-map snapshot code: {color_code}")
+        if not isinstance(color_name, str) or not color_name.strip():
+            raise ValueError(f"missing color name for code: {color_code}")
+        if (
+            not isinstance(display_hex, str)
+            or re.fullmatch(r"#[0-9A-F]{6}", display_hex) is None
+        ):
+            raise ValueError(f"invalid display hex for code: {color_code}")
+        color_codes.add(color_code)
+        validated.append(mapping)
+    return tuple(validated)
+
+
+def _load_color_map_snapshot(path: Path) -> tuple[Asset, ...]:
+    """Load and validate the versioned product-color metadata snapshot."""
+    snapshot = json.loads(path.read_text(encoding="utf-8"))
+    if snapshot.get("source_table") != "dim.dim_product_color_display_map":
+        raise ValueError("color-map snapshot source_table is invalid")
+    if not isinstance(snapshot.get("version"), str) or not snapshot["version"]:
+        raise ValueError("color-map snapshot version is required")
+    mappings = snapshot.get("mappings")
+    if not isinstance(mappings, list) or not mappings:
+        raise ValueError("color-map snapshot mappings must be a non-empty list")
+    canonical = json.dumps(
+        mappings,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    if hashlib.sha256(canonical).hexdigest() != snapshot.get("mapping_sha256"):
+        raise ValueError("color-map snapshot checksum does not match mappings")
+    return _validate_color_mappings(mappings)
+
+
+COLOR_DISPLAY_MAPPINGS: Final = _load_color_map_snapshot(COLOR_MAP_SNAPSHOT_PATH)
+
+
+def _color_display_label(mapping: Mapping[str, str]) -> str:
+    """Return the business-facing color label used by stock charts."""
+    color_code = mapping["color_code"]
+    color_name = mapping["color_name_zh"]
+    return color_code if color_name == color_code else f"{color_name}（{color_code}）"
+
+
+COLOR_LABEL_COLORS: Final = {
+    _color_display_label(mapping): mapping["display_hex"]
+    for mapping in COLOR_DISPLAY_MAPPINGS
+}
 
 UUIDS: Final = {
     "dataset_daily": "ea2025d6-91ac-502f-9238-9f21ca62b761",
@@ -191,6 +257,7 @@ COLUMN_VERBOSE_NAMES: Final = {
     "size": "尺寸",
     "color": "颜色",
     "color_code": "颜色代码",
+    "color_display_label": "展示颜色",
     "developer": "开发经理",
     "model": "型号",
     "sku_level": "SKU等级",
@@ -569,6 +636,7 @@ def _category_filter_expression(alias: str) -> str:
 
 def _daily_sql() -> str:
     """Build the eligible daily serving query with a left-closed month range."""
+    color_code_expression = "NULLIF(TRIM(SUBSTRING_INDEX(d.color, '-', -1)), '')"
     selected = _source_select_list("d", DAILY_SOURCE_COLUMNS)
     selected.extend(
         (
@@ -576,7 +644,15 @@ def _daily_sql() -> str:
             "AS week_start_date",
             "DATE_FORMAT(d.sales_date, '%Y-%m-%d') AS ymd",
             "DATE_FORMAT(d.sales_date, '%xW%v') AS yw",
-            "NULLIF(TRIM(SUBSTRING_INDEX(d.color, '-', -1)), '') AS color_code",
+            f"{color_code_expression} AS color_code",
+            "CASE\n"
+            "    WHEN pcm.color_code IS NULL THEN "
+            f"{color_code_expression}\n"
+            "    WHEN pcm.color_name_zh = "
+            f"{color_code_expression} THEN {color_code_expression}\n"
+            "    ELSE CONCAT(pcm.color_name_zh, '（', "
+            f"{color_code_expression}, '）')\n"
+            "  END AS color_display_label",
         )
     )
     selected.append(f"{_category_filter_expression('pc')} AS category")
@@ -592,6 +668,9 @@ def _daily_sql() -> str:
 FROM ads.ads_pdm_lx_hot_product_index_sku_d d
 LEFT JOIN product_category_values pc
   ON pc.sku = d.sku
+LEFT JOIN dim.dim_product_color_display_map pcm
+  ON pcm.color_code = {color_code_expression}
+ AND pcm.is_active = 1
 CROSS JOIN valid v
 CROSS JOIN product_category_quality pcq
 WHERE v.coverage_complete = 1
@@ -2296,6 +2375,11 @@ def _datasets(database_uuid: str) -> AssetBundle:
             _dataset_column("yw", "STRING"),
             _dataset_column("color_code", "STRING"),
             _dataset_column(
+                "color_display_label",
+                "STRING",
+                description=("已配置颜色显示为中文名（代码）；未配置颜色保留原代码。"),
+            ),
+            _dataset_column(
                 "spu_previous_month_sales_level_sort",
                 "BIGINT",
                 description="固定计算评级顺序：Ps、S、A、B、C、-。",
@@ -3107,7 +3191,8 @@ def _guide_chart_params() -> Asset:
   <h2>颜色口径</h2>
   <p>
     颜色趋势和分布使用颜色代码：颜色文本含连字符时取最后一个连字符后的文本，
-    不含连字符时保留原值；空颜色不生成分类。
+    不含连字符时保留原值；空颜色不生成分类。已配置颜色显示为中文名（代码）并使用
+    公共颜色维表中的代表色；未配置颜色保留原代码并使用 Superset 默认配色。
   </p>
   <h2>指标口径</h2>
   <ul>
@@ -3262,7 +3347,7 @@ def _color_trend_params(grain: str) -> Asset:
     return {
         "adhoc_filters": [],
         "color_scheme": "supersetColors",
-        "groupby": ["color_code"],
+        "groupby": ["color_display_label"],
         "metrics": ["sales_qty_total"],
         "order_desc": False,
         "row_limit": 100000,
@@ -3546,7 +3631,9 @@ def _charts() -> AssetBundle:
                 viz_type="echarts_timeseries_line",
                 dataset_uuid=UUIDS["dataset_daily"],
                 params=_color_trend_params(grain),
-                description=f"按{TREND_GRAIN_LABELS[grain]}粒度展示颜色代码销量趋势。",
+                description=(
+                    f"按{TREND_GRAIN_LABELS[grain]}粒度展示语义颜色销量趋势。"
+                ),
             )
         )
     charts["charts/Hot_Product_Index_Color_Sales_Distribution.yaml"] = _chart(
@@ -3554,8 +3641,8 @@ def _charts() -> AssetBundle:
         uuid=UUIDS["chart_color_distribution"],
         viz_type="pie",
         dataset_uuid=UUIDS["dataset_daily"],
-        params=_pie_params("color_code", legend_type="plain"),
-        description="按颜色代码展示所选范围销量分布。",
+        params=_pie_params("color_display_label", legend_type="plain"),
+        description="按语义颜色展示所选范围销量分布。",
     )
     return charts
 
@@ -4405,11 +4492,20 @@ def _main_metadata() -> Asset:
             "C": "#FFC000",
             "Ps": "#E84A5F",
             "S": "#1677C8",
+            **COLOR_LABEL_COLORS,
         },
         "map_label_colors": {},
         "native_filter_configuration": native_filters,
         "refresh_frequency": 0,
-        "shared_label_colors": ["Ps", "S", "A", "B", "C", "-"],
+        "shared_label_colors": [
+            "Ps",
+            "S",
+            "A",
+            "B",
+            "C",
+            "-",
+            *COLOR_LABEL_COLORS,
+        ],
         "timed_refresh_immune_slices": [],
     }
 
@@ -4746,6 +4842,12 @@ def validate_assets(  # noqa: C901
         )
     if len(dashboard_by_uuid) != len(dashboards):
         raise ValueError("dashboard UUIDs must be unique")
+    label_colors = main.get("metadata", {}).get("label_colors", {})
+    if not isinstance(label_colors, dict) or any(
+        label_colors.get(label) != display_hex
+        for label, display_hex in COLOR_LABEL_COLORS.items()
+    ):
+        raise ValueError("main dashboard color labels must match the color snapshot")
 
     approved_tabs = {
         UUIDS["dashboard_main"]: {

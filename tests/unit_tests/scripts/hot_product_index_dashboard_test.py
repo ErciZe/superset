@@ -1448,7 +1448,10 @@ def test_funnels_keep_the_business_grade_order(tmp_path: Path) -> None:
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
         "拉杆箱在售产品爆品指数看板"
     ]
-    assert main["metadata"]["label_colors"] == {
+    assert {
+        key: main["metadata"]["label_colors"][key]
+        for key in ("-", "A", "B", "C", "Ps", "S")
+    } == {
         "-": "#9CA3AF",
         "A": "#92D050",
         "B": "#FFE600",

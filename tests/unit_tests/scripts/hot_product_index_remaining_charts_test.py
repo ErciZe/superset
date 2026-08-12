@@ -23,18 +23,70 @@ from pathlib import Path
 from typing import Any, cast
 from zipfile import ZipFile
 
+import pytest
+
 from scripts.hot_product_index_dashboard import (
+    _load_color_map_snapshot,
+    COLOR_DISPLAY_MAPPINGS,
+    COLOR_LABEL_COLORS,
     DAILY_SOURCE_COLUMNS,
     FILTERS,
     MONTHLY_SOURCE_COLUMNS,
     UUIDS,
     write_bundle,
 )
+from scripts.validate_hot_product_color_map import validate_rows
 
 EXPECTED_MAIN_DASHBOARD_CSS = """.dt-select-page-size {
   display: none !important;
 }
 """
+
+
+def test_color_map_snapshot_has_approved_unique_contract() -> None:
+    """Checksum validation exposes the approved 39-code palette to assets."""
+    assert len(COLOR_DISPLAY_MAPPINGS) == 39
+    assert len({item["color_code"] for item in COLOR_DISPLAY_MAPPINGS}) == 39
+    assert len(COLOR_LABEL_COLORS) == 39
+    assert COLOR_LABEL_COLORS["黑（BK）"] == "#222222"
+    assert COLOR_LABEL_COLORS["白"] == "#D9D9D6"
+
+
+def test_color_map_snapshot_rejects_tampered_mappings(tmp_path: Path) -> None:
+    """A stale checksum prevents silently publishing changed display colors."""
+    snapshot = {
+        "version": "test-v1",
+        "source_table": "dim.dim_product_color_display_map",
+        "mapping_sha256": "0" * 64,
+        "mappings": [
+            {
+                "color_code": "BK",
+                "color_name_zh": "黑",
+                "display_hex": "#222222",
+            }
+        ],
+    }
+    path = tmp_path / "color-map.json"
+    path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="checksum"):
+        _load_color_map_snapshot(path)
+
+
+def test_production_color_rows_must_match_release_snapshot() -> None:
+    """Publishing fails before import when DIM values drift from the snapshot."""
+    rows = [
+        {
+            **mapping,
+            "is_active": 1,
+        }
+        for mapping in COLOR_DISPLAY_MAPPINGS
+    ]
+    validate_rows(rows)
+    rows[0]["display_hex"] = "#FFFFFF"
+
+    with pytest.raises(ValueError, match="differs"):
+        validate_rows(rows)
 
 
 def read_bundle(path: Path) -> dict[str, dict[str, Any]]:
@@ -328,6 +380,41 @@ def test_daily_dataset_exposes_trend_and_color_semantics(tmp_path: Path) -> None
     )
 
 
+def test_color_charts_use_authoritative_display_labels_and_colors(
+    tmp_path: Path,
+) -> None:
+    """Mapped colors use Chinese labels while unknown codes remain queryable."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    daily = assets_by_key(assets, "datasets", "table_name")["爆品指数-日明细"]
+    charts = assets_by_key(assets, "charts", "slice_name")
+    main = assets_by_key(assets, "dashboards", "dashboard_title")[
+        "拉杆箱在售产品爆品指数看板"
+    ]
+    columns = {item["column_name"]: item for item in daily["columns"]}
+
+    assert columns["color_display_label"]["type"] == "STRING"
+    assert columns["color_display_label"]["verbose_name"] == "展示颜色"
+    assert columns["color_display_label"]["filterable"] is True
+    assert columns["color_display_label"]["groupby"] is True
+    assert "LEFT JOIN dim.dim_product_color_display_map pcm" in daily["sql"]
+    assert "pcm.is_active = 1" in daily["sql"]
+    assert "ELSE CONCAT(pcm.color_name_zh, '（'," in daily["sql"]
+    assert "WHEN pcm.color_code IS NULL THEN" in daily["sql"]
+    assert "WHEN pcm.color_name_zh =" in daily["sql"]
+
+    for chart_name in (
+        "颜色销售比例-周",
+        "颜色销售比例-月",
+        "颜色销量分布",
+    ):
+        assert charts[chart_name]["params"]["groupby"] == ["color_display_label"]
+
+    assert main["metadata"]["label_colors"]["黑（BK）"] == "#222222"
+    assert main["metadata"]["label_colors"]["枪黑（GBK）"] == "#3B444B"
+    assert "黑（BK）" in main["metadata"]["shared_label_colors"]
+    assert "UNKNOWN" not in main["metadata"]["label_colors"]
+
+
 def test_new_daily_metrics_have_chinese_labels_and_approved_formats(
     tmp_path: Path,
 ) -> None:
@@ -566,7 +653,7 @@ def test_remaining_pie_and_color_trend_contracts(tmp_path: Path) -> None:
     charts = assets_by_key(assets, "charts", "slice_name")
     for name, groupby, legend_type in (
         ("SPU销售比例", "spu", "plain"),
-        ("颜色销量分布", "color_code", "plain"),
+        ("颜色销量分布", "color_display_label", "plain"),
     ):
         chart = charts[name]
         params = chart["params"]
@@ -617,15 +704,15 @@ def test_remaining_pie_and_color_trend_contracts(tmp_path: Path) -> None:
         params = chart["params"]
         assert chart["viz_type"] == "echarts_timeseries_line"
         assert params["x_axis"] == x_axis
-        assert params["groupby"] == ["color_code"]
+        assert params["groupby"] == ["color_display_label"]
         assert params["metrics"] == ["sales_qty_total"]
         assert params["show_value"] is True
         assert params["y_axis_format"] == ",.0f"
         assert params["series_limit"] == 1000
         assert params["row_limit"] == 100000
         query = json.loads(chart["query_context"])["queries"][0]
-        assert query["columns"] == [x_axis, "color_code"]
-        assert query["series_columns"] == ["color_code"]
+        assert query["columns"] == [x_axis, "color_display_label"]
+        assert query["series_columns"] == ["color_display_label"]
         assert query["metrics"] == ["sales_qty_total"]
         assert [item["operation"] for item in query["post_processing"]] == [
             "pivot",
