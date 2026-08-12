@@ -238,7 +238,7 @@ def test_remaining_analysis_filter_scope_includes_leaderboard_only_daily(
         )
     }
 
-    assert len(select_filters) == 12
+    assert len(select_filters) == 13
     for item in select_filters:
         assert leaderboard_uuid in item["chartsInScope"]
         target_datasets = {target["datasetUuid"] for target in item["targets"]}
@@ -1254,6 +1254,7 @@ def test_remaining_detail_native_filters_target_all_three_datasets_and_charts(
     filters = main["metadata"]["native_filter_configuration"]
     by_name = {item["name"]: item for item in filters}
     filter_names = {"国家维度": "国家", "SPU开发经理": "开发经理", "型号维度": "型号"}
+    category_filter = by_name["品类"]
 
     for name, spec in REMAINING_DETAIL_SPECS.items():
         dataset_uuid = spec["dataset_uuid"]
@@ -1266,6 +1267,10 @@ def test_remaining_detail_native_filters_target_all_three_datasets_and_charts(
         assert chart_uuid in filter_item["chartsInScope"]
         assert dataset_uuid in {
             target["datasetUuid"] for target in filter_item["targets"]
+        }
+        assert chart_uuid in category_filter["chartsInScope"]
+        assert dataset_uuid in {
+            target["datasetUuid"] for target in category_filter["targets"]
         }
 
 

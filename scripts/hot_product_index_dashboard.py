@@ -21,7 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Final, Iterable, Sequence
+from typing import Any, Final, Iterable, Mapping, Sequence
 from uuid import UUID
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
@@ -184,6 +184,7 @@ COLUMN_VERBOSE_NAMES: Final = {
     "sku": "SKU",
     "spu": "SPU",
     "company_sku": "公司SKU",
+    "category": "品类",
     "channel": "渠道",
     "product_line": "品线",
     "country": "国家",
@@ -282,6 +283,7 @@ DETAIL_METRICS: Final[dict[str, str]] = {
 }
 
 FILTERS: Final[tuple[tuple[str, str], ...]] = (
+    ("品类", "category"),
     ("渠道", "channel"),
     ("品线", "product_line"),
     ("SPU", "spu"),
@@ -295,6 +297,11 @@ FILTERS: Final[tuple[tuple[str, str], ...]] = (
     ("SKU等级", "sku_level"),
     ("实际评级", "product_level"),
 )
+
+FILTER_COLUMN_TYPES: Final[dict[str, str]] = {
+    **dict(DAILY_SOURCE_COLUMNS),
+    "category": "STRING",
+}
 
 RATING_SEMANTICS: Final[str] = (
     "实际评级取月度快照；快照缺失显示空白；计算评级为现有计算值。"
@@ -534,6 +541,32 @@ def _source_select_list(alias: str, columns: Sequence[tuple[str, str]]) -> list[
     return selected
 
 
+def _product_category_ctes() -> str:
+    """Build the unique normalized product-category mapping and quality gate."""
+    return """product_category_values AS (
+  SELECT DISTINCT
+    sku,
+    COALESCE(NULLIF(TRIM(category), ''), '-') AS category
+  FROM dim.dim_product
+  WHERE org_id = 1
+    AND sku IS NOT NULL
+),
+product_category_quality AS (
+  SELECT COUNT(*) AS category_conflict_count
+  FROM (
+    SELECT sku
+    FROM product_category_values
+    GROUP BY sku
+    HAVING COUNT(*) > 1
+  ) conflicts
+)"""
+
+
+def _category_filter_expression(alias: str) -> str:
+    """Return the normalized category expression for matched and missing SKUs."""
+    return f"COALESCE({alias}.category, '-')"
+
+
 def _daily_sql() -> str:
     """Build the eligible daily serving query with a left-closed month range."""
     selected = _source_select_list("d", DAILY_SOURCE_COLUMNS)
@@ -546,15 +579,23 @@ def _daily_sql() -> str:
             "NULLIF(TRIM(SUBSTRING_INDEX(d.color, '-', -1)), '') AS color_code",
         )
     )
+    selected.append(f"{_category_filter_expression('pc')} AS category")
     selected.extend(f"v.{name}" for name, _ in COVERAGE_COLUMNS)
     select_sql = ",\n  ".join(selected)
     return (
         _coverage_ctes("sales_date")
+        + ",\n"
+        + _product_category_ctes()
+        + "\n"
         + f"""SELECT
   {select_sql}
 FROM ads.ads_pdm_lx_hot_product_index_sku_d d
+LEFT JOIN product_category_values pc
+  ON pc.sku = d.sku
 CROSS JOIN valid v
+CROSS JOIN product_category_quality pcq
 WHERE v.coverage_complete = 1
+  AND pcq.category_conflict_count = 0
   AND d.is_eligible = 1
   AND d.sales_date >= v.selected_start_date
   AND d.sales_date < v.effective_end_exclusive_date
@@ -565,15 +606,23 @@ WHERE v.coverage_complete = 1
 def _monthly_sql() -> str:
     """Build the selected end-month serving query for eligible in-sale products."""
     selected = _source_select_list("m", MONTHLY_SOURCE_COLUMNS)
+    selected.append(f"{_category_filter_expression('pc')} AS category")
     selected.extend(f"v.{name}" for name, _ in COVERAGE_COLUMNS)
     select_sql = ",\n  ".join(selected)
     return (
         _coverage_ctes("month_start_date")
+        + ",\n"
+        + _product_category_ctes()
+        + "\n"
         + f"""SELECT
   {select_sql}
 FROM ads.ads_pdm_lx_hot_product_index_sku_m m
+LEFT JOIN product_category_values pc
+  ON pc.sku = m.sku
 CROSS JOIN valid v
+CROSS JOIN product_category_quality pcq
 WHERE v.coverage_complete = 1
+  AND pcq.category_conflict_count = 0
   AND m.is_eligible = 1
   AND m.month_start_date = DATE_TRUNC(v.selected_end_date, 'month')
 """
@@ -635,21 +684,22 @@ def _validate_detail_source_columns() -> None:
 def _native_filter_fragment(
     alias: str,
     columns: Sequence[str] | None = None,
+    column_expressions: Mapping[str, str] | None = None,
 ) -> str:
     """Render fail-fast IN/NOT IN predicates consumed inside virtual SQL."""
     filter_columns = columns or tuple(name for _, name in FILTERS)
     fragments: list[str] = []
     for column in filter_columns:
+        expression = (column_expressions or {}).get(column, f"{alias}.{column}")
         fragments.append(
             "\n".join(
                 (
                     "{% for filter in get_filters("
                     f"'{column}', remove_filter=True) %}}",
                     "  {% if filter.get('op') == 'IN' %}",
-                    f"    AND {alias}.{column} IN "
-                    "{{ filter.get('val') | where_in }}",
+                    f"    AND {expression} IN " "{{ filter.get('val') | where_in }}",
                     "  {% elif filter.get('op') == 'NOT IN' %}",
-                    f"    AND {alias}.{column} NOT IN "
+                    f"    AND {expression} NOT IN "
                     "{{ filter.get('val') | where_in }}",
                     "  {% else %}",
                     "    {{ raise('Unsupported "
@@ -665,9 +715,15 @@ def _native_filter_fragment(
 
 def _leaderboard_sql() -> str:
     """Build the watermark-anchored SPU leaderboard query."""
-    current_filter_sql = _native_filter_fragment("m")
-    previous_filter_sql = _native_filter_fragment("m")
-    return f"""WITH watermark AS (
+    category_expression = _category_filter_expression("pc")
+    current_filter_sql = _native_filter_fragment(
+        "m", column_expressions={"category": category_expression}
+    )
+    previous_filter_sql = _native_filter_fragment(
+        "m", column_expressions={"category": category_expression}
+    )
+    return f"""WITH {_product_category_ctes()},
+watermark AS (
   SELECT MAX(data_through_date) AS data_through_date
   FROM ads.ads_pdm_lx_hot_product_index_sku_d
 ),
@@ -708,8 +764,12 @@ quality AS (
 current_filtered AS (
   SELECT m.*
   FROM ads.ads_pdm_lx_hot_product_index_sku_m m
+  LEFT JOIN product_category_values pc
+    ON pc.sku = m.sku
   CROSS JOIN quality q
+  CROSS JOIN product_category_quality pcq
   WHERE q.coverage_complete = 1
+    AND pcq.category_conflict_count = 0
     AND m.ym = q.current_ym
     AND m.is_eligible = 1
 {current_filter_sql}
@@ -717,8 +777,12 @@ current_filtered AS (
 previous_filtered AS (
   SELECT m.*
   FROM ads.ads_pdm_lx_hot_product_index_sku_m m
+  LEFT JOIN product_category_values pc
+    ON pc.sku = m.sku
   CROSS JOIN quality q
+  CROSS JOIN product_category_quality pcq
   WHERE q.coverage_complete = 1
+    AND pcq.category_conflict_count = 0
     AND m.ym = q.previous_ym
     AND m.is_eligible = 1
 {previous_filter_sql}
@@ -796,12 +860,16 @@ def _detail_sql(*, grain: str) -> str:
     )
     stock_leaf_group_dimensions = ", ".join(f"p.{column}" for column in dimensions)
     stock_group_dimensions = ", ".join(stock_dimensions)
-    filter_sql = _native_filter_fragment("d")
+    filter_sql = _native_filter_fragment(
+        "d",
+        column_expressions={"category": _category_filter_expression("pc")},
+    )
     return f"""{{% set time_filter = get_time_filter(
   "sales_date", default="Current month", target_type="DATE",
   remove_filter=True
 ) %}}
-WITH selected_bounds AS (
+WITH {_product_category_ctes()},
+selected_bounds AS (
   SELECT
     CAST({{{{ time_filter.from_expr }}}} AS DATE) AS selected_start_date,
     CAST({{{{ time_filter.to_expr }}}} AS DATE) AS selected_end_exclusive_date,
@@ -909,9 +977,13 @@ quality AS (
 filtered_daily AS (
   SELECT d.*
   FROM ads.ads_pdm_lx_hot_product_index_sku_d d
+  LEFT JOIN product_category_values pc
+    ON pc.sku = d.sku
   CROSS JOIN quality b
+  CROSS JOIN product_category_quality pcq
   WHERE b.coverage_complete = 1
     AND b.lookback_complete = 1
+    AND pcq.category_conflict_count = 0
     AND d.is_eligible = 1
     AND d.sales_date >= DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
     AND d.sales_date < b.effective_end_exclusive_date
@@ -1082,8 +1154,13 @@ def _dimension_detail_sql(*, grain: str) -> str:
     rolling_join = " AND ".join(
         f"f.{dimension} <=> r.{dimension}" for dimension in dimensions
     )
-    filter_daily = _native_filter_fragment("d")
-    filter_monthly = _native_filter_fragment("m")
+    category_expression = _category_filter_expression("pc")
+    filter_daily = _native_filter_fragment(
+        "d", column_expressions={"category": category_expression}
+    )
+    filter_monthly = _native_filter_fragment(
+        "m", column_expressions={"category": category_expression}
+    )
 
     rolling_select = ",\n      ".join(
         (
@@ -1120,7 +1197,8 @@ def _dimension_detail_sql(*, grain: str) -> str:
   "sales_date", default="Current month", target_type="DATE",
   remove_filter=True
 ) %}}
-WITH selected_bounds AS (
+WITH {_product_category_ctes()},
+selected_bounds AS (
   SELECT
     CAST({{{{ time_filter.from_expr }}}} AS DATE) AS selected_start_date,
     CAST({{{{ time_filter.to_expr }}}} AS DATE) AS selected_end_exclusive_date,
@@ -1235,9 +1313,13 @@ quality AS (
 filtered_daily AS (
   SELECT d.*
   FROM ads.ads_pdm_lx_hot_product_index_sku_d d
+  LEFT JOIN product_category_values pc
+    ON pc.sku = d.sku
   CROSS JOIN quality b
+  CROSS JOIN product_category_quality pcq
   WHERE b.coverage_complete = 1
     AND b.lookback_complete = 1
+    AND pcq.category_conflict_count = 0
     AND d.is_eligible = 1
     AND d.sales_date >= DATE_SUB(b.effective_end_exclusive_date, INTERVAL 90 DAY)
     AND d.sales_date < b.effective_end_exclusive_date
@@ -1287,9 +1369,13 @@ stock_rows AS (
       m.theoretical_stock_qty,
       m.actual_stock_qty
   FROM ads.ads_pdm_lx_hot_product_index_sku_m m
+  LEFT JOIN product_category_values pc
+    ON pc.sku = m.sku
   CROSS JOIN quality b
+  CROSS JOIN product_category_quality pcq
   WHERE b.coverage_complete = 1
     AND b.lookback_complete = 1
+    AND pcq.category_conflict_count = 0
     AND m.is_eligible = 1
     AND m.ym = b.effective_end_ym
 {filter_monthly}
@@ -1634,14 +1720,13 @@ def _leaderboard_columns() -> list[Asset]:
         for name, type_, is_dttm in output_columns
     ]
     visible_names = {name for name, _, _ in output_columns}
-    source_types = dict(MONTHLY_SOURCE_COLUMNS)
     for _, filter_column in FILTERS:
         if filter_column in visible_names:
             continue
         columns.append(
             _dataset_column(
                 filter_column,
-                source_types[filter_column],
+                FILTER_COLUMN_TYPES[filter_column],
                 description="仅作为原生筛选目标，不参与排行榜展示或聚合。",
                 groupby=False,
             )
@@ -1706,14 +1791,13 @@ def _detail_columns(grain: str) -> list[Asset]:
         )
     )
     visible_names = {*names, "month_start_date"}
-    source_types = dict(DAILY_SOURCE_COLUMNS)
     for _, filter_column in FILTERS:
         if filter_column in visible_names:
             continue
         columns.append(
             _dataset_column(
                 filter_column,
-                source_types[filter_column],
+                FILTER_COLUMN_TYPES[filter_column],
                 description="仅作为原生筛选目标，不参与明细表展示或聚合。",
                 groupby=False,
             )
@@ -2042,14 +2126,13 @@ def _dimension_detail_columns(grain: str) -> list[Asset]:
             )
         )
 
-    source_types = dict(DAILY_SOURCE_COLUMNS)
     for _, filter_column in FILTERS:
         if filter_column in {column["column_name"] for column in columns}:
             continue
         columns.append(
             _dataset_column(
                 filter_column,
-                source_types[filter_column],
+                FILTER_COLUMN_TYPES[filter_column],
                 description="仅作为原生筛选目标，不参与明细表展示或聚合。",
                 groupby=False,
             )
@@ -2203,6 +2286,11 @@ def _datasets(database_uuid: str) -> AssetBundle:
     ]
     daily_columns.extend(
         [
+            _dataset_column(
+                "category",
+                "STRING",
+                description="来自dim.dim_product且org_id=1的标准品类。",
+            ),
             _dataset_column("week_start_date", "DATE", is_dttm=True),
             _dataset_column("ymd", "STRING"),
             _dataset_column("yw", "STRING"),
@@ -2221,6 +2309,11 @@ def _datasets(database_uuid: str) -> AssetBundle:
     ]
     monthly_columns.extend(
         [
+            _dataset_column(
+                "category",
+                "STRING",
+                description="来自dim.dim_product且org_id=1的标准品类。",
+            ),
             _dataset_column(
                 "spu_previous_month_sales_level_sort",
                 "BIGINT",
@@ -4131,9 +4224,10 @@ def _select_filter(
     name: str,
     column: str,
     business_chart_uuids: Sequence[str],
+    default_value: Sequence[str] | None = None,
 ) -> Asset:
     """Build a multi-target select filter shared by overview and detail charts."""
-    return {
+    filter_config: Asset = {
         "cascadeParentIds": [],
         "chartsInScope": list(business_chart_uuids),
         "controlValues": {
@@ -4184,6 +4278,14 @@ def _select_filter(
         ],
         "type": "NATIVE_FILTER",
     }
+    if default_value is not None:
+        values = list(default_value)
+        filter_config["defaultDataMask"] = {
+            "extraFormData": {"filters": [{"col": column, "op": "IN", "val": values}]},
+            "filterState": {"value": values},
+            "ownState": {},
+        }
+    return filter_config
 
 
 def _month_filter(main_chart_uuids: Sequence[str]) -> Asset:
@@ -4274,13 +4376,13 @@ def _main_metadata() -> Asset:
             name=name,
             column=column,
             business_chart_uuids=business_chart_uuids,
+            default_value=("拉杆箱",) if column == "category" else None,
         )
         for name, column in FILTERS
     }
     native_filters = [
-        *(select_filters[column] for _, column in FILTERS[:8]),
         _month_filter(month_scoped_chart_uuids),
-        *(select_filters[column] for _, column in FILTERS[8:]),
+        *(select_filters[column] for _, column in FILTERS),
     ]
     return {
         "chart_configuration": {},
@@ -4736,8 +4838,11 @@ def validate_assets(  # noqa: C901
                 f"main dashboard must contain exactly one {chart_key} chart node"
             )
     filters = main["metadata"]["native_filter_configuration"]
-    if len(filters) != 13:
-        raise ValueError("main dashboard must contain exactly 13 native filters")
+    expected_filter_names = ["年月", *(name for name, _ in FILTERS)]
+    if len(filters) != 14:
+        raise ValueError("main dashboard must contain exactly 14 native filters")
+    if [str(item["name"]) for item in filters] != expected_filter_names:
+        raise ValueError("main dashboard native filter order is invalid")
     month_filters = [
         item for item in filters if item["filterType"] == "filter_month_range"
     ]
@@ -4762,6 +4867,39 @@ def validate_assets(  # noqa: C901
         raise ValueError(
             "month-range filter must not target the SPU leaderboard dataset"
         )
+    category_filters = [item for item in filters if item["name"] == "品类"]
+    if len(category_filters) != 1:
+        raise ValueError("main dashboard must contain exactly one category filter")
+    category_filter = category_filters[0]
+    expected_category_mask = {
+        "extraFormData": {
+            "filters": [{"col": "category", "op": "IN", "val": ["拉杆箱"]}]
+        },
+        "filterState": {"value": ["拉杆箱"]},
+        "ownState": {},
+    }
+    if category_filter.get("defaultDataMask") != expected_category_mask:
+        raise ValueError("category filter must default to 拉杆箱")
+    expected_category_targets = [
+        UUIDS[key]
+        for key in (
+            "dataset_daily",
+            "dataset_monthly",
+            "dataset_spu_detail",
+            "dataset_sku_detail",
+            "dataset_country_detail",
+            "dataset_developer_detail",
+            "dataset_model_detail",
+            "dataset_spu_leaderboard",
+        )
+    ]
+    actual_category_targets = [
+        str(target["datasetUuid"]) for target in category_filter["targets"]
+    ]
+    if actual_category_targets != expected_category_targets or any(
+        target["column"]["name"] != "category" for target in category_filter["targets"]
+    ):
+        raise ValueError("category filter targets are invalid")
 
 
 def _json_bytes(asset: Asset) -> bytes:

@@ -226,8 +226,10 @@ def test_actual_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> Non
         "拉杆箱在售产品爆品指数看板"
     ]
     filters = main["metadata"]["native_filter_configuration"]
-    assert len(filters) == 13
+    assert len(filters) == 14
     assert [item["name"] for item in filters] == [
+        "年月",
+        "品类",
         "渠道",
         "品线",
         "SPU",
@@ -236,7 +238,6 @@ def test_actual_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> Non
         "SKU",
         "尺寸",
         "颜色",
-        "年月",
         "开发经理",
         "型号",
         "SKU等级",
@@ -259,6 +260,61 @@ def test_actual_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> Non
     assert {target["column"]["name"] for target in by_name["SKU等级"]["targets"]} == {
         "sku_level"
     }
+    category_filter = by_name["品类"]
+    assert category_filter["id"] == "NATIVE_FILTER-category"
+    assert category_filter["targets"] == [
+        {"column": {"name": "category"}, "datasetUuid": UUIDS[key]}
+        for key in (
+            "dataset_daily",
+            "dataset_monthly",
+            "dataset_spu_detail",
+            "dataset_sku_detail",
+            "dataset_country_detail",
+            "dataset_developer_detail",
+            "dataset_model_detail",
+            "dataset_spu_leaderboard",
+        )
+    ]
+    assert category_filter["defaultDataMask"] == {
+        "extraFormData": {
+            "filters": [{"col": "category", "op": "IN", "val": ["拉杆箱"]}]
+        },
+        "filterState": {"value": ["拉杆箱"]},
+        "ownState": {},
+    }
+    assert UUIDS["chart_status"] not in category_filter["chartsInScope"]
+
+
+def test_category_filter_uses_dim_product_across_business_datasets(
+    tmp_path: Path,
+) -> None:
+    """Every category target uses the stock DIM mapping and fails on conflicts."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    datasets = assets_by_key(assets, "datasets", "table_name")
+    relevant_names = {
+        "爆品指数-日明细",
+        "爆品指数-月末在售",
+        "爆品指数-SPU月度经营明细",
+        "爆品指数-SKU月度经营明细",
+        "爆品指数-SPU销量排行榜",
+        "爆品指数-国家经营明细",
+        "爆品指数-SPU开发经理经营明细",
+        "爆品指数-型号经营明细",
+    }
+
+    for name in relevant_names:
+        dataset = datasets[name]
+        columns = {item["column_name"]: item for item in dataset["columns"]}
+        assert columns["category"]["verbose_name"] == "品类"
+        assert columns["category"]["type"] == "STRING"
+        assert "FROM dim.dim_product" in dataset["sql"]
+        assert "org_id = 1" in dataset["sql"]
+        assert "COALESCE(NULLIF(TRIM(category), ''), '-')" in dataset["sql"]
+        assert "category_conflict_count = 0" in dataset["sql"]
+
+    status = datasets["爆品指数-数据状态"]
+    assert "category" not in {item["column_name"] for item in status["columns"]}
+    assert "dim.dim_product" not in status["sql"]
 
 
 def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
@@ -791,7 +847,7 @@ def test_virtual_datasets_fail_closed_on_incomplete_month_publication(
         sql = dataset["sql"]
         if dataset_name == "爆品指数-SPU销量排行榜":
             assert "get_time_filter(" not in sql
-            assert "WITH watermark AS (" in sql
+            assert "watermark AS (" in sql
             assert "MAX(data_through_date)" in sql
             assert "daily_quality AS (" in sql
             assert "monthly_quality AS (" in sql
@@ -1057,6 +1113,8 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
 
     filters = main["metadata"]["native_filter_configuration"]
     assert [item["name"] for item in filters] == [
+        "年月",
+        "品类",
         "渠道",
         "品线",
         "SPU",
@@ -1065,7 +1123,6 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
         "SKU",
         "尺寸",
         "颜色",
-        "年月",
         "开发经理",
         "型号",
         "SKU等级",
@@ -1235,6 +1292,32 @@ def test_validate_assets_requires_month_scope_to_exclude_only_leaderboard(
     month_filter["chartsInScope"].remove(UUIDS["chart_trend_day"])
 
     with pytest.raises(ValueError, match="month-range filter scope"):
+        validate_assets(assets, DEFAULT_DATABASE_UUID)
+
+
+def test_validate_assets_rejects_category_default_drift(tmp_path: Path) -> None:
+    """The stock category filter must continue to default to 拉杆箱."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    filters = assets["dashboards/Hot_Product_Index.yaml"]["metadata"][
+        "native_filter_configuration"
+    ]
+    category_filter = next(item for item in filters if item["name"] == "品类")
+    category_filter["defaultDataMask"]["filterState"]["value"] = ["背包"]
+
+    with pytest.raises(ValueError, match="category filter must default"):
+        validate_assets(assets, DEFAULT_DATABASE_UUID)
+
+
+def test_validate_assets_rejects_category_target_drift(tmp_path: Path) -> None:
+    """All eight business datasets must remain category-filter targets."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    filters = assets["dashboards/Hot_Product_Index.yaml"]["metadata"][
+        "native_filter_configuration"
+    ]
+    category_filter = next(item for item in filters if item["name"] == "品类")
+    category_filter["targets"].pop()
+
+    with pytest.raises(ValueError, match="category filter targets"):
         validate_assets(assets, DEFAULT_DATABASE_UUID)
 
 
