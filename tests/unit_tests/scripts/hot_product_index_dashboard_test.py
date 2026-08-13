@@ -205,7 +205,8 @@ def test_actual_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> Non
         in (spu["sql"])
     )
     assert (
-        "GROUP BY ym, spu, spu_previous_month_sales_level, product_level"
+        "GROUP BY ym, spu, spu_previous_month_sales_level, "
+        "spu_previous_month_sales_amount_usd, product_level"
         in (spu["sql"])
     )
     assert (
@@ -214,6 +215,10 @@ def test_actual_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> Non
     )
     spu_columns = {item["column_name"]: item for item in spu["columns"]}
     assert spu_columns["spu_previous_month_sales_level"]["verbose_name"] == "计算评级"
+    assert (
+        spu_columns["spu_previous_month_sales_amount_usd"]["verbose_name"]
+        == "上月全渠道销售额（美元）"
+    )
     assert spu_columns["actual_rating"]["verbose_name"] == "实际评级"
     assert spu_columns["actual_rating"]["groupby"] is True
     assert spu_columns["product_level"]["verbose_name"] == "实际评级"
@@ -348,6 +353,7 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
             "spu",
             "ym",
             "spu_previous_month_sales_level",
+            "spu_previous_month_sales_amount_usd",
             "actual_rating",
             "product_level",
             "sku_level",
@@ -370,6 +376,7 @@ def test_detail_datasets_expose_approved_leaf_fields_and_metrics(
         "spu": "SPU",
         "ym": "年月",
         "spu_previous_month_sales_level": "计算评级",
+        "spu_previous_month_sales_amount_usd": "上月全渠道销售额（美元）",
         "actual_rating": "实际评级",
         "product_level": "实际评级",
         "sku_level": "SKU等级",
@@ -558,7 +565,8 @@ def test_detail_sql_has_exact_grains_filters_and_null_safe_metrics(
     )
     detail_specs = {
         "爆品指数-SPU月度经营明细": (
-            "GROUP BY ym, spu, spu_previous_month_sales_level, product_level",
+            "GROUP BY ym, spu, spu_previous_month_sales_level, "
+            "spu_previous_month_sales_amount_usd, product_level",
         ),
         "爆品指数-SKU月度经营明细": (
             "GROUP BY ym, company_sku, sku, product_level, size, color",
@@ -604,12 +612,14 @@ def test_spu_stock_leaf_groups_once_per_spu_leaf(tmp_path: Path) -> None:
         sql.index("LEFT JOIN (\n    SELECT") : sql.index("  ) stock_leaf\n")
     ]
     assert (
-        "SELECT DISTINCT ym, spu, spu_previous_month_sales_level, product_level, sku"
+        "SELECT DISTINCT ym, spu, spu_previous_month_sales_level, "
+        "spu_previous_month_sales_amount_usd, product_level, sku"
         in stock_sql
     )
     assert "p.sku AS sku" not in stock_sql
     assert (
-        "GROUP BY p.ym, p.spu, p.spu_previous_month_sales_level, p.product_level"
+        "GROUP BY p.ym, p.spu, p.spu_previous_month_sales_level, "
+        "p.spu_previous_month_sales_amount_usd, p.product_level"
         in stock_sql
     )
     assert (
@@ -633,6 +643,7 @@ def test_detail_charts_preserve_approved_fields_pagination_and_sorting(
         "spu",
         "ym",
         "spu_previous_month_sales_level",
+        "spu_previous_month_sales_amount_usd",
         "actual_rating",
     ]
     assert sku["params"]["groupby"] == [
@@ -667,7 +678,7 @@ def test_detail_charts_preserve_approved_fields_pagination_and_sorting(
     spu_widths = spu["params"]["column_config"]
     spu_visible_columns = [*spu["params"]["groupby"], *spu["params"]["metrics"]]
     assert (
-        sum(spu_widths[column]["columnWidth"] for column in spu_visible_columns) == 1800
+        sum(spu_widths[column]["columnWidth"] for column in spu_visible_columns) == 1912
     )
     assert all(
         spu_widths[column]["columnWidth"] == 112 for column in spu["params"]["groupby"]
@@ -1505,7 +1516,7 @@ def test_validate_assets_reports_missing_main_dashboard(tmp_path: Path) -> None:
 
 
 def test_funnels_keep_the_business_grade_order(tmp_path: Path) -> None:
-    """Funnel geometry must follow Ps/S/A/B/C/- rather than metric magnitude."""
+    """Funnel geometry must follow PS/S/A/B/C/- rather than metric magnitude."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     charts = assets_by_key(assets, "charts", "slice_name")
     funnels = [chart for chart in charts.values() if chart["viz_type"] == "funnel"]
@@ -1535,13 +1546,13 @@ def test_funnels_keep_the_business_grade_order(tmp_path: Path) -> None:
     ]
     assert {
         key: main["metadata"]["label_colors"][key]
-        for key in ("-", "A", "B", "C", "Ps", "S")
+        for key in ("-", "A", "B", "C", "PS", "S")
     } == {
         "-": "#9CA3AF",
         "A": "#92D050",
         "B": "#FFE600",
         "C": "#FFC000",
-        "Ps": "#E84A5F",
+        "PS": "#E84A5F",
         "S": "#1677C8",
     }
 
@@ -1693,7 +1704,8 @@ def test_rating_descriptions_preserve_snapshot_null_semantics(tmp_path: Path) ->
     expected_phrases = (
         "实际评级取月度快照",
         "快照缺失显示空白",
-        "计算评级为现有计算值",
+        "父体 SPU 上一个自然月的全渠道",
+        "PS 为 [100万, +∞)",
     )
     assert all(phrase in guide_template for phrase in expected_phrases)
     for chart_name in ("爆品指数说明", "SPU维度", "SKU维度"):

@@ -158,6 +158,7 @@ DAILY_SOURCE_COLUMNS: Final[tuple[tuple[str, str], ...]] = (
     ("sku_level", "STRING"),
     ("product_level", "STRING"),
     ("spu_previous_month_sales_amount_cny", "DECIMAL"),
+    ("spu_previous_month_sales_amount_usd", "DECIMAL"),
     ("spu_previous_month_sales_level", "STRING"),
     ("sales_qty", "BIGINT"),
     ("sales_amount_usd", "DECIMAL"),
@@ -195,6 +196,7 @@ MONTHLY_SOURCE_COLUMNS: Final[tuple[tuple[str, str], ...]] = (
     ("sku_level", "STRING"),
     ("product_level", "STRING"),
     ("spu_previous_month_sales_amount_cny", "DECIMAL"),
+    ("spu_previous_month_sales_amount_usd", "DECIMAL"),
     ("spu_previous_month_sales_level", "STRING"),
     ("sales_qty", "BIGINT"),
     ("sales_amount_usd", "DECIMAL"),
@@ -263,6 +265,7 @@ COLUMN_VERBOSE_NAMES: Final = {
     "sku_level": "SKU等级",
     "product_level": "实际评级",
     "spu_previous_month_sales_amount_cny": "SPU上月销售额（人民币）",
+    "spu_previous_month_sales_amount_usd": "上月全渠道销售额（美元）",
     "spu_previous_month_sales_level": "计算评级",
     "sales_qty": "销量",
     "sales_amount_usd": "销售额（美元）",
@@ -371,7 +374,9 @@ FILTER_COLUMN_TYPES: Final[dict[str, str]] = {
 }
 
 RATING_SEMANTICS: Final[str] = (
-    "实际评级取月度快照；快照缺失显示空白；计算评级为现有计算值。"
+    "实际评级取月度快照；快照缺失显示空白；计算评级按父体 SPU 上一个自然月的全渠道"
+    "美元销售额计算：C 为 [0, 5万)，B 为 [5万, 10万)，A 为 [10万, 30万)，"
+    "S 为 [30万, 100万)，PS 为 [100万, +∞)；评级在目标月生效。"
 )
 
 KPI_DEFINITIONS: Final[tuple[tuple[str, str, str, str], ...]] = (
@@ -524,7 +529,13 @@ daily_quality AS (
     COALESCE(SUM(
       CASE
         WHEN d.is_eligible = 1
-          AND d.spu_previous_month_sales_level IS NULL
+          AND (
+            d.spu_previous_month_sales_level IS NULL
+            OR (
+              d.spu_previous_month_sales_level <> '-'
+              AND d.spu_previous_month_sales_amount_usd IS NULL
+            )
+          )
         THEN 1
         ELSE 0
       END
@@ -542,7 +553,13 @@ monthly_quality AS (
     COALESCE(SUM(
       CASE
         WHEN m.is_eligible = 1
-          AND m.spu_previous_month_sales_level IS NULL
+          AND (
+            m.spu_previous_month_sales_level IS NULL
+            OR (
+              m.spu_previous_month_sales_level <> '-'
+              AND m.spu_previous_month_sales_amount_usd IS NULL
+            )
+          )
         THEN 1
         ELSE 0
       END
@@ -615,7 +632,7 @@ def _source_select_list(alias: str, columns: Sequence[tuple[str, str]]) -> list[
         selected.append(f"{alias}.{name}")
     selected.append(
         f"CASE {alias}.spu_previous_month_sales_level "
-        "WHEN 'Ps' THEN 1 WHEN 'S' THEN 2 WHEN 'A' THEN 3 "
+        "WHEN 'PS' THEN 1 WHEN 'S' THEN 2 WHEN 'A' THEN 3 "
         "WHEN 'B' THEN 4 WHEN 'C' THEN 5 WHEN '-' THEN 6 ELSE 99 "
         "END AS spu_previous_month_sales_level_sort"
     )
@@ -924,6 +941,7 @@ def _detail_sql(*, grain: str) -> str:
             "ym",
             "spu",
             "spu_previous_month_sales_level",
+            "spu_previous_month_sales_amount_usd",
             "product_level",
         )
     elif grain == "sku":
@@ -999,7 +1017,13 @@ daily_quality AS (
         WHEN d.is_eligible = 1
           AND d.sales_date >= b.selected_start_date
           AND d.sales_date < b.selected_end_exclusive_date
-          AND d.spu_previous_month_sales_level IS NULL
+          AND (
+            d.spu_previous_month_sales_level IS NULL
+            OR (
+              d.spu_previous_month_sales_level <> '-'
+              AND d.spu_previous_month_sales_amount_usd IS NULL
+            )
+          )
         THEN 1
         ELSE 0
       END
@@ -1015,7 +1039,13 @@ monthly_quality AS (
     COALESCE(SUM(
       CASE
         WHEN m.is_eligible = 1
-          AND m.spu_previous_month_sales_level IS NULL
+          AND (
+            m.spu_previous_month_sales_level IS NULL
+            OR (
+              m.spu_previous_month_sales_level <> '-'
+              AND m.spu_previous_month_sales_amount_usd IS NULL
+            )
+          )
         THEN 1
         ELSE 0
       END
@@ -1332,7 +1362,13 @@ daily_quality AS (
         WHEN d.is_eligible = 1
           AND d.sales_date >= b.selected_start_date
           AND d.sales_date < b.effective_end_exclusive_date
-          AND d.spu_previous_month_sales_level IS NULL
+          AND (
+            d.spu_previous_month_sales_level IS NULL
+            OR (
+              d.spu_previous_month_sales_level <> '-'
+              AND d.spu_previous_month_sales_amount_usd IS NULL
+            )
+          )
         THEN 1
         ELSE 0
       END
@@ -1350,7 +1386,13 @@ monthly_quality AS (
     COALESCE(SUM(
       CASE
         WHEN m.is_eligible = 1
-          AND m.spu_previous_month_sales_level IS NULL
+          AND (
+            m.spu_previous_month_sales_level IS NULL
+            OR (
+              m.spu_previous_month_sales_level <> '-'
+              AND m.spu_previous_month_sales_amount_usd IS NULL
+            )
+          )
         THEN 1
         ELSE 0
       END
@@ -1688,6 +1730,7 @@ DETAIL_LABELS: Final[dict[str, str]] = {
     "sku": "SKU",
     "ym": "年月",
     "spu_previous_month_sales_level": "计算评级",
+    "spu_previous_month_sales_amount_usd": "上月全渠道销售额（美元）",
     "actual_rating": "实际评级",
     "sku_level": "SKU等级",
     "product_level": "实际评级",
@@ -1715,6 +1758,7 @@ DETAIL_DISPLAYED_COLUMNS: Final[dict[str, tuple[str, ...]]] = {
         "spu",
         "ym",
         "spu_previous_month_sales_level",
+        "spu_previous_month_sales_amount_usd",
         "actual_rating",
         "hot_product_index",
         "score",
@@ -1761,6 +1805,7 @@ DETAIL_COLUMN_TYPES: Final[dict[str, str]] = {
     "sku": "STRING",
     "ym": "STRING",
     "spu_previous_month_sales_level": "STRING",
+    "spu_previous_month_sales_amount_usd": "DECIMAL",
     "actual_rating": "STRING",
     "sku_level": "STRING",
     "product_level": "STRING",
@@ -1943,6 +1988,7 @@ DETAIL_NUMERIC_COLUMNS: Final[frozenset[str]] = frozenset(
         "hot_product_index",
         "score",
         "sales_amount_usd",
+        "spu_previous_month_sales_amount_usd",
         "sales_qty",
         "avg_daily_sales_qty",
         "gross_profit_usd",
@@ -1957,14 +2003,20 @@ DETAIL_NUMERIC_COLUMNS: Final[frozenset[str]] = frozenset(
 )
 DETAIL_RATE_COLUMNS: Final[frozenset[str]] = frozenset({"gross_margin", "return_rate"})
 DETAIL_MONEY_COLUMNS: Final[frozenset[str]] = frozenset(
-    {"sales_amount_usd", "gross_profit_usd"}
+    {"sales_amount_usd", "gross_profit_usd", "spu_previous_month_sales_amount_usd"}
 )
 DETAIL_IDENTIFIER_COLUMNS: Final[dict[str, tuple[str, ...]]] = {
     "spu": ("spu", "ym", "spu_previous_month_sales_level", "actual_rating"),
     "sku": ("company_sku", "sku"),
 }
 DETAIL_GROUPBY: Final[dict[str, tuple[str, ...]]] = {
-    "spu": ("spu", "ym", "spu_previous_month_sales_level", "actual_rating"),
+    "spu": (
+        "spu",
+        "ym",
+        "spu_previous_month_sales_level",
+        "spu_previous_month_sales_amount_usd",
+        "actual_rating",
+    ),
     "sku": ("company_sku", "sku", "ym", "product_level", "size", "color"),
 }
 DETAIL_SORT: Final[dict[str, tuple[tuple[str, bool], ...]]] = {
@@ -2397,7 +2449,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
             _dataset_column(
                 "spu_previous_month_sales_level_sort",
                 "BIGINT",
-                description="固定计算评级顺序：Ps、S、A、B、C、-。",
+                description="固定计算评级顺序：PS、S、A、B、C、-。",
             ),
             *common_business_columns,
         ]
@@ -2416,7 +2468,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
             _dataset_column(
                 "spu_previous_month_sales_level_sort",
                 "BIGINT",
-                description="固定计算评级顺序：Ps、S、A、B、C、-。",
+                description="固定计算评级顺序：PS、S、A、B、C、-。",
             ),
             *common_business_columns,
         ]
@@ -2492,7 +2544,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
             "计算评级排序",
             "MIN(spu_previous_month_sales_level_sort)",
             ",.0f",
-            "用于按 Ps、S、A、B、C、- 固定顺序排列漏斗。",
+            "用于按 PS、S、A、B、C、- 固定顺序排列漏斗。",
         ),
         _metric(
             "avg_daily_sales_qty_period",
@@ -2571,7 +2623,7 @@ def _datasets(database_uuid: str) -> AssetBundle:
             "计算评级排序",
             "MIN(spu_previous_month_sales_level_sort)",
             ",.0f",
-            "用于按 Ps、S、A、B、C、- 固定顺序排列漏斗。",
+            "用于按 PS、S、A、B、C、- 固定顺序排列漏斗。",
         ),
     )
 
@@ -3266,8 +3318,9 @@ def _guide_chart_params() -> Asset:
   </ul>
   <h2>评级</h2>
   <p>
-    实际评级取月度快照；快照缺失显示空白；计算评级为现有计算值。计算评级使用目标月
-    SPU 的上一个自然月销售等级，固定顺序为 Ps、S、A、B、C、-。
+    实际评级取月度快照；快照缺失显示空白。计算评级按父体 SPU 上一个自然月的全渠道
+    美元销售额计算：C 为 [0, 5万)，B 为 [5万, 10万)，A 为 [10万, 30万)，
+    S 为 [30万, 100万)，PS 为 [100万, +∞)；评级在目标月生效。
   </p>
   <h2>数据来源</h2>
   <p>
@@ -4583,7 +4636,7 @@ def _main_metadata() -> Asset:
             "A": "#92D050",
             "B": "#FFE600",
             "C": "#FFC000",
-            "Ps": "#E84A5F",
+            "PS": "#E84A5F",
             "S": "#1677C8",
             **COLOR_LABEL_COLORS,
         },
@@ -4591,7 +4644,7 @@ def _main_metadata() -> Asset:
         "native_filter_configuration": native_filters,
         "refresh_frequency": 0,
         "shared_label_colors": [
-            "Ps",
+            "PS",
             "S",
             "A",
             "B",
