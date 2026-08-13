@@ -451,6 +451,7 @@ def test_spu_leaderboard_uses_watermark_anchored_two_period_contract(
         assert sql.count(f"get_filters('{column}', remove_filter=True)") == 2
     assert "spu_previous_month_sales_amount_cny" not in sql
     assert "SUM(m.sales_amount_usd)" in sql
+    assert "AND d.sales_date <= a.data_through_date" in sql
     assert "GROUP BY m.spu, m.spu_previous_month_sales_level, m.product_level" in sql
     assert "COALESCE(c.product_level, '') AS actual_rating" in sql
     assert "spu_final_rating" not in sql

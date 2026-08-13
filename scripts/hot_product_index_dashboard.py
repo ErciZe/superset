@@ -839,6 +839,7 @@ daily_quality AS (
     END) AS previous_days
   FROM ads.ads_pdm_lx_hot_product_index_sku_d d CROSS JOIN anchor a
   WHERE d.ym IN (a.current_ym, a.previous_ym)
+    AND d.sales_date <= a.data_through_date
 ),
 monthly_quality AS (
   SELECT COUNT(DISTINCT m.ym) AS monthly_months
