@@ -4526,6 +4526,7 @@ def _main_metadata() -> Asset:
             name=name,
             column=column,
             business_chart_uuids=business_chart_uuids,
+            default_value=("拉杆箱",) if column == "category" else None,
         )
         for name, column in FILTERS
     }
@@ -5043,8 +5044,15 @@ def validate_assets(  # noqa: C901
     if len(category_filters) != 1:
         raise ValueError("main dashboard must contain exactly one category filter")
     category_filter = category_filters[0]
-    if "defaultDataMask" in category_filter:
-        raise ValueError("category filter must not default to one category")
+    expected_category_default = {
+        "extraFormData": {
+            "filters": [{"col": "category", "op": "IN", "val": ["拉杆箱"]}]
+        },
+        "filterState": {"value": ["拉杆箱"]},
+        "ownState": {},
+    }
+    if category_filter.get("defaultDataMask") != expected_category_default:
+        raise ValueError("category filter must default to 拉杆箱")
     expected_category_targets = [
         UUIDS[key]
         for key in (

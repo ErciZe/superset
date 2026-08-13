@@ -280,7 +280,13 @@ def test_actual_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> Non
             "dataset_spu_leaderboard",
         )
     ]
-    assert "defaultDataMask" not in category_filter
+    assert category_filter["defaultDataMask"] == {
+        "extraFormData": {
+            "filters": [{"col": "category", "op": "IN", "val": ["拉杆箱"]}]
+        },
+        "filterState": {"value": ["拉杆箱"]},
+        "ownState": {},
+    }
     assert UUIDS["chart_status"] not in category_filter["chartsInScope"]
 
 
@@ -1316,22 +1322,16 @@ def test_validate_assets_requires_month_scope_to_exclude_only_leaderboard(
         validate_assets(assets, DEFAULT_DATABASE_UUID)
 
 
-def test_validate_assets_rejects_category_default(tmp_path: Path) -> None:
-    """The all-product dashboard must not silently constrain category."""
+def test_validate_assets_requires_category_default(tmp_path: Path) -> None:
+    """The dashboard must default category selection to luggage."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     filters = assets["dashboards/Hot_Product_Index.yaml"]["metadata"][
         "native_filter_configuration"
     ]
     category_filter = next(item for item in filters if item["name"] == "品类")
-    category_filter["defaultDataMask"] = {
-        "extraFormData": {
-            "filters": [{"col": "category", "op": "IN", "val": ["拉杆箱"]}]
-        },
-        "filterState": {"value": ["拉杆箱"]},
-        "ownState": {},
-    }
+    category_filter.pop("defaultDataMask", None)
 
-    with pytest.raises(ValueError, match="category filter must not default"):
+    with pytest.raises(ValueError, match="category filter must default to 拉杆箱"):
         validate_assets(assets, DEFAULT_DATABASE_UUID)
 
 
