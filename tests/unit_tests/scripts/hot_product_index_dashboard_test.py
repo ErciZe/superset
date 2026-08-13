@@ -206,8 +206,7 @@ def test_actual_rating_has_raw_schema_and_filter_contract(tmp_path: Path) -> Non
     )
     assert (
         "GROUP BY ym, spu, spu_previous_month_sales_level, "
-        "spu_previous_month_sales_amount_usd, product_level"
-        in (spu["sql"])
+        "spu_previous_month_sales_amount_usd, product_level" in (spu["sql"])
     )
     assert (
         "GROUP BY ym, spu, spu_previous_month_sales_level, sku_level"
@@ -613,14 +612,12 @@ def test_spu_stock_leaf_groups_once_per_spu_leaf(tmp_path: Path) -> None:
     ]
     assert (
         "SELECT DISTINCT ym, spu, spu_previous_month_sales_level, "
-        "spu_previous_month_sales_amount_usd, product_level, sku"
-        in stock_sql
+        "spu_previous_month_sales_amount_usd, product_level, sku" in stock_sql
     )
     assert "p.sku AS sku" not in stock_sql
     assert (
         "GROUP BY p.ym, p.spu, p.spu_previous_month_sales_level, "
-        "p.spu_previous_month_sales_amount_usd, p.product_level"
-        in stock_sql
+        "p.spu_previous_month_sales_amount_usd, p.product_level" in stock_sql
     )
     assert (
         "GROUP BY p.ym, p.spu, p.spu_previous_month_sales_level, p.sku_level, p.sku"
@@ -1056,8 +1053,8 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
     assert sum(chart["viz_type"] == "handlebars" for chart in main_charts) == 1
     assert sum(chart["viz_type"] == "table" for chart in main_charts) == 6
     assert sum(chart["viz_type"] == "mixed_timeseries" for chart in main_charts) == 3
-    assert sum(chart["viz_type"] == "pie" for chart in main_charts) == 2
-    assert sum(chart["viz_type"] == "treemap_v2" for chart in main_charts) == 1
+    assert sum(chart["viz_type"] == "pie" for chart in main_charts) == 3
+    assert sum(chart["viz_type"] == "treemap_v2" for chart in main_charts) == 0
     assert (
         sum(chart["viz_type"] == "echarts_timeseries_line" for chart in main_charts)
         == 2
@@ -1327,9 +1324,7 @@ def test_main_dashboard_matches_finebi_title_and_table_readability_contract(
     main = assets_by_key(assets, "dashboards", "dashboard_title")[
         "在售产品爆品指数看板"
     ]
-    assert main["position"]["HEADER_ID"]["meta"]["text"] == (
-        "在售产品爆品指数看板"
-    )
+    assert main["position"]["HEADER_ID"]["meta"]["text"] == ("在售产品爆品指数看板")
     assert main["css"] == EXPECTED_MAIN_DASHBOARD_CSS
 
 
@@ -1414,9 +1409,7 @@ def test_validate_assets_rejects_funnel_cross_filter_scope_drift(
     """Both funnels must keep exactly the five detail charts in scope."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
     metadata = assets["dashboards/Hot_Product_Index.yaml"]["metadata"]
-    funnel_config = metadata["chart_configuration"][
-        UUIDS["chart_funnel_sales_amount"]
-    ]
+    funnel_config = metadata["chart_configuration"][UUIDS["chart_funnel_sales_amount"]]
     funnel_config["crossFilters"]["chartsInScope"].pop()
 
     with pytest.raises(ValueError, match="funnel cross-filter scope"):
@@ -1740,7 +1733,8 @@ def test_stock_chart_contract_removes_private_dashboard_extensions(
     assert charts["SPU维度"]["viz_type"] == "table"
     assert charts["SKU维度"]["viz_type"] == "table"
     assert charts["SPU销量排行榜"]["viz_type"] == "table"
-    assert charts["SKU销售比例"]["viz_type"] == "treemap_v2"
+    assert charts["SKU销售比例"]["viz_type"] == "pie"
+    assert charts["SKU销售比例"]["params"]["groupby"] == ["sku"]
 
     banned_keys = {
         "advanced_filter_enabled",

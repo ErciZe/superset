@@ -807,7 +807,7 @@ def _native_filter_fragment(
                     "{% for filter in get_filters("
                     f"'{column}', remove_filter=True) %}}",
                     "  {% if filter.get('op') == 'IN' %}",
-                    f"    AND {expression} IN " "{{ filter.get('val') | where_in }}",
+                    f"    AND {expression} IN {{{{ filter.get('val') | where_in }}}}",
                     "  {% elif filter.get('op') == 'NOT IN' %}",
                     f"    AND {expression} NOT IN "
                     "{{ filter.get('val') | where_in }}",
@@ -2825,12 +2825,10 @@ CHART_METRIC_LABELS: Final[dict[str, str]] = {
 
 SALES_QTY_TOTAL_EXPRESSION: Final[str] = "SUM(sales_qty)"
 SALES_AMOUNT_USD_FUNNEL_EXPRESSION: Final[str] = (
-    "CASE WHEN MIN(rating_complete) = 1 "
-    "THEN SUM(sales_amount_usd) ELSE NULL END"
+    "CASE WHEN MIN(rating_complete) = 1 THEN SUM(sales_amount_usd) ELSE NULL END"
 )
 IN_SALE_SPU_COUNT_FUNNEL_EXPRESSION: Final[str] = (
-    "CASE WHEN MIN(rating_complete) = 1 "
-    "THEN COUNT(DISTINCT spu) ELSE NULL END"
+    "CASE WHEN MIN(rating_complete) = 1 THEN COUNT(DISTINCT spu) ELSE NULL END"
 )
 
 TOOLTIP_METRIC_DEFINITIONS: Final[dict[str, tuple[str, str]]] = {
@@ -3722,9 +3720,9 @@ def _charts() -> AssetBundle:
     charts["charts/Hot_Product_Index_SKU_Sales_Ratio.yaml"] = _chart(
         slice_name="SKU销售比例",
         uuid=UUIDS["chart_sku_share"],
-        viz_type="treemap_v2",
+        viz_type="pie",
         dataset_uuid=UUIDS["dataset_daily"],
-        params=_treemap_params("sku"),
+        params=_pie_params("sku", legend_type="plain"),
         description="按SKU展示所选范围销量比例。",
     )
     charts["charts/Hot_Product_Index_SPU_Leaderboard.yaml"] = _chart(

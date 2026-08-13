@@ -669,6 +669,7 @@ def test_remaining_pie_and_color_trend_contracts(tmp_path: Path) -> None:
     charts = assets_by_key(assets, "charts", "slice_name")
     for name, groupby, legend_type in (
         ("SPU销售比例", "spu", "plain"),
+        ("SKU销售比例", "sku", "plain"),
         ("颜色销量分布", "color_display_label", "plain"),
     ):
         chart = charts[name]
@@ -703,19 +704,6 @@ def test_remaining_pie_and_color_trend_contracts(tmp_path: Path) -> None:
                 },
             }
         ]
-
-    sku = charts["SKU销售比例"]
-    sku_params = sku["params"]
-    assert sku["viz_type"] == "treemap_v2"
-    assert sku_params["groupby"] == ["sku"]
-    assert sku_params["metric"]["label"] == "销量"
-    assert sku_params["row_limit"] == 1000
-    assert sku_params["number_format"] == ",.0f"
-    sku_query = json.loads(sku["query_context"])["queries"][0]
-    assert sku_query["columns"] == ["sku"]
-    assert sku_query["metrics"] == [sku_params["metric"]]
-    assert sku_query["orderby"] == [[sku_params["metric"], False]]
-    assert sku_query["post_processing"] == []
 
     for name, x_axis in (("颜色销售比例-周", "yw"), ("颜色销售比例-月", "ym")):
         chart = charts[name]
