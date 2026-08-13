@@ -4517,6 +4517,33 @@ def _main_metadata() -> Asset:
     ]
     leaderboard_uuid = UUIDS["chart_spu_leaderboard"]
     main_chart_uuids = [UUIDS["chart_status"], *business_chart_uuids]
+    detail_chart_uuids = sorted(
+        UUIDS[key]
+        for key in (
+            "chart_spu_detail",
+            "chart_sku_detail",
+            "chart_country_detail",
+            "chart_developer_detail",
+            "chart_model_detail",
+        )
+    )
+    non_detail_chart_uuids = sorted(set(main_chart_uuids) - set(detail_chart_uuids))
+    funnel_chart_configuration = {
+        funnel_uuid: {
+            "id": funnel_uuid,
+            "crossFilters": {
+                "chartsInScope": detail_chart_uuids,
+                "scope": {
+                    "excluded": non_detail_chart_uuids,
+                    "rootPath": ["ROOT_ID"],
+                },
+            },
+        }
+        for funnel_uuid in (
+            UUIDS["chart_funnel_sales_amount"],
+            UUIDS["chart_funnel_spu_count"],
+        )
+    }
     month_scoped_chart_uuids = [
         UUIDS["chart_status"],
         *(uuid for uuid in business_chart_uuids if uuid != leaderboard_uuid),
@@ -4535,18 +4562,21 @@ def _main_metadata() -> Asset:
         *(select_filters[column] for _, column in FILTERS),
     ]
     return {
-        "chart_configuration": {},
+        "chart_configuration": funnel_chart_configuration,
         "chart_customization_config": [],
         "color_scheme": "supersetColors",
         "color_scheme_domain": [],
-        "cross_filters_enabled": False,
+        "cross_filters_enabled": True,
         "default_filters": "{}",
         "expanded_slices": {},
         "filter_bar_orientation": "HORIZONTAL",
         "filter_scopes": {},
         "global_chart_configuration": {
-            "chartsInScope": main_chart_uuids,
-            "scope": {"excluded": [], "rootPath": ["ROOT_ID"]},
+            "chartsInScope": [],
+            "scope": {
+                "excluded": sorted(main_chart_uuids),
+                "rootPath": ["ROOT_ID"],
+            },
         },
         "label_colors": {
             "-": "#9CA3AF",
@@ -5010,6 +5040,56 @@ def validate_assets(  # noqa: C901
             raise ValueError(
                 f"main dashboard must contain exactly one {chart_key} chart node"
             )
+    detail_cross_filter_uuids = sorted(
+        UUIDS[key]
+        for key in (
+            "chart_spu_detail",
+            "chart_sku_detail",
+            "chart_country_detail",
+            "chart_developer_detail",
+            "chart_model_detail",
+        )
+    )
+    expected_cross_filter_scope = {
+        "chartsInScope": detail_cross_filter_uuids,
+        "scope": {
+            "excluded": sorted(
+                set(main_chart_node_uuids) - set(detail_cross_filter_uuids)
+            ),
+            "rootPath": ["ROOT_ID"],
+        },
+    }
+    chart_configuration = main["metadata"].get("chart_configuration")
+    funnel_uuids = {
+        UUIDS["chart_funnel_sales_amount"],
+        UUIDS["chart_funnel_spu_count"],
+    }
+    if (
+        main["metadata"].get("cross_filters_enabled") is not True
+        or not isinstance(chart_configuration, dict)
+        or set(chart_configuration) != funnel_uuids
+        or any(
+            config
+            != {
+                "id": funnel_uuid,
+                "crossFilters": expected_cross_filter_scope,
+            }
+            for funnel_uuid, config in chart_configuration.items()
+        )
+    ):
+        raise ValueError("funnel cross-filter scope must target five detail charts")
+    expected_global_cross_filter = {
+        "chartsInScope": [],
+        "scope": {
+            "excluded": sorted(main_chart_node_uuids),
+            "rootPath": ["ROOT_ID"],
+        },
+    }
+    if (
+        main["metadata"].get("global_chart_configuration")
+        != expected_global_cross_filter
+    ):
+        raise ValueError("non-funnel cross-filter scope must remain empty")
     filters = main["metadata"]["native_filter_configuration"]
     expected_filter_names = ["年月", *(name for name, _ in FILTERS)]
     if len(filters) != 14:

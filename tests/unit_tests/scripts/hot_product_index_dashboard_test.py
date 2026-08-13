@@ -1211,6 +1211,55 @@ def test_main_dashboard_matches_approved_scope_and_filters(tmp_path: Path) -> No
     assert status_uuid in month_filter["chartsInScope"]
 
 
+def test_only_funnels_cross_filter_the_five_detail_charts(tmp_path: Path) -> None:
+    """Funnel clicks filter detail tables without activating other chart links."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    main = assets_by_key(assets, "dashboards", "dashboard_title")[
+        "在售产品爆品指数看板"
+    ]
+    metadata = main["metadata"]
+    main_chart_uuids = {
+        node["meta"]["uuid"]
+        for node in main["position"].values()
+        if isinstance(node, dict) and node.get("type") == "CHART"
+    }
+    detail_chart_uuids = {
+        UUIDS[key]
+        for key in (
+            "chart_spu_detail",
+            "chart_sku_detail",
+            "chart_country_detail",
+            "chart_developer_detail",
+            "chart_model_detail",
+        )
+    }
+
+    assert metadata["cross_filters_enabled"] is True
+    assert metadata["global_chart_configuration"] == {
+        "chartsInScope": [],
+        "scope": {
+            "excluded": sorted(main_chart_uuids),
+            "rootPath": ["ROOT_ID"],
+        },
+    }
+    chart_configuration = metadata["chart_configuration"]
+    assert set(chart_configuration) == {
+        UUIDS["chart_funnel_sales_amount"],
+        UUIDS["chart_funnel_spu_count"],
+    }
+    for funnel_uuid, config in chart_configuration.items():
+        assert config == {
+            "id": funnel_uuid,
+            "crossFilters": {
+                "chartsInScope": sorted(detail_chart_uuids),
+                "scope": {
+                    "excluded": sorted(main_chart_uuids - detail_chart_uuids),
+                    "rootPath": ["ROOT_ID"],
+                },
+            },
+        }
+
+
 def test_detail_css_is_scoped_to_table_components_and_tabs(tmp_path: Path) -> None:
     """The main dashboard hides only the table page-size selector."""
     assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
@@ -1345,6 +1394,21 @@ def test_validate_assets_rejects_category_target_drift(tmp_path: Path) -> None:
     category_filter["targets"].pop()
 
     with pytest.raises(ValueError, match="category filter targets"):
+        validate_assets(assets, DEFAULT_DATABASE_UUID)
+
+
+def test_validate_assets_rejects_funnel_cross_filter_scope_drift(
+    tmp_path: Path,
+) -> None:
+    """Both funnels must keep exactly the five detail charts in scope."""
+    assets = read_bundle(write_bundle(tmp_path / "assets.zip"))
+    metadata = assets["dashboards/Hot_Product_Index.yaml"]["metadata"]
+    funnel_config = metadata["chart_configuration"][
+        UUIDS["chart_funnel_sales_amount"]
+    ]
+    funnel_config["crossFilters"]["chartsInScope"].pop()
+
+    with pytest.raises(ValueError, match="funnel cross-filter scope"):
         validate_assets(assets, DEFAULT_DATABASE_UUID)
 
 
