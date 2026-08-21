@@ -17,6 +17,7 @@
  * under the License.
  */
 import { render } from '@superset-ui/core/spec';
+import { GenericDataType } from '@apache-superset/core/common';
 import TableChart from '../../src/table/AgGridTableChart';
 import type { AgGridTableProps } from '../../src/table/AgGridTable';
 
@@ -39,7 +40,13 @@ jest.mock('../../src/table/utils/useColDefs', () => ({
 const baseProps = {
   height: 400,
   width: 1000,
-  columns: [{ key: 'platform_order_name', label: '平台订单号' }],
+  columns: [
+    {
+      key: 'platform_order_name',
+      label: '平台订单号',
+      dataType: GenericDataType.String,
+    },
+  ],
   data: [],
   includeSearch: false,
   allowRearrangeColumns: false,
@@ -51,6 +58,8 @@ const baseProps = {
   percentMetrics: [],
   hasServerPageLengthChanged: false,
   serverPageLength: 10,
+  hasPageLength: false,
+  timeGrain: undefined,
   emitCrossFilters: false,
   filters: {},
   isRawRecords: false,
@@ -62,6 +71,10 @@ const baseProps = {
   showTotals: false,
   columnColorFormatters: [],
   basicColorFormatters: [],
+  formData: {
+    datasource: '1__table',
+    viz_type: 'ag_grid_table',
+  },
 };
 
 test('marks only the WHM order detail chart for scoped advanced filter styles', () => {

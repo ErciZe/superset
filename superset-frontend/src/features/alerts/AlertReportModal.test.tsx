@@ -120,6 +120,7 @@ const FETCH_CHART_ENDPOINT = 'glob:*/api/v1/report/2';
 const FETCH_REPORT_WITH_FILTERS_ENDPOINT = 'glob:*/api/v1/report/3';
 const FETCH_REPORT_NO_FILTER_NAME_ENDPOINT = 'glob:*/api/v1/report/4';
 const FETCH_REPORT_OVERWRITE_ENDPOINT = 'glob:*/api/v1/report/5';
+const FETCH_REPORT_MONTH_RANGE_ENDPOINT = 'glob:*/api/v1/report/6';
 
 fetchMock.get(
   FETCH_DASHBOARD_ENDPOINT,
@@ -188,6 +189,29 @@ fetchMock.get(FETCH_REPORT_OVERWRITE_ENDPOINT, {
             columnName: 'country',
             columnLabel: 'Country',
             filterValues: ['USA'],
+          },
+        ],
+      },
+    },
+  },
+});
+fetchMock.get(FETCH_REPORT_MONTH_RANGE_ENDPOINT, {
+  result: {
+    ...generateMockPayload(true),
+    id: 6,
+    type: 'Report',
+    extra: {
+      dashboard: {
+        nativeFilters: [
+          {
+            nativeFilterId: 'NATIVE_FILTER-MONTH',
+            filterName: 'Month Range Filter',
+            filterType: 'filter_month_range',
+            columnName: 'Month Range Filter',
+            columnLabel: 'Month Range Filter',
+            filterValues: ['Current month'],
+            monthSelectionMode: 'range',
+            monthTimeZone: 'Asia/Shanghai',
           },
         ],
       },
@@ -1007,6 +1031,28 @@ const tabsWithFilters = {
           filterType: 'filter_select',
           targets: [{ column: { name: 'city' }, datasetId: 2 }],
           adhoc_filters: [],
+        },
+      ],
+    },
+  },
+};
+
+const tabsWithMonthRangeFilter = {
+  result: {
+    all_tabs: {},
+    tab_tree: [],
+    native_filters: {
+      all: [
+        {
+          id: 'NATIVE_FILTER-MONTH',
+          name: 'Month Range Filter',
+          filterType: 'filter_month_range',
+          targets: [],
+          adhoc_filters: [],
+          controlValues: {
+            monthSelectionMode: 'range',
+            monthTimeZone: 'Asia/Shanghai',
+          },
         },
       ],
     },
@@ -2508,6 +2554,82 @@ test('selecting filter triggers chart data request with correct params', async (
 
   mockGetChartDataRequest.mockReset();
 });
+
+test('month range dashboard filters render as time ranges without querying values', async () => {
+  mockGetChartDataRequest.mockReset();
+  fetchMock.removeRoute(tabsEndpoint);
+  fetchMock.get(tabsEndpoint, tabsWithMonthRangeFilter, {
+    name: tabsEndpoint,
+  });
+
+  render(<AlertReportModal {...generateMockedProps(true, true)} />, {
+    useRedux: true,
+  });
+
+  userEvent.click(screen.getByTestId('contents-panel'));
+  await screen.findByText(/test dashboard/i);
+  const filterDropdown = await screen.findByRole('combobox', {
+    name: /select filter/i,
+  });
+
+  await comboboxSelect(filterDropdown, 'Month Range Filter', () =>
+    document.querySelector(
+      '.ant-select-selection-item[title="Month Range Filter"]',
+    ),
+  );
+
+  await waitFor(() => {
+    expect(
+      screen.queryByRole('combobox', { name: /select value/i }),
+    ).not.toBeInTheDocument();
+  });
+  expect(screen.getByTestId('alert-month-range-picker')).toBeInTheDocument();
+  expect(screen.getAllByPlaceholderText('Month')).toHaveLength(2);
+  expect(mockGetChartDataRequest).not.toHaveBeenCalled();
+});
+
+test('saving a report preserves rolling month range metadata', async () => {
+  fetchMock.removeRoute(tabsEndpoint);
+  fetchMock.get(tabsEndpoint, tabsWithMonthRangeFilter, {
+    name: tabsEndpoint,
+  });
+  fetchMock.put(
+    'glob:*/api/v1/report/6',
+    { id: 6, result: {} },
+    { name: 'put-month-range-report' },
+  );
+  const props = {
+    ...generateMockedProps(true, true),
+    alert: { ...validAlert, id: 6 },
+  };
+
+  render(<AlertReportModal {...props} />, { useRedux: true });
+  userEvent.click(screen.getByTestId('contents-panel'));
+  await screen.findByTestId('alert-month-range-picker');
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: /save/i })).toBeEnabled();
+  });
+  userEvent.click(screen.getByRole('button', { name: /save/i }));
+
+  await waitFor(() => {
+    expect(
+      fetchMock.callHistory.calls('put-month-range-report'),
+    ).not.toHaveLength(0);
+  });
+  const calls = fetchMock.callHistory.calls('put-month-range-report');
+  const body = JSON.parse(calls[calls.length - 1].options.body as string);
+  expect(body.extra.dashboard.nativeFilters).toEqual([
+    expect.objectContaining({
+      filterType: 'filter_month_range',
+      filterValues: ['Current month'],
+      monthSelectionMode: 'range',
+      monthTimeZone: 'Asia/Shanghai',
+    }),
+  ]);
+
+  fetchMock.removeRoute('put-month-range-report');
+  fetchMock.removeRoute(tabsEndpoint);
+}, 30000);
 
 test('selected filter excluded from other row dropdowns', async () => {
   mockGetChartDataRequest.mockReset();

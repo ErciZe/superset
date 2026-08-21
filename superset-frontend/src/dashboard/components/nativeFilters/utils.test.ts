@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { Behavior } from '@superset-ui/core';
+import { Behavior, NativeFilterType } from '@superset-ui/core';
 import { DashboardLayout } from 'src/dashboard/types';
 import { CHART_TYPE } from 'src/dashboard/util/componentTypes';
 import {
@@ -91,7 +91,7 @@ test('getFormData should include persisted time_grains for time grain filters', 
     dashboardId: 10,
     id: 'NATIVE_FILTER-1',
     filterType: 'filter_timegrain',
-    type: 'NATIVE_FILTER' as any,
+    type: NativeFilterType.NativeFilter,
     controlValues: {},
     defaultDataMask: {},
     datasetId: 11,
@@ -99,4 +99,19 @@ test('getFormData should include persisted time_grains for time grain filters', 
   });
 
   expect((formData as any).time_grains).toEqual(['PT1H', 'P1D', 'P1W']);
+});
+
+test('getFormData passes monthTimeZone through native filter control values', () => {
+  const formData = getFormData({
+    dashboardId: 10,
+    id: 'NATIVE_FILTER-MONTH',
+    filterType: 'filter_month_range',
+    type: NativeFilterType.NativeFilter,
+    controlValues: { monthTimeZone: 'Asia/Shanghai' },
+    defaultDataMask: {},
+  });
+
+  expect(formData).toEqual(
+    expect.objectContaining({ monthTimeZone: 'Asia/Shanghai' }),
+  );
 });

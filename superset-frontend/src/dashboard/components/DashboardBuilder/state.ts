@@ -19,6 +19,7 @@
 import { useSelector, useDispatch } from 'react-redux';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { URL_PARAMS } from 'src/constants';
+import { isTimeRangeFilterType } from 'src/filters/utils';
 import { getUrlParam } from 'src/utils/urlUtils';
 import { RootState } from 'src/dashboard/types';
 import { isFeatureEnabled, FeatureFlag } from '@superset-ui/core';
@@ -28,6 +29,16 @@ import {
 } from '../nativeFilters/FilterBar/state';
 import { useChartCustomizationFromRedux } from '../nativeFilters/state';
 import { toggleNativeFiltersBar } from '../../actions/dashboardState';
+
+export function isRequiredFirstFilter<T extends object>(
+  filter: T,
+): filter is T & { requiredFirst: true; filterType?: string } {
+  return (
+    'requiredFirst' in filter &&
+    filter.requiredFirst === true &&
+    !('filterType' in filter && isTimeRangeFilterType(filter.filterType))
+  );
+}
 
 export const useNativeFilters = () => {
   const dispatch = useDispatch();
@@ -56,13 +67,7 @@ export const useNativeFilters = () => {
         (filterValues.length !== 0 || chartCustomizations.length !== 0)));
 
   const requiredFirstFilter = useMemo(
-    () =>
-      filterValues.filter(
-        filter =>
-          'requiredFirst' in filter &&
-          filter.requiredFirst === true &&
-          filter.filterType !== 'filter_time',
-      ),
+    () => filterValues.filter(isRequiredFirstFilter),
     [filterValues],
   );
   const dataMask = useNativeFiltersDataMask();

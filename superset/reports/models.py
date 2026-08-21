@@ -17,7 +17,9 @@
 """A collection of ORM sqlalchemy models for Superset"""
 
 import logging
+from datetime import datetime
 from typing import Any, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import rison
 from cron_descriptor import get_description
@@ -51,6 +53,126 @@ from superset.utils.core import MediumText
 logger = logging.getLogger(__name__)
 
 metadata = Model.metadata  # pylint: disable=no-member
+
+_MONTH_RANGE_FORMAT = "%Y-%m-%dT%H:%M:%S"
+_MONTH_RANGE_SEPARATOR = " : "
+_MONTH_SELECTION_MODES = {"range", "single"}
+
+
+def _next_month(month: datetime) -> datetime:
+    """Return the first day of the calendar month after ``month``."""
+    if month.month == 12:
+        return month.replace(year=month.year + 1, month=1)
+    return month.replace(month=month.month + 1)
+
+
+def _parse_month_bound(value: str) -> datetime:
+    """Parse an exact midnight, first-of-month range boundary."""
+    try:
+        bound = datetime.strptime(value, _MONTH_RANGE_FORMAT)
+    except ValueError as ex:
+        raise ValueError(f"expected timestamp format {_MONTH_RANGE_FORMAT}") from ex
+
+    if bound.strftime(_MONTH_RANGE_FORMAT) != value:
+        raise ValueError(f"expected timestamp format {_MONTH_RANGE_FORMAT}")
+    if bound.day != 1 or any((bound.hour, bound.minute, bound.second)):
+        raise ValueError("month bounds must be the first day at midnight")
+    return bound
+
+
+def _get_month_time_zone(value: Optional[str]) -> ZoneInfo:
+    """Return the configured time zone required by a relative month range."""
+    if value is None:
+        raise ValueError("monthTimeZone is required for relative month ranges")
+    if not isinstance(value, str):
+        raise ValueError("monthTimeZone must be a string")
+    try:
+        return ZoneInfo(value)
+    except (ValueError, ZoneInfoNotFoundError) as ex:
+        raise ValueError(f"invalid monthTimeZone '{value}'") from ex
+
+
+def _normalize_month_range(
+    value: Optional[str],
+    month_time_zone: Optional[str],
+    month_selection_mode: Optional[str],
+) -> str:
+    """Return a validated left-closed, right-open whole-month range."""
+    selection_mode = "range" if month_selection_mode is None else month_selection_mode
+    if (
+        not isinstance(selection_mode, str)
+        or selection_mode not in _MONTH_SELECTION_MODES
+    ):
+        raise ValueError(f"unsupported monthSelectionMode '{selection_mode}'")
+
+    if value == "Current month":
+        local_now = datetime.now(_get_month_time_zone(month_time_zone))
+        start = datetime(local_now.year, local_now.month, 1)
+        end = _next_month(start)
+    elif value == "Current year":
+        local_now = datetime.now(_get_month_time_zone(month_time_zone))
+        start = datetime(local_now.year, 1, 1)
+        end = datetime(local_now.year + 1, 1, 1)
+    elif isinstance(value, str):
+        bounds = value.split(_MONTH_RANGE_SEPARATOR)
+        if len(bounds) != 2:
+            raise ValueError("expected a concrete month range or exact relative value")
+        start, end = (_parse_month_bound(bound) for bound in bounds)
+    else:
+        raise ValueError("month range value must be a string")
+
+    if start >= end:
+        raise ValueError("month range start must be before its end")
+    if selection_mode == "single" and end != _next_month(start):
+        raise ValueError("single month mode accepts exactly one month")
+
+    return (
+        f"{start.strftime(_MONTH_RANGE_FORMAT)}"
+        f"{_MONTH_RANGE_SEPARATOR}"
+        f"{end.strftime(_MONTH_RANGE_FORMAT)}"
+    )
+
+
+def _generate_month_range_filter(
+    native_filter_id: str,
+    values: list[Optional[str]],
+    month_time_zone: Optional[str],
+    month_selection_mode: Optional[str],
+) -> tuple[dict[str, Any], Optional[str]]:
+    """Generate a native filter config from one valid month range value."""
+    if len(values) != 1:
+        warning_msg = (
+            "Skipping filter_month_range with invalid filterValues "
+            f"(filter_id: {native_filter_id}): expected exactly one value"
+        )
+        logger.warning(warning_msg)
+        return {}, warning_msg
+
+    try:
+        normalized_value = _normalize_month_range(
+            values[0],
+            month_time_zone,
+            month_selection_mode,
+        )
+    except ValueError as ex:
+        warning_msg = (
+            "Skipping filter_month_range with invalid filterValues "
+            f"(filter_id: {native_filter_id}): {ex}"
+        )
+        logger.warning(warning_msg)
+        return {}, warning_msg
+
+    return (
+        {
+            native_filter_id or "": {
+                "id": native_filter_id or "",
+                "extraFormData": {"time_range": normalized_value},
+                "filterState": {"value": normalized_value},
+                "ownState": {},
+            }
+        },
+        None,
+    )
 
 
 class ReportScheduleType(StrEnum):
@@ -220,6 +342,8 @@ class ReportSchedule(AuditMixinNullable, ExtraJSONMixin, Model):
                     filter_type,
                     native_filter.get("columnName") or "",
                     native_filter.get("filterValues") or [],
+                    month_time_zone=native_filter.get("monthTimeZone"),
+                    month_selection_mode=native_filter.get("monthSelectionMode"),
                 )
                 if filter_warning:
                     warnings.append(filter_warning)
@@ -235,6 +359,9 @@ class ReportSchedule(AuditMixinNullable, ExtraJSONMixin, Model):
         filter_type: str,
         column_name: str,
         values: list[Optional[str]],
+        *,
+        month_time_zone: Optional[str] = None,
+        month_selection_mode: Optional[str] = None,
     ) -> tuple[dict[str, Any], Optional[str]]:
         """
         Generate a native filter configuration for the given filter type.
@@ -246,6 +373,7 @@ class ReportSchedule(AuditMixinNullable, ExtraJSONMixin, Model):
         # Filter types that require at least one value
         requires_values = (
             "filter_time",
+            "filter_month_range",
             "filter_timegrain",
             "filter_timecolumn",
             "filter_range",
@@ -257,6 +385,14 @@ class ReportSchedule(AuditMixinNullable, ExtraJSONMixin, Model):
             )
             logger.warning(warning_msg)
             return {}, warning_msg
+
+        if filter_type == "filter_month_range":
+            return _generate_month_range_filter(
+                native_filter_id,
+                values,
+                month_time_zone,
+                month_selection_mode,
+            )
 
         if filter_type == "filter_time":
             return (

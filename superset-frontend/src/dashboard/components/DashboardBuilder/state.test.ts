@@ -23,14 +23,7 @@
  * This tests the core logic that determines whether to block dashboard rendering
  * based on the "Select first filter value by default" (requiredFirst) setting.
  */
-
-const requiredFirstFilterPredicate = (filter: {
-  requiredFirst?: boolean;
-  filterType?: string;
-}) =>
-  'requiredFirst' in filter &&
-  filter.requiredFirst === true &&
-  filter.filterType !== 'filter_time';
+import { isRequiredFirstFilter as requiredFirstFilterPredicate } from './state';
 
 /**
  * Unit test for the missingInitialFilters logic.
@@ -74,6 +67,13 @@ test('requiredFirstFilterPredicate excludes time filters even when requiredFirst
     requiredFirstFilterPredicate({
       requiredFirst: true,
       filterType: 'filter_time',
+    }),
+  ).toBe(false);
+
+  expect(
+    requiredFirstFilterPredicate({
+      requiredFirst: true,
+      filterType: 'filter_month_range',
     }),
   ).toBe(false);
 
@@ -229,6 +229,12 @@ test('only requiredFirst:true filters without values block dashboard', () => {
       requiredFirst: true,
       filterType: 'filter_time', // Excluded
     },
+    {
+      id: 'filter-5',
+      name: 'Month Range Filter',
+      requiredFirst: true,
+      filterType: 'filter_month_range', // Excluded
+    },
   ];
 
   const dataMask = {
@@ -236,10 +242,11 @@ test('only requiredFirst:true filters without values block dashboard', () => {
     'filter-2': { filterState: { value: undefined } },
     'filter-3': { filterState: { value: undefined } },
     'filter-4': { filterState: { value: undefined } },
+    'filter-5': { filterState: { value: undefined } },
   };
 
   const requiredFirstFilters = filters.filter(requiredFirstFilterPredicate);
-  // Only filter-1 and filter-2 should be included (not filter-3 or filter-4)
+  // Only filter-1 and filter-2 should be included.
   expect(requiredFirstFilters.map(f => f.id)).toEqual(['filter-1', 'filter-2']);
 
   const missingInitialFilters = requiredFirstFilters

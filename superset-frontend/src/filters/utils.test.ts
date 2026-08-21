@@ -28,6 +28,7 @@ import {
   getDataRecordFormatter,
   getRangeExtraFormData,
   getSelectExtraFormData,
+  isTimeRangeFilterType,
 } from 'src/filters/utils';
 import { FALSE_STRING, NULL_STRING, TRUE_STRING } from 'src/utils/common';
 
@@ -220,4 +221,15 @@ describe('Filter utils', () => {
       ).toEqual('1970-01-01 00:00:00');
     });
   });
+});
+
+test('isTimeRangeFilterType recognizes dashboard time range filters', () => {
+  expect(isTimeRangeFilterType('filter_time')).toBe(true);
+  expect(isTimeRangeFilterType('filter_month_range')).toBe(true);
+});
+
+test('isTimeRangeFilterType rejects other and missing filter types', () => {
+  expect(isTimeRangeFilterType('filter_timegrain')).toBe(false);
+  expect(isTimeRangeFilterType('filter_select')).toBe(false);
+  expect(isTimeRangeFilterType(undefined)).toBe(false);
 });

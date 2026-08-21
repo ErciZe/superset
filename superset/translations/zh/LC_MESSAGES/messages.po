@@ -7550,6 +7550,9 @@ msgstr "填充"
 msgid "Filter"
 msgstr "过滤器"
 
+msgid "Filter a dashboard by a single month or month range"
+msgstr "按单月或月份范围筛选仪表板"
+
 #, fuzzy
 msgid "Filter Configuration"
 msgstr "过滤配置"
@@ -10030,6 +10033,15 @@ msgstr "星期一"
 msgid "Month"
 msgstr "月"
 
+msgid "Month range"
+msgstr "月份范围"
+
+msgid "Month range filter"
+msgstr "月份范围筛选器"
+
+msgid "Month selection mode"
+msgstr "月份选择模式"
+
 #, python-format
 msgid "Months %s"
 msgstr "月%s"
@@ -11670,6 +11682,9 @@ msgstr "上一周"
 
 msgid "Previous year"
 msgstr "上一年"
+
+msgid "Choose whether this filter accepts one month or a month range."
+msgstr "选择此筛选器仅支持单月，或支持月度范围。"
 
 msgid "Primary"
 msgstr "主要"

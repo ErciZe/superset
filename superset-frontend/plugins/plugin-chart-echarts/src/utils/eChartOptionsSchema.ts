@@ -225,6 +225,7 @@ export const legendSchema = z.object({
   selectedMode: z
     .union([z.boolean(), z.enum(['single', 'multiple', 'series'])])
     .optional(),
+  selected: z.record(z.string(), z.boolean()).optional(),
   inactiveColor: colorSchema.optional(),
   inactiveBorderColor: colorSchema.optional(),
   inactiveBorderWidth: z.number().optional(),

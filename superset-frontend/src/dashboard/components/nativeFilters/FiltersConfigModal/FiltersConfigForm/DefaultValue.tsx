@@ -27,6 +27,7 @@ import {
 import { Loading, type FormInstance } from '@superset-ui/core/components';
 import { NativeFiltersForm } from '../types';
 import { getFormData } from '../../utils';
+import { isTimeRangeFilterType } from 'src/filters/utils';
 import {
   INPUT_HEIGHT,
   INPUT_WIDTH,
@@ -55,7 +56,7 @@ const DefaultValue: FC<DefaultValueProps> = ({
   const formFilter = form.getFieldValue('filters')?.[filterId];
   const queriesData = formFilter?.defaultValueQueriesData;
   const chartType = formFilter?.filterType;
-  const isTimeFilter = formFilter?.filterType === 'filter_time';
+  const isTimeFilter = isTimeRangeFilterType(formFilter?.filterType);
   const hasQueriesData = queriesData && queriesData.length > 0;
   const emptyQueriesData = useMemo(() => [{ data: [{}] }], []);
   const loading = hasDataset && queriesData === null;

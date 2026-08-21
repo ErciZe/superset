@@ -52,16 +52,20 @@ import { DEFAULT_LEGEND_FORM_DATA, OpacityEnum } from '../constants';
 import { getDefaultTooltip } from '../utils/tooltip';
 import { Refs } from '../types';
 
-const percentFormatter = getNumberFormatter(NumberFormats.PERCENT_2_POINT);
+const defaultPercentFormatter = getNumberFormatter(
+  NumberFormats.PERCENT_2_POINT,
+);
 
 export function parseParams({
   params,
   numberFormatter,
+  percentFormatter = defaultPercentFormatter,
   percentCalculationType = PercentCalcType.FirstStep,
   sanitizeName = false,
 }: {
   params: Pick<CallbackDataParams, 'name' | 'value' | 'percent' | 'data'>;
   numberFormatter: ValueFormatter;
+  percentFormatter?: ValueFormatter;
   percentCalculationType?: PercentCalcType;
   sanitizeName?: boolean;
 }) {
@@ -109,7 +113,10 @@ export default function transformProps(
     sort,
     gap,
     labelLine,
+    labelTemplate,
     labelType,
+    labelValueDivisor,
+    labelValueSuffix,
     tooltipLabelType,
     legendMargin,
     legendOrientation,
@@ -117,6 +124,7 @@ export default function transformProps(
     legendSort,
     metric = '',
     numberFormat,
+    percentFormat,
     currencyFormat,
     showLabels,
     inContextMenu,
@@ -165,6 +173,11 @@ export default function transformProps(
     currencyCodeColumn,
     detectedCurrency,
   );
+  const percentFormatter = getNumberFormatter(percentFormat);
+  const metricDisplayName =
+    datasource.metrics?.find(
+      metricItem => metricItem.metric_name === metricLabel,
+    )?.verbose_name || metricLabel;
 
   const transformedData: {
     value: number;
@@ -213,8 +226,26 @@ export default function transformProps(
     const [name, formattedValue, formattedPercent] = parseParams({
       params,
       numberFormatter,
+      percentFormatter,
       percentCalculationType,
     });
+    if (labelTemplate) {
+      if (!Number.isFinite(labelValueDivisor) || labelValueDivisor <= 0) {
+        throw new Error('Label value divisor must be greater than zero');
+      }
+      const templateValues = {
+        '{name}': name,
+        '{value}': `${numberFormatter(
+          (params.value as number) / labelValueDivisor,
+        )}${labelValueSuffix}`,
+        '{percent}': formattedPercent,
+        '\\n': '\n',
+      };
+      return Object.entries(templateValues).reduce(
+        (label, [placeholder, value]) => label.replaceAll(placeholder, value),
+        labelTemplate,
+      );
+    }
     switch (labelType) {
       case EchartsFunnelLabelType.Key:
         return name;
@@ -293,13 +324,14 @@ export default function transformProps(
         const [name, formattedValue, formattedPercent] = parseParams({
           params,
           numberFormatter,
+          percentFormatter,
           percentCalculationType,
         });
         const row = [];
         const enumName = EchartsFunnelLabelType[tooltipLabelType];
         const title = enumName.includes('Key') ? name : undefined;
         if (enumName.includes('Value') || enumName.includes('Percent')) {
-          row.push(metricLabel);
+          row.push(metricDisplayName);
         }
         if (enumName.includes('Value')) {
           row.push(formattedValue);

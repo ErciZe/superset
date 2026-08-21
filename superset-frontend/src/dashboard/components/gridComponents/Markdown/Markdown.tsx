@@ -353,9 +353,16 @@ function Markdown({
         }
         htmlSanitization={htmlSanitization}
         htmlSchemaOverrides={htmlSchemaOverrides}
+        openLinksInNewTab={component.meta.openLinksInNewTab === true}
       />
     ),
-    [hasError, markdownSource, htmlSanitization, htmlSchemaOverrides],
+    [
+      component.meta.openLinksInNewTab,
+      hasError,
+      markdownSource,
+      htmlSanitization,
+      htmlSchemaOverrides,
+    ],
   );
 
   // inherit the size of parent columns

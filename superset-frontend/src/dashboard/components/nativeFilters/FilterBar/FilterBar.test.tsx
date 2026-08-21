@@ -23,12 +23,14 @@ import {
   render,
   screen,
   userEvent,
+  waitFor,
 } from 'spec/helpers/testing-library';
 import { stateWithoutNativeFilters } from 'spec/fixtures/mockStore';
 import { testWithId } from 'src/utils/testUtils';
 import { Preset, makeApi } from '@superset-ui/core';
 import {
   TimeFilterPlugin,
+  MonthRangeFilterPlugin,
   SelectFilterPlugin,
   RangeFilterPlugin,
 } from 'src/filters/components';
@@ -55,6 +57,7 @@ class MainPreset extends Preset {
       name: 'Legacy charts',
       plugins: [
         new TimeFilterPlugin().configure({ key: 'filter_time' }),
+        new MonthRangeFilterPlugin().configure({ key: 'filter_month_range' }),
         new SelectFilterPlugin().configure({ key: 'filter_select' }),
         new RangeFilterPlugin().configure({ key: 'filter_range' }),
       ],
@@ -458,6 +461,68 @@ test('FilterBar does not crash when filter has value but empty extraFormData', a
 
   updateDataMaskSpy.mockRestore();
 });
+
+test.each([
+  {
+    relativeValue: 'Current month',
+    expectedValue: '2026-09-01T00:00:00 : 2026-10-01T00:00:00',
+  },
+  {
+    relativeValue: 'Current year',
+    expectedValue: '2026-01-01T00:00:00 : 2027-01-01T00:00:00',
+  },
+])(
+  'FilterBar applies a normalized $relativeValue default without a manual apply',
+  async ({ relativeValue, expectedValue }) => {
+    const originalNow = Date.now();
+    jest.setSystemTime(new Date('2026-08-31T16:30:00Z'));
+    const filterId = 'NATIVE_FILTER-MONTH-RANGE';
+    const updateDataMaskSpy = jest.spyOn(dataMaskActions, 'updateDataMask');
+    const filter = createFilter({
+      id: filterId,
+      filterType: 'filter_month_range',
+      targets: [],
+      controlValues: {
+        monthSelectionMode: 'range',
+        monthTimeZone: 'Asia/Shanghai',
+      },
+      defaultDataMask: {
+        filterState: { value: relativeValue },
+        extraFormData: { time_range: relativeValue },
+      },
+    });
+    const dataMask = createDataMask(filterId, relativeValue, {
+      time_range: relativeValue,
+    });
+    const state = createStateWithFilter(filter, dataMask);
+
+    try {
+      renderFilterBar(createOpenedBarProps(), state);
+
+      await act(async () => {
+        jest.runAllTimers();
+      });
+
+      await waitFor(() =>
+        expect(updateDataMaskSpy).toHaveBeenCalledWith(
+          filterId,
+          expect.objectContaining({
+            extraFormData: {
+              time_range: expectedValue,
+            },
+            filterState: expect.objectContaining({
+              value: expectedValue,
+            }),
+          }),
+        ),
+      );
+      expect(updateDataMaskSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      updateDataMaskSpy.mockRestore();
+      jest.setSystemTime(originalNow);
+    }
+  },
+);
 
 test('FilterBar renders correctly when filter has complete extraFormData', async () => {
   const filterId = 'test-filter-complete';

@@ -55,6 +55,8 @@ import {
   PluginFilterSelectCustomizeProps,
   SelectFilterOperatorType,
 } from 'src/filters/components/Select/types';
+import type { MonthSelectionMode } from 'src/filters/components/MonthRange/types';
+import { isTimeRangeFilterType } from 'src/filters/utils';
 import { useSelector } from 'react-redux';
 import { getChartDataRequest } from 'src/components/Chart/chartAction';
 import {
@@ -276,6 +278,7 @@ const FILTER_TYPE_NAME_MAPPING = {
   [t('Select filter')]: t('Value'),
   [t('Range filter')]: t('Numerical range'),
   [t('Time filter')]: t('Time range'),
+  [t('Month range filter')]: t('Month range'),
   [t('Time column')]: t('Time column'),
   [t('Time grain')]: t('Time grain'),
   [t('Group By')]: t('Group by'),
@@ -623,6 +626,14 @@ const FiltersConfigForm = (
     filterToEdit?.controlValues?.enableEasyDateRange ??
     false;
 
+  const monthSelectionMode: MonthSelectionMode =
+    formFilter?.controlValues?.monthSelectionMode ??
+    filterToEdit?.controlValues?.monthSelectionMode ??
+    'range';
+  const monthTimeZone =
+    formFilter?.controlValues?.monthTimeZone ??
+    filterToEdit?.controlValues?.monthTimeZone;
+
   const showDefaultValue = isChartCustomization
     ? !hasDataset || !isDataDirty
     : !hasDataset ||
@@ -663,6 +674,19 @@ const FiltersConfigForm = (
             enableEasyDateRange: true,
           }
         : controlValues,
+    });
+    forceUpdate();
+    formChanged();
+  };
+
+  const onMonthSelectionModeChanged = (value: MonthSelectionMode) => {
+    const previous = form.getFieldValue('filters')?.[filterId].controlValues;
+    setNativeFilterFieldValues(form, filterId, {
+      controlValues: {
+        ...previous,
+        monthSelectionMode: value,
+      },
+      defaultDataMask: null,
     });
     forceUpdate();
     formChanged();
@@ -751,7 +775,7 @@ const FiltersConfigForm = (
   );
   const hasAvailableFilters = availableFilters.length > 0;
   const hasTimeDependency = availableFilters
-    .filter(filter => filter.type === 'filter_time')
+    .filter(filter => isTimeRangeFilterType(filter.type))
     .some(filter => dependencies?.includes(filter.value));
 
   const extensionsRegistry = getExtensionsRegistry();
@@ -1068,7 +1092,7 @@ const FiltersConfigForm = (
                     </StyledFormItem>
                   )}
                 </StyledContainer>
-                {formFilter?.filterType === 'filter_time' && (
+                {isTimeRangeFilterType(formFilter?.filterType) && (
                   <FilterTypeInfo expanded={expanded}>
                     {t(`Dashboard time range filters apply to temporal columns defined in
           the filter section of each chart. Add temporal columns to the chart
@@ -1151,7 +1175,7 @@ const FiltersConfigForm = (
                   expandIconPosition="end"
                   key={`native-filter-config-${filterId}`}
                   items={[
-                    ...(itemTypeField !== 'filter_time'
+                    ...(!isTimeRangeFilterType(itemTypeField)
                       ? [
                           {
                             key: `${filterId}-${FilterPanels.configuration.key}`,
@@ -1766,6 +1790,51 @@ const FiltersConfigForm = (
                                   {t('Use easy date range picker')}
                                 </Checkbox>
                               </StyledRowFormItem>
+                            )}
+                          {!isChartCustomization &&
+                            itemTypeField === 'filter_month_range' && (
+                              <>
+                                <FormItem
+                                  hidden
+                                  name={[
+                                    'filters',
+                                    filterId,
+                                    'controlValues',
+                                    'monthTimeZone',
+                                  ]}
+                                  initialValue={monthTimeZone}
+                                >
+                                  <Input />
+                                </FormItem>
+                                <StyledRowFormItem
+                                  expanded={expanded}
+                                  name={[
+                                    'filters',
+                                    filterId,
+                                    'controlValues',
+                                    'monthSelectionMode',
+                                  ]}
+                                  initialValue={monthSelectionMode}
+                                  label={
+                                    <StyledLabel>
+                                      {t('Month selection mode')}
+                                    </StyledLabel>
+                                  }
+                                >
+                                  <Select
+                                    ariaLabel={t('Month selection mode')}
+                                    options={[
+                                      { value: 'single', label: t('Single') },
+                                      { value: 'range', label: t('Range') },
+                                    ]}
+                                    onChange={value =>
+                                      onMonthSelectionModeChanged(
+                                        value as MonthSelectionMode,
+                                      )
+                                    }
+                                  />
+                                </StyledRowFormItem>
+                              </>
                             )}
                           <FormItem
                             name={['filters', filterId, 'defaultValue']}

@@ -16,7 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { type ComponentProps, useEffect, useMemo, useState } from 'react';
+import type { Components, ExtraProps } from 'react-markdown';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { cloneDeep, mergeWith } from 'lodash-es';
@@ -26,6 +27,29 @@ interface SafeMarkdownProps {
   source: string;
   htmlSanitization?: boolean;
   htmlSchemaOverrides?: typeof defaultSchema;
+  openLinksInNewTab?: boolean;
+}
+
+export function NewTabMarkdownLink({
+  node: _node,
+  children,
+  ...props
+}: ComponentProps<'a'> & ExtraProps) {
+  return (
+    <a {...props} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  );
+}
+
+const NEW_TAB_MARKDOWN_COMPONENTS: Components = {
+  a: NewTabMarkdownLink,
+};
+
+export function getSafeMarkdownComponents(
+  openLinksInNewTab: boolean,
+): Components | undefined {
+  return openLinksInNewTab ? NEW_TAB_MARKDOWN_COMPONENTS : undefined;
 }
 
 // Link protocols that can execute script when used as an href.
@@ -98,6 +122,7 @@ export function SafeMarkdown({
   source,
   htmlSanitization = true,
   htmlSchemaOverrides = {},
+  openLinksInNewTab = false,
 }: SafeMarkdownProps) {
   const escapeHtml = isFeatureEnabled(FeatureFlag.EscapeMarkdownHtml);
   const [rehypeRawPlugin, setRehypeRawPlugin] = useState<any>(null);
@@ -133,6 +158,7 @@ export function SafeMarkdown({
   // React Markdown escapes HTML by default
   return (
     <ReactMarkdown
+      components={getSafeMarkdownComponents(openLinksInNewTab)}
       rehypePlugins={rehypePlugins}
       remarkPlugins={[remarkGfm]}
       skipHtml={false}

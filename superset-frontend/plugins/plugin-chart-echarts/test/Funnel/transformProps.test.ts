@@ -18,6 +18,11 @@
  */
 import { ChartProps, getNumberFormatter } from '@superset-ui/core';
 import { supersetTheme } from '@apache-superset/core/theme';
+import type { FunnelSeriesOption } from 'echarts/charts';
+import type {
+  CallbackDataParams,
+  LabelFormatterCallback,
+} from 'echarts/types/src/util/types';
 import transformProps, { parseParams } from '../../src/Funnel/transformProps';
 import {
   EchartsFunnelChartProps,
@@ -45,6 +50,32 @@ const chartProps = new ChartProps({
   height: 600,
   queriesData,
   theme: supersetTheme,
+});
+
+const callbackParams = (
+  overrides: Partial<CallbackDataParams> = {},
+): CallbackDataParams => ({
+  componentType: 'series',
+  componentSubType: 'funnel',
+  componentIndex: 0,
+  seriesType: 'funnel',
+  seriesIndex: 0,
+  seriesId: '',
+  seriesName: '',
+  name: 'S',
+  dataIndex: 0,
+  data: { firstStepPercent: 1, prevStepPercent: 1 },
+  dataType: undefined,
+  value: 10,
+  color: '#000000',
+  borderColor: '',
+  dimensionNames: [],
+  encode: {},
+  marker: '',
+  status: 'normal',
+  percent: 100,
+  $vars: [],
+  ...overrides,
 });
 
 describe('Funnel transformProps', () => {
@@ -80,6 +111,105 @@ describe('Funnel transformProps', () => {
     expect(label.color).toBe(supersetTheme.colorText);
     expect(label.textBorderColor).toBeUndefined();
     expect(label.textBorderWidth).toBeUndefined();
+  });
+
+  test('formats a configured label template without changing funnel geometry', () => {
+    const props = new ChartProps({
+      ...chartProps,
+      formData: {
+        ...formData,
+        groupby: ['foo'],
+        label_template: '{name}\\n{value} | {percent}',
+        label_value_divisor: 10,
+        label_value_suffix: '万',
+        number_format: '$,.1f',
+        percent_format: ',.1~%',
+        percent_calculation_type: PercentCalcType.Total,
+        tooltip_label_type: 5,
+      },
+      datasource: {
+        metrics: [
+          {
+            uuid: '90eadf6a-f870-4305-a33a-77f5ca39b968',
+            metric_name: 'sum__num',
+            verbose_name: '销售额',
+          },
+        ],
+      },
+      queriesData: [
+        {
+          data: [
+            { foo: 'S', sum__num: 615 },
+            { foo: 'A', sum__num: 390 },
+          ],
+        },
+      ],
+    });
+    const result = transformProps(props as unknown as EchartsFunnelChartProps);
+    const series = (result.echartOptions.series as FunnelSeriesOption[])[0]!;
+    const formatter = series.label?.formatter as LabelFormatterCallback;
+    const params = callbackParams({
+      data: {
+        firstStepPercent: 1,
+        prevStepPercent: 1,
+      },
+      value: 615,
+      percent: 61.25,
+    });
+
+    expect(series.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'S', value: 615 }),
+      ]),
+    );
+    expect(formatter(params)).toBe('S\n$61.5万 | 61.3%');
+
+    const tooltipFormatter = (
+      result.echartOptions.tooltip as unknown as {
+        formatter: (params: CallbackDataParams) => string;
+      }
+    ).formatter;
+    const tooltip = tooltipFormatter(params);
+    expect(tooltip).toContain('销售额');
+    expect(tooltip).not.toContain('sum__num');
+    expect(tooltip).toContain('61.3%');
+  });
+
+  test('keeps the existing label behavior when no template is configured', () => {
+    const result = transformProps(chartProps as EchartsFunnelChartProps);
+    const series = (result.echartOptions.series as FunnelSeriesOption[])[0]!;
+    const formatter = series.label?.formatter as LabelFormatterCallback;
+
+    expect(
+      formatter(
+        callbackParams({
+          name: 'S',
+          value: 10,
+          percent: 80,
+          data: { firstStepPercent: 0.8, prevStepPercent: 0.8 },
+        }),
+      ),
+    ).toBe('S');
+  });
+
+  test('rejects a non-positive configured label value divisor', () => {
+    const props = new ChartProps({
+      ...chartProps,
+      formData: {
+        ...formData,
+        groupby: ['foo'],
+        label_template: '{value}',
+        label_value_divisor: 0,
+      },
+      queriesData: [{ data: [{ foo: 'S', sum__num: 10 }] }],
+    });
+    const result = transformProps(props as unknown as EchartsFunnelChartProps);
+    const series = (result.echartOptions.series as FunnelSeriesOption[])[0]!;
+    const formatter = series.label?.formatter as LabelFormatterCallback;
+
+    expect(() => formatter(callbackParams())).toThrow(
+      'Label value divisor must be greater than zero',
+    );
   });
 });
 

@@ -15,6 +15,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from freezegun import freeze_time
+
 from superset.reports.models import ReportSchedule
 
 
@@ -349,6 +351,168 @@ def test_generate_native_filter_time_normal():
     assert warning is None
 
 
+def test_generate_native_filter_month_range_normal():
+    report_schedule = ReportSchedule()
+    result, warning = report_schedule._generate_native_filter(
+        "F_MONTH",
+        "filter_month_range",
+        "ignored",
+        ["2026-01-01T00:00:00 : 2026-08-01T00:00:00"],
+    )
+    assert result == {
+        "F_MONTH": {
+            "id": "F_MONTH",
+            "extraFormData": {
+                "time_range": "2026-01-01T00:00:00 : 2026-08-01T00:00:00"
+            },
+            "filterState": {"value": "2026-01-01T00:00:00 : 2026-08-01T00:00:00"},
+            "ownState": {},
+        }
+    }
+    assert warning is None
+
+
+@freeze_time("2026-08-31 16:30:00")
+def test_generate_native_filter_month_range_normalizes_relative_in_time_zone():
+    report_schedule = ReportSchedule()
+
+    result, warning = report_schedule._generate_native_filter(
+        "F_MONTH",
+        "filter_month_range",
+        "ignored",
+        ["Current month"],
+        month_time_zone="Asia/Shanghai",
+    )
+
+    assert result["F_MONTH"]["extraFormData"]["time_range"] == (
+        "2026-09-01T00:00:00 : 2026-10-01T00:00:00"
+    )
+    assert result["F_MONTH"]["filterState"]["value"] == (
+        "2026-09-01T00:00:00 : 2026-10-01T00:00:00"
+    )
+    assert warning is None
+
+
+def test_generate_native_filter_month_range_rejects_invalid_time_zone():
+    report_schedule = ReportSchedule()
+
+    result, warning = report_schedule._generate_native_filter(
+        "F_MONTH",
+        "filter_month_range",
+        "ignored",
+        ["Current month"],
+        month_time_zone="Invalid/TimeZone",
+    )
+
+    assert result == {}
+    assert warning is not None
+    assert "monthTimeZone" in warning
+
+
+def test_generate_native_filter_month_range_requires_time_zone_for_relative_value():
+    report_schedule = ReportSchedule()
+
+    result, warning = report_schedule._generate_native_filter(
+        "F_MONTH",
+        "filter_month_range",
+        "ignored",
+        ["Current month"],
+    )
+
+    assert result == {}
+    assert warning is not None
+    assert "monthTimeZone" in warning
+
+
+@freeze_time("2025-12-31 16:30:00")
+def test_get_native_filters_params_normalizes_month_range_metadata():
+    report_schedule = ReportSchedule()
+    report_schedule.extra = {
+        "dashboard": {
+            "nativeFilters": [
+                {
+                    "nativeFilterId": "F_MONTH",
+                    "filterType": "filter_month_range",
+                    "filterValues": ["Current year"],
+                    "monthSelectionMode": "range",
+                    "monthTimeZone": "Asia/Shanghai",
+                }
+            ]
+        }
+    }
+
+    encoded, warnings = report_schedule.get_native_filters_params()
+
+    assert "2026-01-01T00:00:00 : 2027-01-01T00:00:00" in encoded
+    assert warnings == []
+
+
+def test_get_native_filters_params_passes_month_selection_mode():
+    report_schedule = ReportSchedule()
+    report_schedule.extra = {
+        "dashboard": {
+            "nativeFilters": [
+                {
+                    "nativeFilterId": "F_MONTH",
+                    "filterType": "filter_month_range",
+                    "filterValues": ["2026-01-01T00:00:00 : 2026-03-01T00:00:00"],
+                    "monthSelectionMode": "single",
+                    "monthTimeZone": "UTC",
+                }
+            ]
+        }
+    }
+
+    encoded, warnings = report_schedule.get_native_filters_params()
+
+    assert encoded == "()"
+    assert len(warnings) == 1
+    assert "single" in warnings[0]
+
+
+def test_generate_native_filter_month_range_rejects_partial_months():
+    report_schedule = ReportSchedule()
+
+    result, warning = report_schedule._generate_native_filter(
+        "F_MONTH",
+        "filter_month_range",
+        "ignored",
+        ["2026-01-01T12:00:00 : 2026-03-01T00:00:00"],
+    )
+
+    assert result == {}
+    assert warning is not None
+    assert "filter_month_range" in warning
+
+
+def test_generate_native_filter_month_range_rejects_unsupported_relative_value():
+    report_schedule = ReportSchedule()
+
+    result, warning = report_schedule._generate_native_filter(
+        "F_MONTH", "filter_month_range", "ignored", ["Last 30 days"]
+    )
+
+    assert result == {}
+    assert warning is not None
+    assert "filter_month_range" in warning
+
+
+def test_generate_native_filter_month_range_enforces_single_month_mode():
+    report_schedule = ReportSchedule()
+
+    result, warning = report_schedule._generate_native_filter(
+        "F_MONTH",
+        "filter_month_range",
+        "ignored",
+        ["2026-01-01T00:00:00 : 2026-03-01T00:00:00"],
+        month_selection_mode="single",
+    )
+
+    assert result == {}
+    assert warning is not None
+    assert "single" in warning
+
+
 def test_generate_native_filter_timegrain_normal():
     report_schedule = ReportSchedule()
     result, warning = report_schedule._generate_native_filter(
@@ -526,6 +690,18 @@ def test_report_generate_native_filter_time_empty_values():
     assert result == {}
     assert warning is not None
     assert "filter_time" in warning
+    assert "empty filterValues" in warning
+    assert "filter_id" in warning
+
+
+def test_report_generate_native_filter_month_range_empty_values():
+    report_schedule = ReportSchedule()
+    result, warning = report_schedule._generate_native_filter(
+        "filter_id", "filter_month_range", "column_name", []
+    )
+    assert result == {}
+    assert warning is not None
+    assert "filter_month_range" in warning
     assert "empty filterValues" in warning
     assert "filter_id" in warning
 

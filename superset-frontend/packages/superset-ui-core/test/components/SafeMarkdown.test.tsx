@@ -16,14 +16,32 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { cloneDeep } from 'lodash-es';
 import { defaultSchema } from 'rehype-sanitize';
 import {
   getOverrideHtmlSchema,
+  getSafeMarkdownComponents,
+  NewTabMarkdownLink,
   SafeMarkdown,
   transformLinkUri,
 } from '../../src/components/SafeMarkdown/SafeMarkdown';
+
+test('new-tab Markdown links use a protected browsing context', () => {
+  render(
+    <NewTabMarkdownLink href="/dashboard/guide/">Guide</NewTabMarkdownLink>,
+  );
+
+  const link = screen.getByRole('link', { name: 'Guide' });
+  expect(link.getAttribute('href')).toBe('/dashboard/guide/');
+  expect(link.getAttribute('target')).toBe('_blank');
+  expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+});
+
+test('new-tab Markdown rendering is opt-in', () => {
+  expect(getSafeMarkdownComponents(false)).toBeUndefined();
+  expect(getSafeMarkdownComponents(true)?.a).toBe(NewTabMarkdownLink);
+});
 
 /**
  * NOTE: react-markdown is mocked globally in spec/helpers/shim.tsx (line 89)

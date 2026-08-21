@@ -19,6 +19,7 @@
 import { t } from '@apache-superset/core/translation';
 import {
   ControlPanelConfig,
+  ControlPanelsContainerProps,
   ControlSubSectionHeader,
   D3_FORMAT_DOCS,
   D3_FORMAT_OPTIONS,
@@ -33,8 +34,13 @@ import {
 } from './types';
 import { legendSection } from '../controls';
 
-const { labelType, numberFormat, showLabels, defaultTooltipLabel } =
-  DEFAULT_FORM_DATA;
+const {
+  labelType,
+  numberFormat,
+  percentFormat,
+  showLabels,
+  defaultTooltipLabel,
+} = DEFAULT_FORM_DATA;
 
 const funnelLegendSection = [...legendSection];
 funnelLegendSection.splice(2, 1);
@@ -130,6 +136,50 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'label_template',
+            config: {
+              type: 'TextControl',
+              label: t('Label Template'),
+              renderTrigger: true,
+              description: t(
+                'Format labels with {name}, {value}, and {percent}. \\n represents a new line.',
+              ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'label_value_divisor',
+            config: {
+              type: 'NumberControl',
+              label: t('Label value divisor'),
+              min: Number.MIN_VALUE,
+              default: 1,
+              renderTrigger: true,
+              description: t(
+                'Divide values for labels without changing funnel geometry or tooltip values.',
+              ),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                Boolean(controls?.label_template?.value),
+            },
+          },
+        ],
+        [
+          {
+            name: 'label_value_suffix',
+            config: {
+              type: 'TextControl',
+              label: t('Label value suffix'),
+              default: '',
+              renderTrigger: true,
+              description: t('Append text to the formatted label value.'),
+              visibility: ({ controls }: ControlPanelsContainerProps) =>
+                Boolean(controls?.label_template?.value),
+            },
+          },
+        ],
+        [
+          {
             name: 'tooltip_label_type',
             config: {
               type: 'SelectControl',
@@ -163,6 +213,20 @@ const config: ControlPanelConfig = {
               label: t('Number format'),
               renderTrigger: true,
               default: numberFormat,
+              choices: D3_FORMAT_OPTIONS,
+              description: `${D3_FORMAT_DOCS} ${D3_NUMBER_FORMAT_DESCRIPTION_VALUES_TEXT}`,
+            },
+          },
+        ],
+        [
+          {
+            name: 'percent_format',
+            config: {
+              type: 'SelectControl',
+              freeForm: true,
+              label: t('Percentage format'),
+              renderTrigger: true,
+              default: percentFormat,
               choices: D3_FORMAT_OPTIONS,
               description: `${D3_FORMAT_DOCS} ${D3_NUMBER_FORMAT_DESCRIPTION_VALUES_TEXT}`,
             },

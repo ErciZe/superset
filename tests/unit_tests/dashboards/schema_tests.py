@@ -28,6 +28,7 @@ from superset.dashboards.schemas import (
     DashboardPostSchema,
     DashboardPutSchema,
 )
+from superset.utils import json
 
 GUEST_RESTRICTED_FIELDS = [
     "owners",
@@ -150,6 +151,15 @@ def test_dashboard_put_css_rejects_dangerous_constructs() -> None:
     with pytest.raises(ValidationError) as exc_info:
         schema.load({"css": "div { width: expression(alert(1)); }"})
     assert "css" in exc_info.value.messages
+
+
+def test_dashboard_put_accepts_two_row_horizontal_filter_metadata() -> None:
+    """The opt-in horizontal filter layout can be saved from edit mode."""
+    metadata = {"horizontal_filter_bar_two_rows": True}
+
+    result = DashboardPutSchema().load({"json_metadata": json.dumps(metadata)})
+
+    assert json.loads(result["json_metadata"]) == metadata
 
 
 def test_dashboard_copy_css_rejects_dangerous_constructs() -> None:

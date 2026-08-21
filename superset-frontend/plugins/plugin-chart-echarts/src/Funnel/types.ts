@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { QueryFormData } from '@superset-ui/core';
+import { NumberFormats, QueryFormData } from '@superset-ui/core';
 import {
   BaseChartProps,
   BaseTransformedProps,
@@ -33,12 +33,16 @@ export type EchartsFunnelFormData = QueryFormData &
     colorScheme?: string;
     groupby: QueryFormData[];
     labelLine: boolean;
+    labelTemplate: string | null;
     labelType: EchartsFunnelLabelType;
+    labelValueDivisor: number;
+    labelValueSuffix: string;
     tooltipLabelType: EchartsFunnelLabelType;
     metric?: string;
     showLabels: boolean;
     showTooltipLabels: boolean;
     numberFormat: string;
+    percentFormat: string;
     gap: number;
     sort: 'descending' | 'ascending' | 'none' | undefined;
     orient: 'vertical' | 'horizontal' | undefined;
@@ -64,11 +68,15 @@ export const DEFAULT_FORM_DATA: EchartsFunnelFormData = {
   ...DEFAULT_LEGEND_FORM_DATA,
   groupby: [],
   labelLine: false,
+  labelTemplate: null,
   labelType: EchartsFunnelLabelType.Key,
+  labelValueDivisor: 1,
+  labelValueSuffix: '',
   defaultTooltipLabel: EchartsFunnelLabelType.KeyValuePercent,
   legendOrientation: LegendOrientation.Top,
   legendType: LegendType.Scroll,
   numberFormat: 'SMART_NUMBER',
+  percentFormat: NumberFormats.PERCENT_2_POINT,
   showLabels: true,
   sort: 'descending',
   orient: 'vertical',

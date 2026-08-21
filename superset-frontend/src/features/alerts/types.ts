@@ -106,6 +106,8 @@ export type ExtraNativeFilter = {
   filterValues?: Array<any> | [];
   nativeFilterId?: string | null;
   optionFilterValues?: Array<any> | [];
+  monthSelectionMode?: 'single' | 'range';
+  monthTimeZone?: string;
 };
 
 export type Extra = {
@@ -216,6 +218,8 @@ export type NativeFilterObject = {
     inverseSelection: boolean;
     multiSelect: boolean;
     searchAllOptions: boolean;
+    monthSelectionMode?: 'single' | 'range';
+    monthTimeZone?: string;
   };
   defaultDataMask: {
     extraFormData: Record<string, any>;
