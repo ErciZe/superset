@@ -81,26 +81,37 @@ test('marks only the WHM order detail chart for scoped advanced filter styles', 
   const { container: whmContainer } = render(
     <TableChart {...baseProps} slice_id={17} />,
   );
+  const { container: tailFeeContainer } = render(
+    <TableChart {...baseProps} slice_id={227} />,
+  );
   const { container: otherContainer } = render(
     <TableChart {...baseProps} slice_id={130} />,
   );
 
   expect(whmContainer.firstChild).toHaveClass('whm-order-detail-chart');
+  expect(tailFeeContainer.firstChild).not.toHaveClass('whm-order-detail-chart');
   expect(otherContainer.firstChild).not.toHaveClass('whm-order-detail-chart');
 });
 
-test('disables cell click cross-filtering only for the WHM order detail chart', () => {
+test('disables cell click cross-filtering for WHM detail charts', () => {
   const { container: whmContainer } = render(
     <TableChart {...baseProps} slice_id={17} />,
+  );
+  const { container: tailFeeContainer } = render(
+    <TableChart {...baseProps} slice_id={227} />,
   );
   const { container: otherContainer } = render(
     <TableChart {...baseProps} slice_id={130} />,
   );
   const whmChart = whmContainer.querySelector('[data-test="ag-grid-table"]');
+  const tailFeeChart = tailFeeContainer.querySelector(
+    '[data-test="ag-grid-table"]',
+  );
   const otherChart = otherContainer.querySelector(
     '[data-test="ag-grid-table"]',
   );
 
   expect(whmChart).toHaveAttribute('data-cross-filter-enabled', 'false');
+  expect(tailFeeChart).toHaveAttribute('data-cross-filter-enabled', 'false');
   expect(otherChart).toHaveAttribute('data-cross-filter-enabled', 'true');
 });

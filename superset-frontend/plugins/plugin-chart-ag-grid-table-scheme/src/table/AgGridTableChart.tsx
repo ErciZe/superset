@@ -200,6 +200,8 @@ export default function TableChart<D extends DataRecord = DataRecord>(
     serverPagination && advancedFilterOptions.length,
   );
   const isWhmOrderDetailChart = slice_id === 17;
+  // WHM 明细表用于查看和复制数据，单元格点击不触发看板交叉过滤。
+  const shouldDisableCellClickCrossFilter = slice_id === 17 || slice_id === 227;
 
   const gridHeight = getGridHeight(
     height,
@@ -381,7 +383,9 @@ export default function TableChart<D extends DataRecord = DataRecord>(
         onSearchChange={handleSearch}
         onSortChange={handleSortByChange}
         id={slice_id}
-        handleCrossFilter={isWhmOrderDetailChart ? undefined : toggleFilter}
+        handleCrossFilter={
+          shouldDisableCellClickCrossFilter ? undefined : toggleFilter
+        }
         percentMetrics={percentMetrics}
         serverPageLength={serverPageLength}
         hasServerPageLengthChanged={hasServerPageLengthChanged}
